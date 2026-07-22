@@ -1,0 +1,55 @@
+{
+  "llm": [
+    {
+      "model": "claude-sonnet-5",
+      "messages": [
+        {
+          "role": "user",
+          "body": "[{\"type\": \"text\", \"content\": \"what does the gadget cost?\"}]"
+        }
+      ],
+      "hash": "ce9f9ad890af645da04609aaeec6b7b3a6610900359d042ed018eaeade6889a7"
+    },
+    {
+      "model": "gpt-4o",
+      "messages": [
+        {
+          "role": "system",
+          "body": "You are terse."
+        },
+        {
+          "role": "user",
+          "body": "  hi  "
+        }
+      ],
+      "hash": "4bee36b180ee411c21ebc59eb8834b4c9c66bb8bdef1187060acff228cfcec4a"
+    },
+    {
+      "model": "claude-opus-4-8",
+      "messages": [
+        {
+          "role": "user",
+          "body": "café <b>&</b> — 42\nsecond line"
+        }
+      ],
+      "hash": "2adfa758db501a119ed23e46bcbaf10315d368fd42e9f9a80f974ef6574563ba"
+    },
+    {
+      "model": "",
+      "messages": [],
+      "hash": "aa5598c670c7f9c9ab8594d942390dad96b52631bfb78d060476b9a719365947"
+    }
+  ],
+  "tool": [
+    {
+      "tool": "lookup_price",
+      "arguments": "{\"sku\":\"SKU-1\"}",
+      "hash": "18b9bcb5021ed8f163ef1e8fed322ead92eff28ac20f21f3579fd691cbc0416b"
+    },
+    {
+      "tool": "search",
+      "arguments": "",
+      "hash": "18bde97e3f382ede75c86c5273d2011ff9e918c51a0aba96c8f187159216a9bf"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+/capybara
+/capybara.db*
+dist/
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# The SDK is a library: CI resolves dependencies fresh so upstream OTel
+# releases break the build here rather than in a user's install.
+uv.lock
+
+# Working notes for coding assistants, kept out of the repository.
+CLAUDE.md
+capybara-spec.md
+.claude/
+

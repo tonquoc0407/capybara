@@ -1,0 +1,41 @@
+[project]
+name = "capybara-sdk"
+dynamic = ["version"]
+description = "Emit OpenTelemetry traces to a local capybara trace debugger."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "capybara" }]
+keywords = ["opentelemetry", "tracing", "llm", "agents", "observability"]
+dependencies = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp-proto-http>=1.20",
+    "pydantic>=2",
+]
+
+[project.urls]
+Homepage = "https://github.com/tonquoc0407/capybara"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "mypy>=1.10", "ruff>=0.5"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/capybara/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/capybara"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src/capybara"]
+
+# Provider clients are optional: replay patches whichever one is installed.
+[[tool.mypy.overrides]]
+module = ["anthropic.*", "openai.*"]
+ignore_missing_imports = true
