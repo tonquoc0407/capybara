@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from anthropic.resources.messages import AsyncMessages, Messages
 from capybara._hash import hash_llm_request
-from capybara.replay import ReplayError, Session, _patch_anthropic, _patch_openai
+from capybara.replay import Session, _patch_anthropic, _patch_openai
 from openai.resources.chat.completions import AsyncCompletions, Completions
 
 MESSAGES = [{"role": "user", "content": "what is the price?"}]
@@ -110,9 +110,31 @@ def test_anthropic_async_paths(anthropic_patched: str) -> None:
     assert asyncio.run(drain())[0] == "message_start"
 
 
-def test_anthropic_stream_helper_is_refused(anthropic_patched: str) -> None:
-    with pytest.raises(ReplayError, match="cannot be replayed"):
-        Messages.stream(object(), model=anthropic_patched, messages=MESSAGES)
+def test_anthropic_stream_helper_replays(anthropic_patched: str) -> None:
+    with Messages.stream(
+        object(), model=anthropic_patched, messages=MESSAGES
+    ) as stream:
+        text = "".join(stream.text_stream)
+        message = stream.get_final_message()
+    assert text == "Checking the catalogue."
+    assert [block.type for block in message.content] == ["text", "tool_use"]
+    assert message.content[1].input == {"sku": "A"}
+
+
+def test_anthropic_async_stream_helper_replays(anthropic_patched: str) -> None:
+    import asyncio
+
+    async def drain() -> tuple[str, list[str]]:
+        async with AsyncMessages.stream(
+            object(), model=anthropic_patched, messages=MESSAGES
+        ) as stream:
+            text = "".join([chunk async for chunk in stream.text_stream])
+            message = await stream.get_final_message()
+        return text, [block.type for block in message.content]
+
+    text, kinds = asyncio.run(drain())
+    assert text == "Checking the catalogue."
+    assert kinds == ["text", "tool_use"]
 
 
 def test_openai_create_serves_the_recording(openai_patched: str) -> None:

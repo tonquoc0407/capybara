@@ -150,6 +150,7 @@ def _patch_anthropic(session: Session) -> None:
     except ImportError:
         return
     original, async_original = Messages.create, AsyncMessages.create
+    original_stream, async_original_stream = Messages.stream, AsyncMessages.stream
 
     def create(self: Any, **kwargs: Any) -> Any:
         model = kwargs.get("model", "")
@@ -169,18 +170,81 @@ def _patch_anthropic(session: Session) -> None:
             return _aiter(_anthropic_events(entry, model))
         return _anthropic_response(entry, model)
 
-    # The messages.stream() helper builds its reader straight from the
-    # transport, so a patch here would never see it. Refusing beats going
-    # live behind the determinism rule.
+    # messages.stream() takes a callable that produces the raw event stream,
+    # so the recording can be handed to the SDK's own reader and every helper
+    # on it — text_stream, get_final_message — keeps working.
     def stream(self: Any, **kwargs: Any) -> Any:
-        raise ReplayError(
-            "messages.stream() cannot be replayed; use create(stream=True)"
+        from anthropic import NOT_GIVEN
+        from anthropic.lib.streaming import MessageStreamManager
+
+        model = kwargs.get("model", "")
+        entry = session.serve_llm(model, _anthropic_messages(kwargs))
+        if entry is None:
+            return original_stream(self, **kwargs)
+        events = _anthropic_events(entry, model)
+        # The reader only iterates and closes, so a stand-in satisfies it.
+        return MessageStreamManager(
+            lambda: _RecordedStream(events),  # type: ignore[arg-type,return-value]
+            output_format=NOT_GIVEN,
+        )
+
+    def astream(self: Any, **kwargs: Any) -> Any:
+        from anthropic.lib.streaming import AsyncMessageStreamManager
+
+        model = kwargs.get("model", "")
+        entry = session.serve_llm(model, _anthropic_messages(kwargs))
+        if entry is None:
+            return async_original_stream(self, **kwargs)
+        return AsyncMessageStreamManager(
+            _recorded_async_stream(_anthropic_events(entry, model))  # type: ignore[arg-type]
         )
 
     Messages.create = create  # type: ignore[method-assign]
     AsyncMessages.create = acreate  # type: ignore[method-assign]
     Messages.stream = stream  # type: ignore[method-assign]
-    AsyncMessages.stream = stream  # type: ignore[method-assign]
+    AsyncMessages.stream = astream  # type: ignore[method-assign]
+
+
+# The SDK's stream reader only needs something iterable that closes; it reads
+# .response solely to expose a request id, which a replay does not have.
+class _RecordedStream:
+    def __init__(self, events: Iterator[Any]) -> None:
+        self._events = events
+
+    def __iter__(self) -> Iterator[Any]:
+        return self._events
+
+    def close(self) -> None:
+        pass
+
+    @property
+    def response(self) -> Any:
+        return None
+
+
+class _AsyncRecordedStream:
+    def __init__(self, events: Iterator[Any]) -> None:
+        self._events = events
+
+    def __aiter__(self) -> _AsyncRecordedStream:
+        return self
+
+    async def __anext__(self) -> Any:
+        try:
+            return next(self._events)
+        except StopIteration:
+            raise StopAsyncIteration from None
+
+    async def close(self) -> None:
+        pass
+
+    @property
+    def response(self) -> Any:
+        return None
+
+
+async def _recorded_async_stream(events: Iterator[Any]) -> _AsyncRecordedStream:
+    return _AsyncRecordedStream(events)
 
 
 def _anthropic_events(entry: dict[str, Any], model: str) -> Iterator[Any]:
