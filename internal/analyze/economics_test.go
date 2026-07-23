@@ -159,7 +159,7 @@ func TestSweepLeavesNewerVersionsUnpriced(t *testing.T) {
 	st := openTemp(t)
 	newer := llmSpan("r1", 0, 0)
 	newer.TokensIn, newer.TokensOut = 1_000_000, 100_000
-	newer.Attrs.Model = "claude-opus-4-8"
+	newer.Attrs.Model = "claude-opus-4-9"
 	dated := llmSpan("r1", 1, 0)
 	dated.TokensIn, dated.TokensOut = 1_000_000, 100_000
 	dated.Attrs.Model = "claude-opus-4-5-20251101"
@@ -177,7 +177,7 @@ func TestSweepLeavesNewerVersionsUnpriced(t *testing.T) {
 		byID[s.ID] = s
 	}
 	if c := byID["r1-llm0"].CostUSD; c != nil {
-		t.Errorf("claude-opus-4-8 inherited claude-opus-4 rates: %v", *c)
+		t.Errorf("claude-opus-4-9 inherited claude-opus-4 rates: %v", *c)
 	}
 	if byID["r1-llm1"].CostUSD == nil {
 		t.Error("a dated release of a priced model went unpriced")
