@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"strings"
@@ -71,36 +70,9 @@ func blameReason(hop analyze.BlameHop) string {
 	}
 	parts := make([]string, 0, len(hop.Findings))
 	for _, f := range hop.Findings {
-		parts = append(parts, findingText(f))
+		parts = append(parts, analyze.FindingSummary(f))
 	}
 	return strings.Join(parts, "; ")
-}
-
-func findingText(f store.Finding) string {
-	var d struct {
-		Tool    string   `json:"tool"`
-		Missing []string `json:"missing"`
-		Pattern []string `json:"pattern"`
-	}
-	_ = json.Unmarshal([]byte(f.Detail), &d)
-	switch f.Type {
-	case "drift":
-		if len(d.Missing) > 0 {
-			return "drift: missing " + strings.Join(d.Missing, ", ")
-		}
-		return "drift"
-	case "malformed":
-		return "malformed output"
-	case "empty_payload":
-		return "empty payload"
-	case "improvised":
-		return "improvised after " + d.Tool + " failure"
-	case "loop":
-		return "loop: " + strings.Join(d.Pattern, ", ")
-	case "cost_spike":
-		return "cost spike"
-	}
-	return f.Type
 }
 
 func spanKindName(sp store.Span) string {

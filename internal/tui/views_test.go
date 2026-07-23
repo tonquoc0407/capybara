@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tonquoc0407/capybara/internal/analyze"
 	"github.com/tonquoc0407/capybara/internal/store"
 	"github.com/tonquoc0407/capybara/internal/theme"
 )
@@ -113,11 +114,11 @@ func TestContextViewRenders(t *testing.T) {
 
 func TestEconomicsFindingSummaries(t *testing.T) {
 	loop := store.Finding{Type: "loop", Detail: `{"pattern":["search_db","fetch"],"n":2}`}
-	if got := findingSummary(loop); got != "tool loop: search_db, fetch" {
+	if got := analyze.FindingSummary(loop); got != "tool loop: search_db, fetch" {
 		t.Errorf("loop summary = %q", got)
 	}
 	spike := store.Finding{Type: "cost_spike", Detail: `{"tokens":40000,"baseline":2000}`}
-	if got := findingSummary(spike); got != "token spike: 40000 vs 2000 baseline" {
+	if got := analyze.FindingSummary(spike); got != "token spike: 40000 vs 2000 baseline" {
 		t.Errorf("spike summary = %q", got)
 	}
 }

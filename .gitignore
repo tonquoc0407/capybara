@@ -1,5 +1,5 @@
 /capybara
-/capybara.db*
+capybara.db*
 dist/
 .venv/
 __pycache__/

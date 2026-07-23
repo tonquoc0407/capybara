@@ -143,7 +143,7 @@ func blameReasonText(hop analyze.BlameHop) string {
 	}
 	parts := make([]string, 0, len(hop.Findings))
 	for _, f := range hop.Findings {
-		parts = append(parts, findingSummary(f))
+		parts = append(parts, analyze.FindingSummary(f))
 	}
 	return strings.Join(parts, "; ")
 }

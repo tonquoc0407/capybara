@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tonquoc0407/capybara/internal/analyze"
 	"github.com/tonquoc0407/capybara/internal/store"
 	"github.com/tonquoc0407/capybara/internal/theme"
 )
@@ -28,7 +29,7 @@ func TestFindingSummaries(t *testing.T) {
 		"parse error at line 7": {Type: "parse_error", Detail: `{"line":7,"error":"bad json"}`},
 	}
 	for want, f := range cases {
-		if got := findingSummary(f); got != want {
+		if got := analyze.FindingSummary(f); got != want {
 			t.Errorf("summary(%s) = %q, want %q", f.Type, got, want)
 		}
 	}

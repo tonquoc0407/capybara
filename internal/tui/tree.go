@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/tonquoc0407/capybara/internal/analyze"
 	"github.com/tonquoc0407/capybara/internal/store"
 	"github.com/tonquoc0407/capybara/internal/theme"
 )
@@ -125,7 +126,7 @@ func (m *treeModel) rebuild() {
 					})
 					break
 				}
-				m.rows = append(m.rows, treeRow{span: sp, depth: depth, note: findingSummary(f)})
+				m.rows = append(m.rows, treeRow{span: sp, depth: depth, note: analyze.FindingSummary(f)})
 			}
 			if kids && !m.collapsed[sp.ID] {
 				walk(sp.ID, depth+1)
