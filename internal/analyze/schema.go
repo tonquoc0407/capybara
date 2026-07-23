@@ -7,10 +7,47 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strings"
 )
 
 // maxDepth bounds recursion into nested payloads.
 const maxDepth = 6
+
+// InferSchema returns the JSON Schema subset capybara would learn from one
+// recorded output body, falling back to a string shape for non-JSON output.
+func InferSchema(body string) json.RawMessage {
+	var v any
+	if err := json.Unmarshal([]byte(body), &v); err != nil {
+		v = body
+	}
+	raw, _ := json.Marshal(infer(v, 0))
+	return raw
+}
+
+// SchemaViolation describes how a recorded output breaks a schema, in the same
+// terms as a drift finding. Empty when the output still fits.
+func SchemaViolation(schema json.RawMessage, body string) string {
+	var want jsonSchema
+	if json.Unmarshal(schema, &want) != nil {
+		return ""
+	}
+	var v any
+	if json.Unmarshal([]byte(body), &v) != nil {
+		v = body
+	}
+	d := diffSchemas(&want, infer(v, 0), "")
+	if !d.breaking() {
+		return ""
+	}
+	var parts []string
+	if len(d.Missing) > 0 {
+		parts = append(parts, "missing "+strings.Join(d.Missing, ", "))
+	}
+	for _, r := range d.Retyped {
+		parts = append(parts, fmt.Sprintf("%s: want %s, got %s", r.Field, r.Want, r.Got))
+	}
+	return strings.Join(parts, "; ")
+}
 
 // jsonSchema is the learned shape of a value: a JSON Schema subset covering
 // field set, types and nullability. Declared Pydantic schemas parse into the

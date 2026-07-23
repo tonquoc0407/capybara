@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -54,11 +55,157 @@ func TestDiffCommandRejectsAmbiguousPrefix(t *testing.T) {
 }
 
 func TestRunRoutesUnimplementedCommands(t *testing.T) {
-	for _, cmd := range []string{"blame", "serve", "export"} {
-		err := run(context.Background(), []string{cmd}, io.Discard)
-		if err == nil || !strings.Contains(err.Error(), "not implemented") {
-			t.Errorf("run(%q) = %v, want not-implemented error", cmd, err)
+	err := run(context.Background(), []string{"serve"}, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "not implemented") {
+		t.Errorf("run(serve) = %v, want not-implemented error", err)
+	}
+}
+
+// improviseJSONL is an agent turn whose answer leans on a failed tool: root
+// agent, one llm turn, a failing tool, then an llm answer that cites it.
+const improviseJSONL = `{"run":"blame-run","span":"root","parent":"","kind":"agent","name":"agent_loop","start":"2026-07-22T10:00:00Z","end":"2026-07-22T10:00:10Z","status":"ok"}
+{"run":"blame-run","span":"llm1","parent":"root","kind":"llm","name":"chat","start":"2026-07-22T10:00:00Z","end":"2026-07-22T10:00:02Z","status":"ok"}
+{"run":"blame-run","span":"tool1","parent":"llm1","kind":"tool","tool":"search_db","name":"search_db","start":"2026-07-22T10:00:02Z","end":"2026-07-22T10:00:03Z","status":"error","contents":[{"role":"output","body":"connection refused"}]}
+{"run":"blame-run","span":"llm2","parent":"root","kind":"llm","name":"chat","start":"2026-07-22T10:00:04Z","end":"2026-07-22T10:00:06Z","status":"ok","contents":[{"role":"assistant","body":"The search_db results show the price is 42."}]}
+`
+
+func TestBlameCommand(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "test.db")
+	file := filepath.Join(dir, "runs.jsonl")
+	if err := os.WriteFile(file, []byte(improviseJSONL), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(context.Background(), []string{"-db", db, "import", file}, io.Discard); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	var out strings.Builder
+	if err := run(context.Background(), []string{"-db", db, "blame", "blame-run"}, &out); err != nil {
+		t.Fatalf("blame: %v", err)
+	}
+	got := out.String()
+	for _, want := range []string{"blame blame-ru", "agent_loop", "improvised after search_db failure", "root", "search_db"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("blame output missing %q:\n%s", want, got)
 		}
+	}
+}
+
+func TestBlameCleanRunPrintsNothing(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "test.db")
+	file := filepath.Join(dir, "runs.jsonl")
+	line := `{"run":"clean","span":"root","kind":"agent","name":"loop","start":"2026-07-22T10:00:00Z","end":"2026-07-22T10:00:01Z","status":"ok"}` + "\n"
+	if err := os.WriteFile(file, []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(context.Background(), []string{"-db", db, "import", file}, io.Discard); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	var out strings.Builder
+	if err := run(context.Background(), []string{"-db", db, "blame", "clean"}, &out); err != nil {
+		t.Fatalf("blame: %v", err)
+	}
+	if out.String() != "" {
+		t.Errorf("blame of clean run printed %q, want nothing", out.String())
+	}
+}
+
+func TestExportGoldenCommand(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "test.db")
+	file := filepath.Join(dir, "runs.jsonl")
+	line := `{"run":"gold","span":"t1","kind":"tool","tool":"fetch","name":"fetch","start":"2026-07-22T10:00:00Z","end":"2026-07-22T10:00:01Z","status":"ok","contents":[{"role":"input","body":"{\"sku\":\"A\"}"},{"role":"output","body":"{\"price\":42}"}]}` + "\n"
+	if err := os.WriteFile(file, []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(context.Background(), []string{"-db", db, "import", file}, io.Discard); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	out := filepath.Join(dir, "tests")
+	var stdout strings.Builder
+	if err := run(context.Background(), []string{"-db", db, "export", "--golden", "-o", out, "gold"}, &stdout); err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	path := strings.TrimSpace(stdout.String())
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read golden %q: %v", path, err)
+	}
+	for _, want := range []string{`"tool": "fetch"`, `"price"`, `"hash"`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("golden missing %q:\n%s", want, raw)
+		}
+	}
+}
+
+func TestExportRequiresGolden(t *testing.T) {
+	err := run(context.Background(), []string{"export", "some-run"}, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "usage: capybara export") {
+		t.Errorf("run(export) = %v, want usage error", err)
+	}
+}
+
+// toolRunJSONL is one completed tool call, the unit capybara check compares.
+func toolRunJSONL(runID, output string) string {
+	return `{"run":"` + runID + `","span":"` + runID + `-t","kind":"tool","tool":"fetch",` +
+		`"name":"fetch","start":"2026-07-22T10:00:00Z","end":"2026-07-22T10:00:01Z","status":"ok",` +
+		`"contents":[{"role":"input","body":"{\"sku\":\"A\"}"},{"role":"output","body":"` +
+		strings.ReplaceAll(output, `"`, `\"`) + `"}]}` + "\n"
+}
+
+func importLine(t *testing.T, db, dir, name, line string) {
+	t.Helper()
+	file := filepath.Join(dir, name)
+	if err := os.WriteFile(file, []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(context.Background(), []string{"-db", db, "import", file}, io.Discard); err != nil {
+		t.Fatalf("import %s: %v", name, err)
+	}
+}
+
+func goldenOf(t *testing.T, db, dir, runID string) string {
+	t.Helper()
+	var stdout strings.Builder
+	args := []string{"-db", db, "export", "--golden", "-o", filepath.Join(dir, "tests"), runID}
+	if err := run(context.Background(), args, &stdout); err != nil {
+		t.Fatalf("export golden: %v", err)
+	}
+	return strings.TrimSpace(stdout.String())
+}
+
+func TestCheckReportsDivergenceFromGolden(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "test.db")
+	importLine(t, db, dir, "gold.jsonl", toolRunJSONL("gold", `{"price":42,"currency":"USD"}`))
+	golden := goldenOf(t, db, dir, "gold")
+	importLine(t, db, dir, "later.jsonl", toolRunJSONL("later", `{"price":42}`))
+	var out strings.Builder
+	err := run(context.Background(), []string{"-db", db, "check", golden, "later"}, &out)
+	if !errors.Is(err, errDiverged) {
+		t.Fatalf("check = %v, want errDiverged", err)
+	}
+	got := out.String()
+	for _, want := range []string{"fetch", "output changed", "currency", "1 divergence"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("check output missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestCheckSilentWhenRunMatchesGolden(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "test.db")
+	importLine(t, db, dir, "gold.jsonl", toolRunJSONL("gold", `{"price":42,"currency":"USD"}`))
+	golden := goldenOf(t, db, dir, "gold")
+	importLine(t, db, dir, "same.jsonl", toolRunJSONL("same", `{"price":42,"currency":"USD"}`))
+	var out strings.Builder
+	if err := run(context.Background(), []string{"-db", db, "check", golden, "same"}, &out); err != nil {
+		t.Fatalf("check: %v", err)
+	}
+	if out.String() != "" {
+		t.Errorf("matching run printed %q, want nothing", out.String())
 	}
 }
 

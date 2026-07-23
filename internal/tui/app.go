@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/tonquoc0407/capybara/internal/analyze"
+	"github.com/tonquoc0407/capybara/internal/export"
 	"github.com/tonquoc0407/capybara/internal/store"
 	"github.com/tonquoc0407/capybara/internal/theme"
 )
@@ -32,6 +33,7 @@ const (
 	viewWaterfall
 	viewContext
 	viewDiff
+	viewBlame
 )
 
 type (
@@ -51,8 +53,13 @@ type (
 		runID string
 		stats map[string]map[string]int64
 	}
-	diffMsg struct{ diff *analyze.RunDiff }
-	errMsg  struct{ err error }
+	diffMsg   struct{ diff *analyze.RunDiff }
+	blameMsg  struct{ chain *analyze.BlameChain }
+	exportMsg struct {
+		paths []string
+		err   error
+	}
+	errMsg struct{ err error }
 )
 
 type keyMap struct {
@@ -63,6 +70,8 @@ type keyMap struct {
 	Filter key.Binding
 	Views  key.Binding
 	Diff   key.Binding
+	Blame  key.Binding
+	Test   key.Binding
 	Edit   key.Binding
 	Rerun  key.Binding
 	Attrs  key.Binding
@@ -79,6 +88,8 @@ func defaultKeys() keyMap {
 		Filter: key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "filter")),
 		Views:  key.NewBinding(key.WithKeys("w", "c"), key.WithHelp("w/c", "waterfall/context")),
 		Diff:   key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "diff")),
+		Blame:  key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "blame")),
+		Test:   key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "export test")),
 		Edit:   key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit output")),
 		Rerun:  key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "re-run")),
 		Attrs:  key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "attrs")),
@@ -88,14 +99,15 @@ func defaultKeys() keyMap {
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Nav, k.Expand, k.Search, k.Filter, k.Views, k.Diff, k.Rerun, k.Help, k.Quit}
+	return []key.Binding{k.Nav, k.Expand, k.Search, k.Filter, k.Diff, k.Blame, k.Rerun, k.Help, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Nav, k.Expand, k.Panes},
 		{k.Search, k.Filter, k.Attrs},
-		{k.Views, k.Diff, k.Edit, k.Rerun},
+		{k.Views, k.Diff, k.Blame},
+		{k.Test, k.Edit, k.Rerun},
 		{k.Help, k.Quit},
 	}
 }
@@ -111,6 +123,7 @@ type appModel struct {
 	waterfall   waterfallModel
 	contextv    contextModel
 	diffv       diffModel
+	blamev      blameModel
 	detail      detailModel
 	mode        viewMode
 	focus       focusArea
@@ -122,6 +135,7 @@ type appModel struct {
 	replaying   bool
 	spans       []store.Span
 	findings    map[string][]store.Finding
+	notice      string
 	lastErr     error
 }
 
@@ -144,6 +158,7 @@ func newApp(st *store.Store, th theme.Theme, events <-chan struct{}) appModel {
 		waterfall: newWaterfall(th),
 		contextv:  newContext(th),
 		diffv:     newDiff(th),
+		blamev:    newBlame(th),
 		detail:    newDetail(th),
 		focus:     focusTree,
 	}
@@ -268,6 +283,22 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layout()
 		m.syncDiffDetail()
 		return m, nil
+	case blameMsg:
+		m.blamev.setChain(msg.chain)
+		m.mode = viewBlame
+		m.focus = focusTree
+		m.layout()
+		if sp, ok := m.blamev.selected(); ok {
+			return m, m.loadContents(sp)
+		}
+		return m, nil
+	case exportMsg:
+		if msg.err != nil {
+			m.lastErr = msg.err
+		} else if len(msg.paths) > 0 {
+			m.notice = "wrote " + msg.paths[len(msg.paths)-1]
+		}
+		return m, nil
 	case editReadyMsg:
 		return m, m.editorCmd(msg)
 	case editDoneMsg:
@@ -292,6 +323,7 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	typing := (m.focus == focusTree && m.mode == viewTree && m.tree.typing()) ||
 		(m.focus == focusRuns && m.runs.typing())
 	if !typing {
+		m.notice = ""
 		switch {
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
@@ -311,6 +343,10 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.switchMode(viewContext)
 		case msg.String() == "d" && m.focus != focusDetail:
 			return m.handleDiffKey()
+		case msg.String() == "b" && m.focus != focusDetail:
+			return m.handleBlameKey()
+		case msg.String() == "t" && m.focus != focusDetail:
+			return m.handleTestKey()
 		case msg.String() == "e" && m.focus != focusDetail:
 			return m.handleEditKey()
 		case msg.String() == "r" && m.focus != focusDetail && !m.replaying:
@@ -365,6 +401,57 @@ func (m appModel) handleDiffKey() (tea.Model, tea.Cmd) {
 		}
 		return diffMsg{diff: d}
 	}
+}
+
+// handleBlameKey toggles the blame view for the selected run, computed off the
+// UI thread.
+func (m appModel) handleBlameKey() (tea.Model, tea.Cmd) {
+	if m.mode == viewBlame {
+		m.mode = viewTree
+		m.layout()
+		if sp, ok := m.middleSelected(); ok {
+			return m, m.loadContents(sp)
+		}
+		return m, nil
+	}
+	if m.selectedRun == "" {
+		return m, nil
+	}
+	st, run := m.st, m.selectedRun
+	return m, func() tea.Msg {
+		chain, err := analyze.Blame(context.Background(), st, run)
+		if err != nil {
+			return errMsg{err}
+		}
+		return blameMsg{chain: chain}
+	}
+}
+
+// handleTestKey exports a pytest regression case for the selected tool span,
+// or for the whole run when the selection is not a tool call.
+func (m appModel) handleTestKey() (tea.Model, tea.Cmd) {
+	if m.selectedRun == "" {
+		return m, nil
+	}
+	st, run, span := m.st, m.selectedRun, ""
+	if sp, ok := m.middleSelected(); ok && sp.Kind == store.KindTool {
+		span = sp.ID
+	}
+	return m, func() tea.Msg {
+		fx, err := buildExportFixture(st, run, span)
+		if err != nil {
+			return exportMsg{err: err}
+		}
+		paths, err := export.WritePytest(export.DefaultDir, fx)
+		return exportMsg{paths: paths, err: err}
+	}
+}
+
+func buildExportFixture(st *store.Store, run, span string) (export.Fixture, error) {
+	if span == "" {
+		return export.BuildFixture(context.Background(), st, run)
+	}
+	return export.BuildSpanFixture(context.Background(), st, run, span)
 }
 
 // syncDiffDetail mirrors the selected diff step into the detail pane.
@@ -422,6 +509,8 @@ func (m appModel) updateMiddle(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.waterfall.update(msg)
 	case viewContext:
 		m.contextv.update(msg)
+	case viewBlame:
+		m.blamev.update(msg)
 	}
 	if sp, ok := m.middleSelected(); ok && sp.ID != before.ID {
 		return m, tea.Batch(cmd, m.loadContents(sp))
@@ -435,6 +524,8 @@ func (m appModel) middleSelected() (store.Span, bool) {
 		return m.waterfall.selected()
 	case viewContext:
 		return m.contextv.selected()
+	case viewBlame:
+		return m.blamev.selected()
 	}
 	return m.tree.selected()
 }
@@ -455,6 +546,7 @@ func (m *appModel) layout() {
 	m.waterfall.setSize(treeW-2, paneH-3)
 	m.contextv.setSize(treeW-2, paneH-3)
 	m.diffv.setSize(treeW-2, paneH-3)
+	m.blamev.setSize(treeW-2, paneH-3)
 	m.detail.setSize(detailW-2, paneH-3)
 }
 
@@ -479,8 +571,12 @@ func (m appModel) View() string {
 				shortID(m.diffv.diff.RunA), shortID(m.diffv.diff.RunB))
 		}
 		middleView = m.diffv.view()
+	case viewBlame:
+		middleTitle = "blame " + shortID(m.selectedRun)
+		middleView = m.blamev.view()
 	}
-	panes := lipgloss.JoinHorizontal(lipgloss.Top,
+	panes := lipgloss.JoinHorizontal(
+		lipgloss.Top,
 		m.pane("runs", m.runs.view(), runsW, paneH, m.focus == focusRuns),
 		m.pane(middleTitle, middleView, treeW, paneH, m.focus == focusTree),
 		m.pane("detail", m.detail.view(), detailW, paneH, m.focus == focusDetail),
@@ -531,6 +627,10 @@ func (m appModel) statusView() string {
 		line = m.th.Accent.Render("replaying") + m.th.StatusBar.Render(" | ") + line
 	} else if m.edit.spanID != "" {
 		line = m.th.Accent.Render("edited "+m.edit.name+": press r to re-run") +
+			m.th.StatusBar.Render(" | ") + line
+	}
+	if m.notice != "" {
+		line = m.th.Accent.Render(truncate(m.notice, m.width/2)) +
 			m.th.StatusBar.Render(" | ") + line
 	}
 	if run, ok := m.runs.selectedRun(); ok && run.Findings > 0 {

@@ -136,6 +136,28 @@ func (s *Store) Findings(ctx context.Context, runID string) ([]Finding, error) {
 	return findings, nil
 }
 
+// Taints returns a run's taint edges.
+func (s *Store) Taints(ctx context.Context, runID string) ([]Taint, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT run_id, span_id, source_span_id FROM taints WHERE run_id = ?`, runID)
+	if err != nil {
+		return nil, fmt.Errorf("taints of %s: %w", runID, err)
+	}
+	defer rows.Close()
+	var taints []Taint
+	for rows.Next() {
+		var t Taint
+		if err := rows.Scan(&t.RunID, &t.SpanID, &t.SourceSpanID); err != nil {
+			return nil, fmt.Errorf("scan taint: %w", err)
+		}
+		taints = append(taints, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("taints of %s: %w", runID, err)
+	}
+	return taints, nil
+}
+
 // ContentsForRun returns every content row of a run, grouped by span.
 func (s *Store) ContentsForRun(ctx context.Context, runID string) (map[string][]Content, error) {
 	rows, err := s.db.QueryContext(ctx,

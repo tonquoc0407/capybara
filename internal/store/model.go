@@ -92,3 +92,11 @@ type Finding struct {
 	Severity string
 	Detail   string
 }
+
+// Taint is one propagation edge: SpanID consumed content derived from
+// SourceSpanID, a finding-marked span.
+type Taint struct {
+	RunID        string
+	SpanID       string
+	SourceSpanID string
+}

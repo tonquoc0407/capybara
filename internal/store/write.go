@@ -188,6 +188,30 @@ func (s *Store) PutLLMCache(ctx context.Context, entries []CachedLLM) error {
 	return nil
 }
 
+// PutTaints replaces a run's taint edges with the given set, so a re-analysis
+// whose findings changed leaves no stale propagation behind.
+func (s *Store) PutTaints(ctx context.Context, runID string, edges []Taint) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM taints WHERE run_id = ?`, runID); err != nil {
+		return fmt.Errorf("clear taints of %s: %w", runID, err)
+	}
+	for _, e := range edges {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO taints (run_id, span_id, source_span_id) VALUES (?, ?, ?)`,
+			e.RunID, e.SpanID, e.SourceSpanID); err != nil {
+			return fmt.Errorf("taint %s<-%s: %w", e.SpanID, e.SourceSpanID, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
+}
+
 // SetRunParent links a replay to the run it was replayed from, creating the
 // row first so the link survives the child's spans arriving later.
 func (s *Store) SetRunParent(ctx context.Context, runID, source, parentRunID string) error {

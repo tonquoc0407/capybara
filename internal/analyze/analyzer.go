@@ -60,12 +60,14 @@ func (a *Analyzer) Sweep(ctx context.Context) error {
 			}
 		}
 	}
+	taintsByRun := make(map[string][]store.Taint, len(runs))
 	for _, runID := range runs {
-		fs, err := a.checkRun(ctx, runID, findings, fresh)
+		fs, ts, err := a.checkRun(ctx, runID, findings, fresh)
 		if err != nil {
 			return fmt.Errorf("analyze run %s: %w", runID, err)
 		}
 		findings = append(findings, fs...)
+		taintsByRun[runID] = ts
 	}
 	if err := a.st.SetSpanCosts(ctx, costs); err != nil {
 		return fmt.Errorf("analyze: %w", err)
@@ -75,23 +77,29 @@ func (a *Analyzer) Sweep(ctx context.Context) error {
 			return fmt.Errorf("analyze: %w", err)
 		}
 	}
+	for _, runID := range runs {
+		if err := a.st.PutTaints(ctx, runID, taintsByRun[runID]); err != nil {
+			return fmt.Errorf("analyze: %w", err)
+		}
+	}
 	if err := a.st.MarkAnalyzed(ctx, ids); err != nil {
 		return fmt.Errorf("analyze: %w", err)
 	}
 	return nil
 }
 
-// checkRun evaluates the cross-span detectors: improvise, loops, token spikes.
+// checkRun evaluates the cross-span detectors: improvise, loops, token spikes,
+// and the taint edges that link every finding to the run's final output.
 func (a *Analyzer) checkRun(ctx context.Context, runID string,
 	sweepFindings []store.Finding, fresh map[string]bool,
-) ([]store.Finding, error) {
+) ([]store.Finding, []store.Taint, error) {
 	spans, err := a.st.Spans(ctx, runID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	known, err := a.st.Findings(ctx, runID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for _, f := range sweepFindings {
 		if f.RunID == runID {
@@ -100,15 +108,16 @@ func (a *Analyzer) checkRun(ctx context.Context, runID string,
 	}
 	findings, err := a.improviseRun(ctx, newRunContext(spans, known, fresh))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	calls, err := a.st.ToolCalls(ctx, runID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	findings = append(findings, loopFindings(runID, calls)...)
 	findings = append(findings, spikeFindings(spans)...)
-	return findings, nil
+	taints := taintRun(spans, append(known, findings...))
+	return findings, taints, nil
 }
 
 // Watch sweeps once, then again after every committed write, until ctx ends.

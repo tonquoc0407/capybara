@@ -24,7 +24,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx, os.Args[1:], os.Stdout); err != nil {
-		fmt.Fprintf(os.Stderr, "capybara: %v\n", err)
+		if !errors.Is(err, errDiverged) {
+			fmt.Fprintf(os.Stderr, "capybara: %v\n", err)
+		}
 		os.Exit(1)
 	}
 }
@@ -54,7 +56,13 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return diffCmd(ctx, *dbPath, args[1:], out)
 	case "replay":
 		return replayCmd(ctx, *dbPath, capture, args[1:], out)
-	case "blame", "serve", "export":
+	case "blame":
+		return blameCmd(ctx, *dbPath, args[1:], out)
+	case "export":
+		return exportCmd(ctx, *dbPath, args[1:], out)
+	case "check":
+		return checkCmd(ctx, *dbPath, args[1:], out)
+	case "serve":
 		return fmt.Errorf("%s: not implemented", args[0])
 	case "help":
 		return usage(out)
@@ -198,7 +206,8 @@ watcher when ~/.claude/projects exists.
   replay   re-run a recorded run, optionally with an edited tool output
   blame    walk a run's final output back to its tainted source
   serve    serve the read-only web view
-  export   export a run
+  export   export a run (--golden snapshots a fixture for CI)
+  check    compare a run against a golden snapshot, non-zero on divergence
   help     print this message
 
 Flags, before the command:
