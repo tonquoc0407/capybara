@@ -177,10 +177,10 @@ def _patch_anthropic(session: Session) -> None:
             "messages.stream() cannot be replayed; use create(stream=True)"
         )
 
-    Messages.create = create
-    AsyncMessages.create = acreate
-    Messages.stream = stream
-    AsyncMessages.stream = stream
+    Messages.create = create  # type: ignore[method-assign]
+    AsyncMessages.create = acreate  # type: ignore[method-assign]
+    Messages.stream = stream  # type: ignore[method-assign]
+    AsyncMessages.stream = stream  # type: ignore[method-assign]
 
 
 def _anthropic_events(entry: dict[str, Any], model: str) -> Iterator[Any]:
@@ -276,8 +276,8 @@ def _patch_openai(session: Session) -> None:
             return _aiter(_openai_chunks(entry, model))
         return _openai_response(entry, model)
 
-    Completions.create = create
-    AsyncCompletions.create = acreate
+    Completions.create = create  # type: ignore[method-assign]
+    AsyncCompletions.create = acreate  # type: ignore[method-assign]
 
 
 def _openai_messages(kwargs: dict[str, Any]) -> list[tuple[str, Any]]:
