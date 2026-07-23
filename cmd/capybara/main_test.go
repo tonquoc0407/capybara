@@ -139,10 +139,34 @@ func TestExportGoldenCommand(t *testing.T) {
 	}
 }
 
-func TestExportRequiresGolden(t *testing.T) {
-	err := run(context.Background(), []string{"export", "some-run"}, io.Discard)
+func TestExportRequiresOneRun(t *testing.T) {
+	err := run(context.Background(), []string{"export"}, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "usage: capybara export") {
 		t.Errorf("run(export) = %v, want usage error", err)
+	}
+}
+
+func TestExportWithoutGoldenWritesAPytestCase(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "test.db")
+	importLine(t, db, dir, "run.jsonl", toolRunJSONL("pytest", `{"price":42}`))
+	var stdout strings.Builder
+	args := []string{"-db", db, "export", "-o", filepath.Join(dir, "tests"), "pytest"}
+	if err := run(context.Background(), args, &stdout); err != nil {
+		t.Fatalf("export: %v", err)
+	}
+	paths := strings.Fields(stdout.String())
+	if len(paths) != 2 {
+		t.Fatalf("printed %v, want a fixture and a test", paths)
+	}
+	src, err := os.ReadFile(paths[1])
+	if err != nil {
+		t.Fatalf("read test: %v", err)
+	}
+	for _, want := range []string{"def test_tool_contracts", "def test_live_tool_contracts"} {
+		if !strings.Contains(string(src), want) {
+			t.Errorf("generated test missing %q", want)
+		}
 	}
 }
 

@@ -19,8 +19,8 @@ func exportCmd(ctx context.Context, dbPath string, args []string, out io.Writer)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if !*golden || fs.NArg() != 1 {
-		return errors.New("usage: capybara export --golden <run>")
+	if fs.NArg() != 1 {
+		return errors.New("usage: capybara export [--golden] <run>")
 	}
 	st, err := store.Open(dbPath)
 	if err != nil {
@@ -35,10 +35,21 @@ func exportCmd(ctx context.Context, dbPath string, args []string, out io.Writer)
 	if err != nil {
 		return err
 	}
-	path, err := export.WriteGolden(*dir, fx)
+	if *golden {
+		path, err := export.WriteGolden(*dir, fx)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(out, path)
+		return err
+	}
+	paths, err := export.WritePytest(*dir, fx)
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintln(out, path)
-	return err
+	w := &errWriter{w: out}
+	for _, path := range paths {
+		w.printf("%s\n", path)
+	}
+	return w.err
 }
