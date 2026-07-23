@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/tonquoc0407/capybara/internal/store"
 	"github.com/tonquoc0407/capybara/internal/theme"
@@ -207,12 +208,39 @@ func (m *detailModel) writeContentList(b *strings.Builder, contents []store.Cont
 	}
 }
 
+// minColumnWidth is the narrowest a diff side can get before two columns cost
+// more in wrapping than they gain in comparison.
+const minColumnWidth = 34
+
 func (m *detailModel) writeDiff(b *strings.Builder) {
 	d := m.diff
 	b.WriteString(m.th.Accent.Render(d.name) + "\n\n")
+	if m.width >= 2*minColumnWidth+1 {
+		b.WriteString(m.diffColumns(d))
+		return
+	}
 	m.writeSide(b, d.runA, d.sideA, d.hasA)
 	b.WriteString("\n")
 	m.writeSide(b, d.runB, d.sideB, d.hasB)
+}
+
+func (m *detailModel) diffColumns(d *diffDetail) string {
+	col := (m.width - 1) / 2
+	defer m.narrowTo(col)()
+	var left, right strings.Builder
+	m.writeSide(&left, d.runA, d.sideA, d.hasA)
+	m.writeSide(&right, d.runB, d.sideB, d.hasB)
+	style := lipgloss.NewStyle().Width(col)
+	return lipgloss.JoinHorizontal(lipgloss.Top,
+		style.Render(left.String()), " ", style.Render(right.String()))
+}
+
+// narrowTo makes body rendering wrap at a column, and restores the pane width
+// when the caller is done with it.
+func (m *detailModel) narrowTo(w int) func() {
+	full := m.width
+	m.width, m.markdown = w, nil
+	return func() { m.width, m.markdown = full, nil }
 }
 
 func (m *detailModel) writeSide(b *strings.Builder, run string, contents []store.Content, present bool) {

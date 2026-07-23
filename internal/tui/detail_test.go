@@ -54,6 +54,49 @@ func TestDetailRawAttrsToggle(t *testing.T) {
 	}
 }
 
+func diffStepFixture() diffDetail {
+	return diffDetail{
+		name: "tool search_db", runA: "aaaaaaaa1111", runB: "bbbbbbbb2222",
+		sideA: []store.Content{{Role: "output", Seq: 0, Body: "left body", MediaType: "text/plain"}},
+		sideB: []store.Content{{Role: "output", Seq: 0, Body: "right body", MediaType: "text/plain"}},
+		hasA:  true, hasB: true,
+	}
+}
+
+func TestDetailDiffSideBySideWhenWide(t *testing.T) {
+	m := newDetail(theme.Bara())
+	m.setSize(100, 20)
+	m.setDiffStep(diffStepFixture())
+	lines := strings.Split(plainView(m), "\n")
+	var paired int
+	for _, line := range lines {
+		if strings.Contains(line, "aaaaaaaa") && strings.Contains(line, "bbbbbbbb") {
+			paired++
+		}
+	}
+	if paired == 0 {
+		t.Errorf("wide pane did not put the two runs on one row:\n%s", plainView(m))
+	}
+	if m.width != 100 {
+		t.Errorf("pane width left narrowed at %d", m.width)
+	}
+}
+
+func TestDetailDiffStacksWhenNarrow(t *testing.T) {
+	m := newDetail(theme.Bara())
+	m.setSize(40, 20)
+	m.setDiffStep(diffStepFixture())
+	out := plainView(m)
+	for _, line := range strings.Split(out, "\n") {
+		if strings.Contains(line, "aaaaaaaa") && strings.Contains(line, "bbbbbbbb") {
+			t.Errorf("narrow pane used columns:\n%s", out)
+		}
+	}
+	if !strings.Contains(out, "aaaaaaaa") || !strings.Contains(out, "bbbbbbbb") {
+		t.Errorf("stacked diff lost a side:\n%s", out)
+	}
+}
+
 func TestDetailWithoutContent(t *testing.T) {
 	m := newDetail(theme.Bara())
 	m.setSize(60, 20)
