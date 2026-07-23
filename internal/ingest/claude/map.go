@@ -260,7 +260,10 @@ func (m *mapper) assistantLine(b *store.Batch, ln line) error {
 	}
 	if msg.Usage != nil {
 		// Same-message lines repeat the usage struct; take it once, at its max.
-		in := msg.Usage.InputTokens + msg.Usage.CacheCreationTokens + msg.Usage.CacheReadTokens
+		// Cache reads stay out of tokens_in: they are context the model saw but
+		// was not billed new for, and they dwarf everything else in long
+		// sessions. The full usage map keeps them for cost and context view.
+		in := msg.Usage.InputTokens + msg.Usage.CacheCreationTokens
 		sp.TokensIn = max(sp.TokensIn, in)
 		sp.TokensOut = max(sp.TokensOut, msg.Usage.OutputTokens)
 		sp.Attrs.Raw["usage"] = *msg.Usage

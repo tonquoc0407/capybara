@@ -100,12 +100,21 @@ func TestNoSpikeOnSteadyBurn(t *testing.T) {
 }
 
 func TestNoSpikeBelowFloor(t *testing.T) {
-	spans := []store.Span{
+	tiny := []store.Span{
 		llmSpan("r1", 0, 50), llmSpan("r1", 1, 60), llmSpan("r1", 2, 40),
 		llmSpan("r1", 3, 55), llmSpan("r1", 4, 600),
 	}
-	if fs := spikeFindings(spans); len(fs) != 0 {
+	if fs := spikeFindings(tiny); len(fs) != 0 {
 		t.Fatalf("tiny turns flagged: %+v", fs)
+	}
+	// A real turn can run many times the baseline and still be too small to
+	// bill anyone's attention.
+	ordinary := []store.Span{
+		llmSpan("r2", 0, 2000), llmSpan("r2", 1, 2200), llmSpan("r2", 2, 1800),
+		llmSpan("r2", 3, 2000), llmSpan("r2", 4, 15000),
+	}
+	if fs := spikeFindings(ordinary); len(fs) != 0 {
+		t.Fatalf("7x the baseline but under the floor was flagged: %+v", fs)
 	}
 }
 

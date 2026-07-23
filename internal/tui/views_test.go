@@ -84,6 +84,17 @@ func TestContextRowsProportionsAndEviction(t *testing.T) {
 	}
 }
 
+func TestContextRowsAddCachedReadsBack(t *testing.T) {
+	spans, stats := contextFixture()
+	spans[0].Attrs.Raw = map[string]any{
+		"usage": map[string]any{"cache_read_input_tokens": float64(9000)},
+	}
+	rows := buildContextRows(spans, stats)
+	if rows[0].total != 10000 {
+		t.Errorf("row total = %d, want 10000 (1000 new + 9000 cached)", rows[0].total)
+	}
+}
+
 func TestContextViewRenders(t *testing.T) {
 	m := newContext(theme.Bara())
 	m.setSize(70, 12)

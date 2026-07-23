@@ -18,11 +18,13 @@ const (
 	minCalls   = 4
 )
 
-// spike detection: token burn beyond a rolling per-run baseline.
+// spike detection: token burn beyond a rolling per-run baseline. The floor is
+// in tokens billed as new, which cache reads no longer inflate; measured over
+// real Claude history it keeps the warning at ~1% of turns.
 const (
 	spikeWindow = 5
 	spikeFactor = 3.0
-	spikeFloor  = 1000
+	spikeFloor  = 20000
 )
 
 func loopFindings(runID string, calls []store.ToolCall) []store.Finding {

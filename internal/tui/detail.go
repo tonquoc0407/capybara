@@ -140,6 +140,9 @@ func (m *detailModel) writeHeader(b *strings.Builder) {
 	if sp.TokensIn > 0 || sp.TokensOut > 0 {
 		info += fmt.Sprintf(" - tok %d/%d", sp.TokensIn, sp.TokensOut)
 	}
+	if n := cacheRead(*sp); n > 0 {
+		info += fmt.Sprintf(" - cached %d", n)
+	}
 	if sp.CostUSD != nil {
 		info += fmt.Sprintf(" - $%.4f", *sp.CostUSD)
 	}

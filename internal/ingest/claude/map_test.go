@@ -67,8 +67,12 @@ func TestMapsSessionTree(t *testing.T) {
 	if llm == nil || llm.Kind != store.KindLLM || llm.ParentID != "sess1:root" {
 		t.Fatalf("llm = %+v", llm)
 	}
-	if llm.TokensIn != 1110 || llm.TokensOut != 50 {
-		t.Errorf("llm tokens = %d/%d, want 1110/50", llm.TokensIn, llm.TokensOut)
+	// Cache reads are context, not new tokens: 10 input + 100 cache_creation.
+	if llm.TokensIn != 110 || llm.TokensOut != 50 {
+		t.Errorf("llm tokens = %d/%d, want 110/50", llm.TokensIn, llm.TokensOut)
+	}
+	if u, ok := llm.Attrs.Raw["usage"].(usage); !ok || u.CacheReadTokens != 1000 {
+		t.Errorf("raw usage lost the cache read: %+v", llm.Attrs.Raw["usage"])
 	}
 	if llm.Attrs.Model != "claude-fable-5" || llm.StartedAt.Equal(llm.EndedAt) {
 		t.Errorf("llm attrs/times = %+v", llm)

@@ -96,7 +96,7 @@ func buildContextRows(spans []store.Span, stats map[string]map[string]int64) []c
 			toolIdx++
 		}
 		charTotal := sysChars + histChars + toolSum
-		total := sp.TokensIn
+		total := contextTokens(sp)
 		if total == 0 {
 			total = charTotal
 		}
@@ -117,6 +117,21 @@ func buildContextRows(spans []store.Span, stats map[string]map[string]int64) []c
 		histChars += s["user"] + s["assistant"] + s["thinking"]
 	}
 	return rows
+}
+
+// contextTokens is the whole prompt the model saw. TokensIn counts only what
+// was billed as new, so a cached read has to be added back here.
+func contextTokens(sp store.Span) int64 {
+	return sp.TokensIn + cacheRead(sp)
+}
+
+func cacheRead(sp store.Span) int64 {
+	u, ok := sp.Attrs.Raw["usage"].(map[string]any)
+	if !ok {
+		return 0
+	}
+	n, _ := u["cache_read_input_tokens"].(float64)
+	return int64(n)
 }
 
 func (m *contextModel) selectedID() string {
