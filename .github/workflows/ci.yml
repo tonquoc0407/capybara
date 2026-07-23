@@ -60,6 +60,6 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           version: "0.11.25"
-      - run: uv sync --extra dev --python ${{ matrix.python }}
+      - run: uv sync --extra dev --locked --python ${{ matrix.python }}
       - run: uv run pytest -q
       - run: uv run mypy

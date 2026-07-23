@@ -1,0 +1,27 @@
+name: sdk-upstream
+
+# The SDK pins its dependencies in uv.lock so ordinary CI is reproducible.
+# This job ignores the lock and resolves fresh, so an OpenTelemetry release
+# that breaks the SDK shows up here rather than in a user's install.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-latest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.11.25"
+      - run: uv sync --extra dev --upgrade
+      - run: uv run pytest -q
+      - run: uv run mypy
