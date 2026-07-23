@@ -16,9 +16,6 @@ const (
 	cwdAttr        = "capybara.cwd"
 )
 
-// DefaultEndpoint is the receiver's OTLP http endpoint, where a replay exports.
-const DefaultEndpoint = "http://127.0.0.1:4318/v1/traces"
-
 // Manifest is the complete instruction set handed to the SDK runner: what to
 // execute, what to serve it, and which recorded value the user replaced.
 type Manifest struct {
@@ -78,7 +75,6 @@ func Build(ctx context.Context, st *store.Store, parentRunID, startSpanID, overr
 		RunID:       runID,
 		ParentRunID: parentRunID,
 		StartSpanID: startSpanID,
-		Endpoint:    DefaultEndpoint,
 		Entrypoint:  entrypoint,
 		Cwd:         cwd,
 	}

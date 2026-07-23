@@ -42,7 +42,7 @@ func startApp(t *testing.T, st *store.Store) *teatest.TestModel {
 	t.Helper()
 	ch, cancel := st.Subscribe()
 	t.Cleanup(cancel)
-	return teatest.NewTestModel(t, newApp(st, theme.Bara(), ch),
+	return teatest.NewTestModel(t, newApp(st, theme.Bara(), ch, true),
 		teatest.WithInitialTermSize(110, 32))
 }
 

@@ -12,10 +12,10 @@ import (
 )
 
 // Run starts the TUI and blocks until quit or ctx cancellation.
-func Run(ctx context.Context, st *store.Store, th theme.Theme) error {
+func Run(ctx context.Context, st *store.Store, th theme.Theme, captureContent bool) error {
 	ch, cancel := st.Subscribe()
 	defer cancel()
-	p := tea.NewProgram(newApp(st, th, ch), tea.WithAltScreen(), tea.WithContext(ctx))
+	p := tea.NewProgram(newApp(st, th, ch, captureContent), tea.WithAltScreen(), tea.WithContext(ctx))
 	if _, err := p.Run(); err != nil {
 		if ctx.Err() != nil {
 			return nil

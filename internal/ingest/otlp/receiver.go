@@ -59,6 +59,15 @@ func (r *Receiver) Listen() error {
 	return nil
 }
 
+// HTTPEndpoint is the bound OTLP trace endpoint, known only after Listen when
+// the port was left to the operating system.
+func (r *Receiver) HTTPEndpoint() string {
+	if r.httpLis == nil {
+		return ""
+	}
+	return "http://" + r.httpLis.Addr().String() + "/v1/traces"
+}
+
 // Run serves on both ports until ctx is cancelled, binding them if needed.
 func (r *Receiver) Run(ctx context.Context) error {
 	if err := r.Listen(); err != nil {

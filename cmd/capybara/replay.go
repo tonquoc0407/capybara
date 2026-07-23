@@ -9,7 +9,6 @@ import (
 	"os"
 
 	"github.com/tonquoc0407/capybara/internal/analyze"
-	"github.com/tonquoc0407/capybara/internal/ingest/otlp"
 	"github.com/tonquoc0407/capybara/internal/replay"
 	"github.com/tonquoc0407/capybara/internal/store"
 )
@@ -49,14 +48,9 @@ func replayCmd(ctx context.Context, dbPath string, capture bool, args []string, 
 	if err != nil {
 		return err
 	}
-	runCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	stop := serveReplay(runCtx, st, capture)
-	if err := replay.Run(ctx, st, m); err != nil {
+	if err := replay.Run(ctx, st, m, capture); err != nil {
 		return err
 	}
-	cancel()
-	stop()
 	an, err := analyze.New(st)
 	if err != nil {
 		return err
@@ -66,19 +60,4 @@ func replayCmd(ctx context.Context, dbPath string, capture bool, args []string, 
 	}
 	_, err = fmt.Fprintln(out, m.RunID)
 	return err
-}
-
-// serveReplay ingests the replay's spans itself unless a capybara is already
-// listening, in which case that one receives them.
-func serveReplay(ctx context.Context, st *store.Store, capture bool) func() {
-	rcv := otlp.New(st, capture)
-	if err := rcv.Listen(); err != nil {
-		return func() {}
-	}
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		_ = rcv.Run(ctx)
-	}()
-	return func() { <-done }
 }

@@ -107,7 +107,7 @@ func receive(ctx context.Context, dbPath string, capture bool) error {
 		workers++
 		go func() { errc <- claude.Watch(runCtx, st, claudeRoot, capture) }()
 	}
-	errs := []error{tui.Run(runCtx, st, th)}
+	errs := []error{tui.Run(runCtx, st, th, capture)}
 	cancel()
 	for range workers {
 		errs = append(errs, <-errc)

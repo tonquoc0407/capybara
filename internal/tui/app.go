@@ -132,6 +132,7 @@ type appModel struct {
 	selectedRun string
 	diffMark    string
 	edit        edit
+	capture     bool
 	replaying   bool
 	spans       []store.Span
 	findings    map[string][]store.Finding
@@ -139,7 +140,7 @@ type appModel struct {
 	lastErr     error
 }
 
-func newApp(st *store.Store, th theme.Theme, events <-chan struct{}) appModel {
+func newApp(st *store.Store, th theme.Theme, events <-chan struct{}, captureContent bool) appModel {
 	h := help.New()
 	h.Styles.ShortKey = th.HelpKey
 	h.Styles.ShortDesc = th.HelpDesc
@@ -161,6 +162,7 @@ func newApp(st *store.Store, th theme.Theme, events <-chan struct{}) appModel {
 		blamev:    newBlame(th),
 		detail:    newDetail(th),
 		focus:     focusTree,
+		capture:   captureContent,
 	}
 }
 

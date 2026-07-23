@@ -78,7 +78,7 @@ func (m appModel) handleReplayKey() (tea.Model, tea.Cmd) {
 	if m.selectedRun == "" {
 		return m, nil
 	}
-	st, parent := m.st, m.selectedRun
+	st, parent, capture := m.st, m.selectedRun, m.capture
 	spanID, override := "", ""
 	if m.edit.runID == parent {
 		spanID, override = m.edit.spanID, m.edit.output
@@ -90,7 +90,7 @@ func (m appModel) handleReplayKey() (tea.Model, tea.Cmd) {
 		if err != nil {
 			return replayDoneMsg{parentRunID: parent, err: err}
 		}
-		if err := replay.Run(ctx, st, manifest); err != nil {
+		if err := replay.Run(ctx, st, manifest, capture); err != nil {
 			return replayDoneMsg{parentRunID: parent, runID: manifest.RunID, err: err}
 		}
 		return replayDoneMsg{parentRunID: parent, runID: manifest.RunID}

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tonquoc0407/capybara/internal/ingest/otlp"
 	"github.com/tonquoc0407/capybara/internal/store"
 )
 
@@ -19,13 +20,19 @@ const ingestWait = 5 * time.Second
 
 // Run links the replay to its parent, hands the manifest to the SDK runner and
 // waits for it. The replay's spans arrive over OTLP like any other run.
-func Run(ctx context.Context, st *store.Store, m Manifest) error {
+func Run(ctx context.Context, st *store.Store, m Manifest, captureContent bool) error {
 	if len(m.Entrypoint) == 0 {
 		return fmt.Errorf("manifest has no entrypoint")
 	}
 	if err := st.SetRunParent(ctx, m.RunID, "otlp", m.ParentRunID); err != nil {
 		return err
 	}
+	stop, endpoint, err := serve(ctx, st, captureContent)
+	if err != nil {
+		return err
+	}
+	defer stop()
+	m.Endpoint = endpoint
 	path, cleanup, err := writeManifest(m)
 	if err != nil {
 		return err
@@ -40,6 +47,24 @@ func Run(ctx context.Context, st *store.Store, m Manifest) error {
 	}
 	waitForSpans(ctx, st, m.RunID)
 	return nil
+}
+
+// serve gives the replay a receiver on a port of its own. Sharing the default
+// one would hand the spans to whichever capybara already holds it, writing
+// them into that process's database instead of this one.
+func serve(ctx context.Context, st *store.Store, captureContent bool) (func(), string, error) {
+	rcv := otlp.New(st, captureContent)
+	rcv.GRPCAddr, rcv.HTTPAddr = "127.0.0.1:0", "127.0.0.1:0"
+	if err := rcv.Listen(); err != nil {
+		return nil, "", fmt.Errorf("replay receiver: %w", err)
+	}
+	rcvCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = rcv.Run(rcvCtx)
+	}()
+	return func() { cancel(); <-done }, rcv.HTTPEndpoint(), nil
 }
 
 // waitForSpans blocks until the replay's spans have been ingested: the runner

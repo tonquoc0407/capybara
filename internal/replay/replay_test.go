@@ -3,12 +3,32 @@ package replay
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/tonquoc0407/capybara/internal/store"
 )
+
+// A capybara already holding the default port must not receive the replay's
+// spans into its own database.
+func TestServeTakesAPortOfItsOwn(t *testing.T) {
+	busy, err := net.Listen("tcp", "127.0.0.1:4318")
+	if err != nil {
+		t.Skip("default otlp port already in use")
+	}
+	defer busy.Close()
+	stop, endpoint, err := serve(context.Background(), openTemp(t), true)
+	if err != nil {
+		t.Fatalf("serve: %v", err)
+	}
+	defer stop()
+	if endpoint == "" || strings.Contains(endpoint, ":4318") {
+		t.Errorf("endpoint = %q, want a port of its own", endpoint)
+	}
+}
 
 var t0 = time.Date(2026, 7, 22, 10, 0, 0, 0, time.UTC)
 
@@ -181,7 +201,7 @@ func TestRunLinksTheReplayToItsParent(t *testing.T) {
 		t.Fatal(err)
 	}
 	m.Entrypoint = []string{"/bin/sh", "-c", "exit 0"}
-	if err := Run(ctx, st, m); err == nil {
+	if err := Run(ctx, st, m, true); err == nil {
 		t.Log("runner exited cleanly")
 	}
 	runs, err := st.ListRuns(ctx)
