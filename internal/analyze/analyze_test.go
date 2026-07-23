@@ -239,6 +239,42 @@ func TestNotImprovisedWhenFailureAcknowledged(t *testing.T) {
 	}
 }
 
+func TestNotImprovisedWhenAcknowledgedInAnotherLanguage(t *testing.T) {
+	st := openTemp(t)
+	b := improviseRunBatch("r1", "connection refused",
+		"search_db báo lỗi nên tôi không thể lấy giá.", "error")
+	if err := st.WriteBatch(context.Background(), b); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	sweep(t, st)
+	if fs := runFindings(t, st, "r1"); len(fs) != 0 {
+		t.Fatalf("findings = %+v", fs)
+	}
+}
+
+// Calling the tool again is acknowledgment in any language, and outweighs an
+// output that would otherwise read as improvised.
+func TestNotImprovisedWhenToolRetried(t *testing.T) {
+	st := openTemp(t)
+	b := improviseRunBatch("r1", "connection refused",
+		"The search_db results show the price is 42.", "error")
+	b.Spans = append(b.Spans, store.Span{
+		ID: "r1-retry", RunID: "r1", ParentID: "r1-llm2", Kind: store.KindTool,
+		Name: "search_db", StartedAt: t0.Add(6 * time.Second), EndedAt: t0.Add(7 * time.Second),
+		Status: "ok", Attrs: store.Attrs{ToolName: "search_db"},
+	})
+	b.Contents = append(b.Contents, store.Content{
+		SpanID: "r1-retry", Role: "output", Seq: 0, Body: "price 42", MediaType: "text/plain",
+	})
+	if err := st.WriteBatch(context.Background(), b); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	sweep(t, st)
+	if fs := runFindings(t, st, "r1"); len(fs) != 0 {
+		t.Fatalf("findings = %+v", fs)
+	}
+}
+
 func TestNotImprovisedWithoutReference(t *testing.T) {
 	st := openTemp(t)
 	b := improviseRunBatch("r1", "connection refused", "Let me try a different approach instead.", "error")

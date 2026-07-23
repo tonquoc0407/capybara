@@ -8,14 +8,18 @@ import (
 	"github.com/tonquoc0407/capybara/internal/store"
 )
 
-// Improvise detection is tuned for low false positives: it fires only when
-// the next llm turn demonstrably references a failed tool call (by name or by
-// quoting its broken output) without acknowledging the failure.
+// Improvise detection is tuned for low false positives: it fires only when the
+// next llm turn demonstrably references a failed tool call (by name or by
+// quoting its broken output) without acknowledging the failure. Acknowledgment
+// is read two ways — calling the tool again, which needs no language at all,
+// and saying so, which needs a word list per language the agent answers in.
 
 var failureWords = []string{
 	"error", "fail", "failed", "failure", "unable", "cannot", "can't",
 	"couldn't", "invalid", "empty", "missing", "retry", "not found",
 	"no result", "denied", "timeout", "timed out", "crash", "exception",
+	"lỗi", "thất bại", "không thể", "không tìm thấy", "không có kết quả",
+	"báo lỗi", "thử lại", "hết thời gian", "bị từ chối", "trống",
 }
 
 const overlapLen = 12
@@ -75,7 +79,7 @@ func (a *Analyzer) improviseRun(ctx context.Context, rc *runContext) ([]store.Fi
 		if !ok || (!rc.fresh[toolID] && !rc.fresh[next.ID]) {
 			continue
 		}
-		evidence, err := a.consumedEvidence(ctx, tool, next)
+		evidence, err := a.consumedEvidence(ctx, rc, tool, next)
 		if err != nil {
 			return nil, err
 		}
@@ -92,28 +96,14 @@ func (a *Analyzer) improviseRun(ctx context.Context, rc *runContext) ([]store.Fi
 	return findings, nil
 }
 
-// nextLLM finds the llm span that received the failed result: the first llm
-// turn after the tool, in the same chain (sibling of the tool or of its
-// issuing llm span). Sidechain turns never match main-chain tools.
 func (a *Analyzer) nextLLM(rc *runContext, tool store.Span) (store.Span, bool) {
-	grandparent := ""
-	if p, ok := rc.byID[tool.ParentID]; ok {
-		grandparent = p.ParentID
-	}
-	for _, llm := range rc.llms {
-		if !llm.EndedAt.After(tool.EndedAt) || llm.ID == tool.ParentID {
-			continue
-		}
-		if llm.ParentID == tool.ParentID || (grandparent != "" && llm.ParentID == grandparent) {
-			return llm, true
-		}
-	}
-	return store.Span{}, false
+	return nextLLMConsumer(tool, rc.llms, rc.byID)
 }
 
 // consumedEvidence returns a description of how the llm output references the
-// failed call, or "" when it does not or acknowledges the failure.
-func (a *Analyzer) consumedEvidence(ctx context.Context, tool, llm store.Span) (string, error) {
+// failed call, or "" when it does not or when the turn shows it noticed the
+// failure.
+func (a *Analyzer) consumedEvidence(ctx context.Context, rc *runContext, tool, llm store.Span) (string, error) {
 	llmContents, err := a.st.Contents(ctx, llm.ID)
 	if err != nil {
 		return "", err
@@ -129,13 +119,17 @@ func (a *Analyzer) consumedEvidence(ctx context.Context, tool, llm store.Span) (
 	if strings.TrimSpace(output) == "" {
 		return "", nil
 	}
+	name := toolName(tool)
+	if retried(rc, llm, name) {
+		return "", nil
+	}
 	for _, w := range failureWords {
 		if strings.Contains(output, w) {
 			return "", nil
 		}
 	}
-	if name := strings.ToLower(toolName(tool)); name != "" && strings.Contains(output, name) {
-		return "output mentions " + toolName(tool), nil
+	if name != "" && strings.Contains(output, strings.ToLower(name)) {
+		return "output mentions " + name, nil
 	}
 	toolContents, err := a.st.Contents(ctx, tool.ID)
 	if err != nil {
@@ -147,6 +141,17 @@ func (a *Analyzer) consumedEvidence(ctx context.Context, tool, llm store.Span) (
 		}
 	}
 	return "", nil
+}
+
+// retried reports whether the turn that consumed the failure called the same
+// tool again, the language-free sign that it noticed.
+func retried(rc *runContext, llm store.Span, name string) bool {
+	for _, sp := range rc.spans {
+		if sp.Kind == store.KindTool && sp.ParentID == llm.ID && toolName(sp) == name {
+			return true
+		}
+	}
+	return false
 }
 
 // sharesSubstring reports whether any overlapLen-sized window of a occurs in b.
