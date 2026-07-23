@@ -69,11 +69,34 @@ func (p pricing) lookup(model string) (rates, bool) {
 	best, found := "", false
 	var r rates
 	for prefix, pr := range p {
-		if strings.HasPrefix(model, prefix) && len(prefix) > len(best) {
-			best, r, found = prefix, pr, true
+		if !strings.HasPrefix(model, prefix) || len(prefix) <= len(best) {
+			continue
 		}
+		if !datedRelease(model[len(prefix):]) {
+			continue
+		}
+		best, r, found = prefix, pr, true
 	}
 	return r, found
+}
+
+// datedRelease reports whether what follows a matched prefix is only a release
+// stamp. Anything else is a different model that happens to share the prefix —
+// claude-opus-4-8 must not inherit claude-opus-4 rates.
+func datedRelease(suffix string) bool {
+	if suffix == "" {
+		return true
+	}
+	const stampLen = 7 // -YYYYMMDD and -YYYY-MM-DD both clear this
+	if len(suffix) < stampLen || suffix[0] != '-' {
+		return false
+	}
+	for _, c := range suffix[1:] {
+		if (c < '0' || c > '9') && c != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // spanCost prices one llm span, preferring the detailed usage breakdown that
