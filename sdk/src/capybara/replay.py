@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import runpy
 import sys
+from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 from opentelemetry import trace
@@ -145,19 +146,75 @@ def main(argv: list[str] | None = None) -> int:
 
 def _patch_anthropic(session: Session) -> None:
     try:
-        from anthropic.resources.messages import Messages
+        from anthropic.resources.messages import AsyncMessages, Messages
     except ImportError:
         return
-    original = Messages.create
+    original, async_original = Messages.create, AsyncMessages.create
 
     def create(self: Any, **kwargs: Any) -> Any:
         model = kwargs.get("model", "")
         entry = session.serve_llm(model, _anthropic_messages(kwargs))
         if entry is None:
             return original(self, **kwargs)
+        if kwargs.get("stream"):
+            return _anthropic_events(entry, model)
         return _anthropic_response(entry, model)
 
+    async def acreate(self: Any, **kwargs: Any) -> Any:
+        model = kwargs.get("model", "")
+        entry = session.serve_llm(model, _anthropic_messages(kwargs))
+        if entry is None:
+            return await async_original(self, **kwargs)
+        if kwargs.get("stream"):
+            return _aiter(_anthropic_events(entry, model))
+        return _anthropic_response(entry, model)
+
+    # The messages.stream() helper builds its reader straight from the
+    # transport, so a patch here would never see it. Refusing beats going
+    # live behind the determinism rule.
+    def stream(self: Any, **kwargs: Any) -> Any:
+        raise ReplayError(
+            "messages.stream() cannot be replayed; use create(stream=True)"
+        )
+
     Messages.create = create
+    AsyncMessages.create = acreate
+    Messages.stream = stream
+    AsyncMessages.stream = stream
+
+
+def _anthropic_events(entry: dict[str, Any], model: str) -> Iterator[Any]:
+    from anthropic import types
+
+    message = _anthropic_response(entry, model)
+    empty = message.model_copy(update={"content": [], "stop_reason": None})
+    yield types.RawMessageStartEvent(type="message_start", message=empty)
+    for index, block in enumerate(message.content):
+        yield types.RawContentBlockStartEvent(
+            type="content_block_start", index=index, content_block=block
+        )
+        yield types.RawContentBlockDeltaEvent(
+            type="content_block_delta", index=index, delta=_anthropic_delta(block)
+        )
+        yield types.RawContentBlockStopEvent(type="content_block_stop", index=index)
+    yield types.RawMessageDeltaEvent.model_validate(
+        {
+            "type": "message_delta",
+            "delta": {"stop_reason": message.stop_reason, "stop_sequence": None},
+            "usage": {"output_tokens": 0},
+        }
+    )
+    yield types.RawMessageStopEvent(type="message_stop")
+
+
+def _anthropic_delta(block: Any) -> Any:
+    from anthropic import types
+
+    if block.type == "tool_use":
+        return types.InputJSONDelta(
+            type="input_json_delta", partial_json=json.dumps(block.input)
+        )
+    return types.TextDelta(type="text_delta", text=block.text)
 
 
 def _anthropic_messages(kwargs: dict[str, Any]) -> list[tuple[str, Any]]:
@@ -196,23 +253,76 @@ def _anthropic_response(entry: dict[str, Any], model: str) -> Any:
 
 def _patch_openai(session: Session) -> None:
     try:
-        from openai.resources.chat.completions import Completions
+        from openai.resources.chat.completions import AsyncCompletions, Completions
     except ImportError:
         return
-    original = Completions.create
+    original, async_original = Completions.create, AsyncCompletions.create
 
     def create(self: Any, **kwargs: Any) -> Any:
         model = kwargs.get("model", "")
-        messages = [
-            (m.get("role", "user"), m.get("content"))
-            for m in kwargs.get("messages", ())
-        ]
-        entry = session.serve_llm(model, messages)
+        entry = session.serve_llm(model, _openai_messages(kwargs))
         if entry is None:
             return original(self, **kwargs)
+        if kwargs.get("stream"):
+            return _openai_chunks(entry, model)
+        return _openai_response(entry, model)
+
+    async def acreate(self: Any, **kwargs: Any) -> Any:
+        model = kwargs.get("model", "")
+        entry = session.serve_llm(model, _openai_messages(kwargs))
+        if entry is None:
+            return await async_original(self, **kwargs)
+        if kwargs.get("stream"):
+            return _aiter(_openai_chunks(entry, model))
         return _openai_response(entry, model)
 
     Completions.create = create
+    AsyncCompletions.create = acreate
+
+
+def _openai_messages(kwargs: dict[str, Any]) -> list[tuple[str, Any]]:
+    return [
+        (m.get("role", "user"), m.get("content")) for m in kwargs.get("messages", ())
+    ]
+
+
+def _openai_chunks(entry: dict[str, Any], model: str) -> Iterator[Any]:
+    from openai.types.chat import ChatCompletionChunk
+
+    completion = _openai_response(entry, model)
+    message = completion.choices[0].message
+    base = {
+        "id": completion.id,
+        "object": "chat.completion.chunk",
+        "created": 0,
+        "model": completion.model,
+    }
+
+    def chunk(delta: dict[str, Any], finish: str | None = None) -> Any:
+        return ChatCompletionChunk.model_validate(
+            {**base, "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
+        )
+
+    yield chunk({"role": "assistant"})
+    if message.content:
+        yield chunk({"content": message.content})
+    for index, call in enumerate(message.tool_calls or ()):
+        yield chunk(
+            {
+                "tool_calls": [
+                    {
+                        "index": index,
+                        "id": call.id,
+                        "type": "function",
+                        "function": {
+                            "name": call.function.name,
+                            "arguments": call.function.arguments,
+                        },
+                    }
+                ]
+            }
+        )
+    yield chunk({}, completion.choices[0].finish_reason)
 
 
 def _openai_response(entry: dict[str, Any], model: str) -> Any:
@@ -251,6 +361,11 @@ def _openai_response(entry: dict[str, Any], model: str) -> Any:
             ],
         }
     )
+
+
+async def _aiter(events: Iterator[Any]) -> AsyncIterator[Any]:
+    for event in events:
+        yield event
 
 
 # Recorded replies are the instrumentor's part list; normalize the two shapes
