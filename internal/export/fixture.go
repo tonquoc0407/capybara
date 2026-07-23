@@ -30,7 +30,10 @@ type Fixture struct {
 // ToolFixture carries the fields the replay runner needs to serve a tool
 // (hash, output) plus what an assertion needs (input, schema, findings).
 type ToolFixture struct {
-	Hash     string           `json:"hash"`
+	Hash string `json:"hash"`
+	// Target is the recorded "module:qualname" of the function behind the
+	// tool, present only for runs the SDK traced. A test can call it.
+	Target   string           `json:"target,omitempty"`
 	SpanID   string           `json:"span_id"`
 	Tool     string           `json:"tool"`
 	Input    string           `json:"input"`
@@ -106,8 +109,10 @@ func buildFixture(ctx context.Context, st *store.Store, runID, spanID string) (F
 		if tool == "" {
 			tool = sp.Name
 		}
+		target, _ := sp.Attrs.Raw["capybara.target"].(string)
 		tf := ToolFixture{
 			Hash:   replay.HashToolCall(tool, input),
+			Target: target,
 			SpanID: sp.ID,
 			Tool:   tool,
 			Input:  input,

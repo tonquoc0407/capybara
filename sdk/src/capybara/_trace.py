@@ -49,6 +49,11 @@ def trace(
         span_name = name or (f"execute_tool {tool_name}" if tool_name else fn.__name__)
         operation = _OPERATION.get(kind, kind)
         signature = _signature(fn)
+        target = (
+            None
+            if fn.__module__ == "__main__"
+            else f"{fn.__module__}:{fn.__qualname__}"
+        )
 
         def annotate(
             span: Span, args: tuple[Any, ...], kwargs: dict[str, Any]
@@ -59,6 +64,11 @@ def trace(
             arguments = _dump(_arguments(signature, args, kwargs))
             span.set_attribute("gen_ai.tool.name", tool_name)
             span.set_attribute("gen_ai.tool.call.arguments", arguments)
+            # Lets an exported test import and call the real tool instead of
+            # only replaying what it returned that day. A tool defined in the
+            # script being run has no importable name, so it gets none.
+            if target is not None:
+                span.set_attribute("capybara.target", target)
             declared = schema_for(tool_name)
             if declared is not None:
                 span.set_attribute(SCHEMA_ATTR, declared)

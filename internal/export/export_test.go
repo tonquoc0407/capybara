@@ -51,6 +51,36 @@ func TestBuildFixtureCapturesToolContract(t *testing.T) {
 	if !strings.Contains(string(tf.Schema), "price") {
 		t.Errorf("schema missing price: %s", tf.Schema)
 	}
+	if tf.Target != "" {
+		t.Errorf("target = %q, want none for a run the sdk did not trace", tf.Target)
+	}
+}
+
+func TestBuildFixtureCarriesTheToolTarget(t *testing.T) {
+	st := openTemp(t)
+	at := time.Date(2026, 7, 22, 10, 0, 0, 0, time.UTC)
+	sp := store.Span{
+		ID: "t1", RunID: "r1", Kind: store.KindTool, Name: "fetch",
+		StartedAt: at, EndedAt: at.Add(time.Second), Status: "ok",
+		Attrs: store.Attrs{
+			ToolName: "fetch",
+			Raw:      map[string]any{"capybara.target": "catalogue:fetch_price"},
+		},
+	}
+	b := store.Batch{Source: "test", Spans: []store.Span{sp}, Contents: []store.Content{
+		{SpanID: "t1", Role: "input", Seq: 0, Body: `{"sku":"A"}`, MediaType: "application/json"},
+		{SpanID: "t1", Role: "output", Seq: 1, Body: `{"price":42}`, MediaType: "application/json"},
+	}}
+	if err := st.WriteBatch(context.Background(), b); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	fx, err := BuildFixture(context.Background(), st, "r1")
+	if err != nil {
+		t.Fatalf("BuildFixture: %v", err)
+	}
+	if fx.Tools[0].Target != "catalogue:fetch_price" {
+		t.Errorf("target = %q", fx.Tools[0].Target)
+	}
 }
 
 func TestBuildSpanFixtureNarrowsToOneCall(t *testing.T) {
