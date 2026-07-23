@@ -9,18 +9,20 @@ import (
 
 	"github.com/tonquoc0407/capybara/internal/export"
 	"github.com/tonquoc0407/capybara/internal/store"
+	"github.com/tonquoc0407/capybara/internal/web"
 )
 
 func exportCmd(ctx context.Context, dbPath string, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("export", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	golden := fs.Bool("golden", false, "snapshot a known-good run as a CI fixture")
-	dir := fs.String("o", export.DefaultDir, "output directory")
+	html := fs.Bool("html", false, "write the run as a self-contained page")
+	dir := fs.String("o", "", "output directory")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fs.NArg() != 1 {
-		return errors.New("usage: capybara export [--golden] <run>")
+	if fs.NArg() != 1 || (*golden && *html) {
+		return errors.New("usage: capybara export [--golden | --html] <run>")
 	}
 	st, err := store.Open(dbPath)
 	if err != nil {
@@ -31,19 +33,29 @@ func exportCmd(ctx context.Context, dbPath string, args []string, out io.Writer)
 	if err != nil {
 		return err
 	}
-	fx, err := export.BuildFixture(ctx, st, run)
-	if err != nil {
-		return err
-	}
-	if *golden {
-		path, err := export.WriteGolden(*dir, fx)
+	if *html {
+		// A page is meant to be sent to someone, not collected with the
+		// test fixtures, so it lands where the command was run.
+		path, err := web.WriteHTML(ctx, st, run, orDefault(*dir, "."))
 		if err != nil {
 			return err
 		}
 		_, err = fmt.Fprintln(out, path)
 		return err
 	}
-	paths, err := export.WritePytest(*dir, fx)
+	fx, err := export.BuildFixture(ctx, st, run)
+	if err != nil {
+		return err
+	}
+	if *golden {
+		path, err := export.WriteGolden(orDefault(*dir, export.DefaultDir), fx)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(out, path)
+		return err
+	}
+	paths, err := export.WritePytest(orDefault(*dir, export.DefaultDir), fx)
 	if err != nil {
 		return err
 	}
@@ -52,4 +64,11 @@ func exportCmd(ctx context.Context, dbPath string, args []string, out io.Writer)
 		w.printf("%s\n", path)
 	}
 	return w.err
+}
+
+func orDefault(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }

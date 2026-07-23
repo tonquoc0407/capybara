@@ -54,10 +54,23 @@ func TestDiffCommandRejectsAmbiguousPrefix(t *testing.T) {
 	}
 }
 
-func TestRunRoutesUnimplementedCommands(t *testing.T) {
-	err := run(context.Background(), []string{"serve"}, io.Discard)
-	if err == nil || !strings.Contains(err.Error(), "not implemented") {
-		t.Errorf("run(serve) = %v, want not-implemented error", err)
+func TestServeRejectsExtraArguments(t *testing.T) {
+	err := run(context.Background(), []string{"serve", "some-run"}, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "usage: capybara serve") {
+		t.Errorf("run(serve some-run) = %v, want usage error", err)
+	}
+}
+
+func TestServeStopsOnCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	db := filepath.Join(t.TempDir(), "test.db")
+	var out strings.Builder
+	if err := run(ctx, []string{"-db", db, "serve", "-addr", "127.0.0.1:0"}, &out); err != nil {
+		t.Fatalf("serve: %v", err)
+	}
+	if !strings.HasPrefix(out.String(), "http://127.0.0.1:") {
+		t.Errorf("serve printed %q, want the bound address", out.String())
 	}
 }
 

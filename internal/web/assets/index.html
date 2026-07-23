@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>capybara</title>
+<style>{{.CSS}}</style>
+</head>
+<body>
+<header>
+  <span class="brand">capybara</span>
+  <span id="run-head"></span>
+</header>
+<main>
+  <section class="pane" id="pane-runs">
+    <h2>runs</h2>
+    <ul id="run-list"></ul>
+  </section>
+  <section class="pane" id="pane-tree">
+    <h2 id="tree-title">trace</h2>
+    <div id="span-tree"></div>
+  </section>
+  <section class="pane" id="pane-detail">
+    <h2>detail</h2>
+    <div id="span-detail"></div>
+  </section>
+</main>
+<script>window.CAPYBARA = {{.Data}};</script>
+<script>{{.JS}}</script>
+</body>
+</html>
