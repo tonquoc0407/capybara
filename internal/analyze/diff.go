@@ -2,6 +2,8 @@ package analyze
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"time"
@@ -60,7 +62,7 @@ func DiffRuns(ctx context.Context, st *store.Store, runA, runB string) (*RunDiff
 		FirstDivergence: -1,
 		ContentsA:       contentsA, ContentsB: contentsB,
 	}
-	for _, p := range align(stepsA, stepsB) {
+	for _, p := range align(stepsA, stepsB, contentsA, contentsB) {
 		step := DiffStep{}
 		if p.ai >= 0 {
 			step.A = &stepsA[p.ai]
@@ -105,12 +107,33 @@ func runSteps(ctx context.Context, st *store.Store, runID string) ([]store.Span,
 	return steps, contents, nil
 }
 
-// alignKey makes two steps alignable: same kind, and for tools the same tool.
-func alignKey(sp store.Span) string {
-	if sp.Kind == store.KindTool {
-		return "tool\x00" + toolName(sp)
+// alignKey makes two steps alignable: same kind, and for tools the same tool
+// called with the same input, so two calls to one tool with different
+// arguments read as one step only in each run, never as a pair.
+func alignKey(sp store.Span, contents map[string][]store.Content) string {
+	if sp.Kind != store.KindTool {
+		return string(sp.Kind)
 	}
-	return string(sp.Kind)
+	return "tool\x00" + toolName(sp) + "\x00" + inputDigest(contents[sp.ID])
+}
+
+func inputDigest(contents []store.Content) string {
+	for _, c := range contents {
+		if c.Role == "input" {
+			sum := sha256.Sum256([]byte(c.Body))
+			return hex.EncodeToString(sum[:8])
+		}
+	}
+	return ""
+}
+
+// alignKeys precomputes the keys the LCS walk compares O(n*m) times.
+func alignKeys(spans []store.Span, contents map[string][]store.Content) []string {
+	keys := make([]string, len(spans))
+	for i, sp := range spans {
+		keys[i] = alignKey(sp, contents)
+	}
+	return keys
 }
 
 type alignedPair struct {
@@ -118,7 +141,8 @@ type alignedPair struct {
 }
 
 // align is a longest-common-subsequence walk over the two key sequences.
-func align(a, b []store.Span) []alignedPair {
+func align(a, b []store.Span, contentsA, contentsB map[string][]store.Content) []alignedPair {
+	ka, kb := alignKeys(a, contentsA), alignKeys(b, contentsB)
 	n, m := len(a), len(b)
 	lcs := make([][]int, n+1)
 	for i := range lcs {
@@ -126,7 +150,7 @@ func align(a, b []store.Span) []alignedPair {
 	}
 	for i := n - 1; i >= 0; i-- {
 		for j := m - 1; j >= 0; j-- {
-			if alignKey(a[i]) == alignKey(b[j]) {
+			if ka[i] == kb[j] {
 				lcs[i][j] = lcs[i+1][j+1] + 1
 			} else {
 				lcs[i][j] = max(lcs[i+1][j], lcs[i][j+1])
@@ -137,7 +161,7 @@ func align(a, b []store.Span) []alignedPair {
 	i, j := 0, 0
 	for i < n && j < m {
 		switch {
-		case alignKey(a[i]) == alignKey(b[j]):
+		case ka[i] == kb[j]:
 			pairs = append(pairs, alignedPair{ai: i, bi: j})
 			i++
 			j++

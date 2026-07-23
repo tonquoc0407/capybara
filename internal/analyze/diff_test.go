@@ -47,6 +47,40 @@ func seedDiffRun(t *testing.T, st *store.Store, runID, searchOut string, at time
 	}
 }
 
+// Same tool, different arguments: two separate calls, not one changed step.
+func TestDiffRunsSeparatesCallsWithDifferentInput(t *testing.T) {
+	st := openTemp(t)
+	seed := func(runID, input string, at time.Time) {
+		t.Helper()
+		spans := []store.Span{{
+			ID: runID + "-search", RunID: runID, Kind: store.KindTool,
+			Name: "search_db", StartedAt: at, EndedAt: at.Add(time.Second),
+			Status: "ok", Attrs: store.Attrs{ToolName: "search_db"},
+		}}
+		contents := []store.Content{
+			{SpanID: runID + "-search", Role: "input", Seq: 0, Body: input, MediaType: "application/json"},
+			{SpanID: runID + "-search", Role: "output", Seq: 1, Body: `{"price":42}`, MediaType: "application/json"},
+		}
+		if err := st.WriteBatch(context.Background(), store.Batch{
+			Source: "test", Spans: spans, Contents: contents,
+		}); err != nil {
+			t.Fatalf("WriteBatch: %v", err)
+		}
+	}
+	seed("ra", `{"sku":"A"}`, t0)
+	seed("rb", `{"sku":"B"}`, t0.Add(time.Hour))
+	d, err := DiffRuns(context.Background(), st, "ra", "rb")
+	if err != nil {
+		t.Fatalf("DiffRuns: %v", err)
+	}
+	if len(d.Steps) != 2 {
+		t.Fatalf("steps = %d, want 2 (one only in A, one only in B)", len(d.Steps))
+	}
+	if d.Steps[0].B != nil || d.Steps[1].A != nil {
+		t.Errorf("calls with different arguments were paired: %+v", d.Steps)
+	}
+}
+
 func TestDiffRunsAlignmentAndDivergence(t *testing.T) {
 	st := openTemp(t)
 	seedDiffRun(t, st, "ra", `{"price":42}`, t0, "fetch_api")
