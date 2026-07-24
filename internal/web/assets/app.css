@@ -1,31 +1,52 @@
-/* The bara palette: one amber accent over near-monochrome, with red, amber and
-   green reserved for status. */
+/* The bara palette, taken from the terminal theme: near-monochrome, one amber
+   accent, status carried by red and the accent. Panes are frames with the
+   title inset in the top rule, the way the terminal draws them. */
 :root {
-  --bg: #1c1c1c;
-  --pane: #222222;
-  --line: #3a3a3a;
+  --bg: #161616;
   --text: #d0d0d0;
-  --dim: #8a8a8a;
+  --dim: #767676;
+  --faint: #444444;
   --accent: #d78700;
   --err: #ff5f5f;
-  --ok: #87af5f;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
+  padding: 0.75rem;
   background: var(--bg);
   color: var(--text);
-  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.frame {
+  position: relative;
+  border: 1px solid var(--faint);
+  padding: 0.5rem 0.75rem;
+  min-width: 0;
+}
+
+.frame > h2 {
+  position: absolute;
+  top: -0.72em;
+  left: 1ch;
+  margin: 0;
+  padding: 0 0.5ch;
+  background: var(--bg);
+  color: var(--dim);
+  font: inherit;
 }
 
 header {
   display: flex;
-  gap: 1rem;
+  gap: 1ch;
   align-items: baseline;
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--line);
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--faint);
 }
 
 .brand { color: var(--accent); font-weight: 700; }
@@ -33,91 +54,91 @@ header {
 
 main {
   display: grid;
-  grid-template-columns: 18rem 1fr 1fr;
-  gap: 1px;
-  background: var(--line);
-  height: calc(100vh - 2.5rem);
+  grid-template-columns: 22ch 1fr 1fr;
+  flex: 1;
+  min-height: 0;
+  margin: -1px 0;
 }
 
-.pane {
-  background: var(--pane);
-  overflow: auto;
-  padding: 0.5rem 0.75rem;
-}
+.pane { overflow: auto; }
+.pane + .pane { border-left: none; }
 
-.pane h2 {
-  margin: 0 0 0.5rem;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+footer {
+  border: 1px solid var(--faint);
+  padding: 0.25rem 0.75rem;
   color: var(--dim);
-  font-weight: 700;
+  min-height: 1.85em;
 }
+footer.warn { color: var(--accent); }
+footer.err { color: var(--err); }
 
 ul { list-style: none; margin: 0; padding: 0; }
 
-#run-list li {
-  padding: 0.3rem 0.4rem;
-  border-radius: 2px;
-  cursor: pointer;
-}
-#run-list li:hover { background: #2b2b2b; }
-#run-list li.on { background: #333029; color: var(--accent); }
-#run-list .meta { color: var(--dim); display: block; font-size: 12px; }
-
-.node { padding-left: 1rem; }
-.row {
+/* Rows carry no fill of their own; selection reverses, the way the terminal
+   marks a cursor line. */
+.row, #run-list li {
   display: flex;
-  gap: 0.5rem;
+  gap: 1ch;
   align-items: baseline;
-  padding: 0.15rem 0.3rem;
-  border-radius: 2px;
+  padding: 0 0.5ch;
   cursor: pointer;
   white-space: nowrap;
 }
-.row:hover { background: #2b2b2b; }
-.row.on { background: #333029; }
+.row:hover, #run-list li:hover { color: var(--accent); }
+.row.on, #run-list li.on {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+}
+.row.on .kind, .row.on .num, .on .meta { color: var(--bg); }
+
+#run-list li { display: block; padding: 0.15rem 0.5ch; }
+#run-list .meta { color: var(--dim); display: block; }
+
+.node { padding-left: 2ch; }
+.node > .node { border-left: 1px solid var(--faint); }
+
+.row .kind { color: var(--dim); width: 9ch; flex: none; }
 .row .name { overflow: hidden; text-overflow: ellipsis; }
-.row .kind { color: var(--dim); }
-.row .num { color: var(--dim); margin-left: auto; padding-left: 1rem; }
+.row .num { color: var(--dim); margin-left: auto; padding-left: 2ch; text-align: right; }
 
 .toggle {
-  width: 1rem;
+  width: 1ch;
+  flex: none;
   color: var(--dim);
   background: none;
   border: 0;
   padding: 0;
   font: inherit;
   cursor: pointer;
-  text-align: left;
 }
-.toggle:empty { cursor: default; }
+.on .toggle { color: var(--bg); }
 
-.mark { width: 1ch; display: inline-block; }
+.mark { width: 1ch; flex: none; white-space: pre; }
 .mark.err { color: var(--err); }
 .mark.warn { color: var(--accent); }
-.mark.ok { color: var(--ok); }
+.on .mark { color: var(--bg); }
 
 .note {
-  padding: 0.1rem 0.3rem 0.1rem 2.4rem;
+  padding: 0 0.5ch 0 4ch;
   color: var(--accent);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .note.error { color: var(--err); }
 
-#span-detail h3 { margin: 0.75rem 0 0.25rem; font-size: 12px; color: var(--dim); }
+#span-detail h3 { margin: 1rem 0 0.25rem; font: inherit; color: var(--dim); }
+#span-detail h3::before { content: "-- "; }
 #span-detail h3:first-child { margin-top: 0; }
-#span-detail .info { color: var(--dim); }
+#span-detail .info { color: var(--dim); margin: 0; }
 #span-detail pre {
-  margin: 0.25rem 0 0.75rem;
-  padding: 0.5rem;
-  background: #1a1a1a;
-  border: 1px solid var(--line);
-  border-radius: 2px;
+  margin: 0.25rem 0 0;
+  padding: 0 0 0 1ch;
+  border-left: 1px solid var(--faint);
   white-space: pre-wrap;
   word-break: break-word;
-  overflow-x: auto;
 }
-#span-detail .finding { color: var(--accent); }
+#span-detail .finding { color: var(--accent); margin: 0.5rem 0 0; }
 #span-detail .finding.error { color: var(--err); }
 .empty { color: var(--dim); }

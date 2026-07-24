@@ -44,10 +44,22 @@
 
   // Status marks, the same alphabet the terminal view uses.
   function mark(status, findings) {
-    if (status === "error") return { text: "x", cls: "err" };
-    if (findings) return { text: "!", cls: "warn" };
-    if (status === "running") return { text: ".", cls: "ok" };
-    return { text: " ", cls: "" };
+    if (status === "error") return { text: "x", cls: "mark err" };
+    if (findings) return { text: "!", cls: "mark warn" };
+    if (status === "running") return { text: ".", cls: "mark run" };
+    return { text: " ", cls: "mark" };
+  }
+
+  // The status line carries what the terminal one does: the error first, then
+  // findings, then the counts.
+  function status(parts, cls) {
+    var bar = el("status");
+    bar.className = cls || "";
+    bar.textContent = parts.filter(Boolean).join(" | ");
+  }
+
+  function count(n, noun) {
+    return n + " " + noun + (n === 1 ? "" : "s");
   }
 
   function renderRuns(runs) {
@@ -62,10 +74,10 @@
       item.dataset.id = run.id;
       var m = mark(run.status, run.findings);
       var head = tag("span");
-      head.append(tag("span", "mark " + m.cls, m.text), " ", run.label || shortID(run.id));
+      head.append(tag("span", m.cls, m.text), " ", run.label || shortID(run.id));
       item.append(head);
       var bits = [run.model, duration(run.duration), money(run.cost)].filter(Boolean);
-      if (run.findings) bits.push(run.findings + (run.findings === 1 ? " finding" : " findings"));
+      if (run.findings) bits.push(count(run.findings, "finding"));
       item.append(tag("span", "meta", bits.join("  ")));
       item.addEventListener("click", function () { selectRun(run); });
       list.append(item);
@@ -86,7 +98,12 @@
       state.span = null;
       state.collapsed = {};
       renderTree();
-    });
+      var findings = (detail.findings || []).length;
+      status([
+        findings ? count(findings, "finding") : "",
+        count((detail.spans || []).length, "span"),
+      ], findings ? "warn" : "");
+    }).catch(fail);
   }
 
   function findingsBySpan() {
@@ -138,7 +155,7 @@
     var label = span.tool || span.model || span.name;
     row.append(
       toggle,
-      tag("span", "mark " + m.cls, m.text),
+      tag("span", m.cls, m.text),
       tag("span", "kind", span.kind),
       tag("span", "name", label),
       tag("span", "num", [duration(span.duration), money(span.cost)].filter(Boolean).join("  ")),
@@ -170,7 +187,8 @@
     host.append(tag("p", "info", info.filter(Boolean).join(" - ")));
 
     findings.forEach(function (f) {
-      host.append(tag("p", "finding" + (f.severity === "error" ? " error" : ""), f.type + ": " + f.summary));
+      var line = f.summary === f.type ? f.type : f.type + ": " + f.summary;
+      host.append(tag("p", "finding" + (f.severity === "error" ? " error" : ""), line));
       if (f.detail) host.append(tag("pre", null, pretty(f.detail)));
     });
 
@@ -192,10 +210,16 @@
     }
   }
 
+  function fail(err) {
+    status([String(err)], "err");
+  }
+
   loadRuns().then(function (runs) {
     renderRuns(runs);
-    if (runs.length) selectRun(runs[0]);
-  }).catch(function (err) {
-    el("run-list").replaceChildren(tag("li", "empty", String(err)));
-  });
+    if (runs.length) {
+      selectRun(runs[0]);
+    } else {
+      status(["no runs recorded"]);
+    }
+  }).catch(fail);
 })();

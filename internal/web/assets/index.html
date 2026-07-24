@@ -12,19 +12,20 @@
   <span id="run-head"></span>
 </header>
 <main>
-  <section class="pane" id="pane-runs">
+  <section class="frame pane">
     <h2>runs</h2>
     <ul id="run-list"></ul>
   </section>
-  <section class="pane" id="pane-tree">
+  <section class="frame pane">
     <h2 id="tree-title">trace</h2>
     <div id="span-tree"></div>
   </section>
-  <section class="pane" id="pane-detail">
+  <section class="frame pane">
     <h2>detail</h2>
     <div id="span-detail"></div>
   </section>
 </main>
+<footer id="status"></footer>
 <script>window.CAPYBARA = {{.Data}};</script>
 <script>{{.JS}}</script>
 </body>
