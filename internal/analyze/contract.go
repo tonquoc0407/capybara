@@ -52,6 +52,9 @@ func (a *Analyzer) checkTool(ctx context.Context, sp store.Span) ([]store.Findin
 	}
 	d := diffSchemas(current, obs, "")
 	if d.breaking() {
+		if !declared && rootEncodingFlip(current, obs, d) {
+			return nil, a.touch(ctx, sp, tool, mergeSchemas(current, obs))
+		}
 		if !declared {
 			if err := a.adopt(ctx, sp, tool, obs); err != nil {
 				return nil, err
@@ -72,14 +75,15 @@ func (a *Analyzer) checkTool(ctx context.Context, sp store.Span) ([]store.Findin
 }
 
 // nonJSONOutput handles unparseable bodies: malformed only when the contract
-// says JSON; plain-text tools learn a string schema and never drift.
+// says JSON and has never accepted text; plain-text tools learn a string schema
+// and never drift.
 func (a *Analyzer) nonJSONOutput(ctx context.Context, sp store.Span, tool, body string,
 	current *jsonSchema, declared bool,
 ) ([]store.Finding, error) {
 	if current == nil {
 		return nil, a.learn(ctx, sp, tool, infer(body, 0))
 	}
-	if current.Types.has("object") || current.Types.has("array") {
+	if !current.Types.has("string") && hasContainer(current.Types) {
 		return []store.Finding{finding(sp, "malformed", "warning", map[string]any{
 			"tool": tool, "want": joinTypes(current.Types),
 		})}, nil

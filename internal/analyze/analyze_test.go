@@ -142,6 +142,26 @@ func TestTextToolsNeverDriftOrMalform(t *testing.T) {
 	}
 }
 
+// One shell command printing a line of JSON used to replace the tool's text
+// contract with an object, after which every later plain-text call was filed as
+// malformed. On six real Claude sessions that was 738 findings from one
+// accident, and each one that a model then answered past became an improvised
+// finding too.
+func TestOneJSONLineDoesNotRetypeATextTool(t *testing.T) {
+	st := openTemp(t)
+	toolRun(t, st, "r1", "bash", "tests pass", t0)
+	sweep(t, st)
+	toolRun(t, st, "r2", "bash", `{"exit":0}`, t0.Add(time.Minute))
+	sweep(t, st)
+	toolRun(t, st, "r3", "bash", "compile error on line 3", t0.Add(2*time.Minute))
+	sweep(t, st)
+	for _, run := range []string{"r2", "r3"} {
+		if fs := runFindings(t, st, run); len(fs) != 0 {
+			t.Errorf("%s findings = %+v, want none", run, fs)
+		}
+	}
+}
+
 func TestEmptyPayloadFinding(t *testing.T) {
 	st := openTemp(t)
 	toolRun(t, st, "r1", "fetch", `  `, t0)

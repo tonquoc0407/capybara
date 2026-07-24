@@ -221,6 +221,23 @@ func diffSchemas(schema, obs *jsonSchema, path string) schemaDiff {
 	return d
 }
 
+func hasContainer(t typeList) bool {
+	return t.has("object") || t.has("array")
+}
+
+// rootEncodingFlip reports whether the whole break is the top-level value
+// crossing between free text and JSON. A shell tool that usually prints text
+// and once prints a line of JSON never promised either shape: calling that
+// drift replaces the contract with the accident, and every later plain-text
+// call is then filed as malformed. Field-level retypes are untouched, which is
+// where real drift shows up.
+func rootEncodingFlip(current, obs *jsonSchema, d schemaDiff) bool {
+	if len(d.Missing) > 0 || len(d.Retyped) != 1 || d.Retyped[0].Field != "$" {
+		return false
+	}
+	return hasContainer(current.Types) != hasContainer(obs.Types)
+}
+
 func joinPath(path, field string) string {
 	if path == "" {
 		return field
