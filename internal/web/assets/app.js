@@ -187,7 +187,7 @@
     host.append(tag("p", "info", info.filter(Boolean).join(" - ")));
 
     findings.forEach(function (f) {
-      var line = f.summary === f.type ? f.type : f.type + ": " + f.summary;
+      var line = f.summary.indexOf(f.type) === 0 ? f.summary : f.type + ": " + f.summary;
       host.append(tag("p", "finding" + (f.severity === "error" ? " error" : ""), line));
       if (f.detail) host.append(tag("pre", null, pretty(f.detail)));
     });

@@ -62,11 +62,11 @@ func FindingSummary(f store.Finding) string {
 }
 
 // FindingLine labels a summary with its type, except when the summary already
-// fell back to the type and would stutter.
+// opens with it — "improvised: improvised after x" helps nobody.
 func FindingLine(f store.Finding) string {
 	summary := FindingSummary(f)
-	if summary == f.Type {
-		return f.Type
+	if strings.HasPrefix(summary, f.Type) {
+		return summary
 	}
 	return f.Type + ": " + summary
 }

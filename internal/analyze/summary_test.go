@@ -27,6 +27,11 @@ func TestFindingLineLabelsOnlyWhatItCanWord(t *testing.T) {
 			f:    store.Finding{Type: "tool_error", Detail: `{"status":502}`},
 			want: "tool_error",
 		},
+		{
+			name: "summary that opens with its type is not labelled again",
+			f:    store.Finding{Type: "improvised", Detail: `{"tool":"get_stock_price"}`},
+			want: "improvised after get_stock_price failure",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
