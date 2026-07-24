@@ -41,22 +41,41 @@ func New(st *store.Store, captureContent bool) *Receiver {
 	}
 }
 
-// Listen binds both ports without serving, so callers can fail fast.
+// Listen binds the ports without serving, so callers can report the address
+// before traffic starts. Each transport is bound on its own: 4317 and 4318 are
+// the ports every other tracing tool wants too, and losing one of them is no
+// reason to refuse the other. The error names what could not be bound; whether
+// that is fatal is the caller's call.
 func (r *Receiver) Listen() error {
-	if r.grpcLis != nil {
+	if r.grpcLis != nil || r.httpLis != nil {
 		return nil
 	}
-	grpcLis, err := net.Listen("tcp", r.GRPCAddr)
-	if err != nil {
-		return fmt.Errorf("otlp grpc listen: %w", err)
+	var errs []error
+	if lis, err := net.Listen("tcp", r.GRPCAddr); err != nil {
+		errs = append(errs, fmt.Errorf("otlp grpc listen: %w", err))
+	} else {
+		r.grpcLis = lis
 	}
-	httpLis, err := net.Listen("tcp", r.HTTPAddr)
-	if err != nil {
-		grpcLis.Close()
-		return fmt.Errorf("otlp http listen: %w", err)
+	if lis, err := net.Listen("tcp", r.HTTPAddr); err != nil {
+		errs = append(errs, fmt.Errorf("otlp http listen: %w", err))
+	} else {
+		r.httpLis = lis
 	}
-	r.grpcLis, r.httpLis = grpcLis, httpLis
-	return nil
+	return errors.Join(errs...)
+}
+
+// Listening reports whether any transport bound.
+func (r *Receiver) Listening() bool {
+	return r.grpcLis != nil || r.httpLis != nil
+}
+
+// HTTPBase is what OTEL_EXPORTER_OTLP_ENDPOINT wants: the collector root, with
+// no signal path, because every SDK appends /v1/traces itself.
+func (r *Receiver) HTTPBase() string {
+	if r.httpLis == nil {
+		return ""
+	}
+	return "http://" + r.httpLis.Addr().String()
 }
 
 // HTTPEndpoint is the bound OTLP trace endpoint, known only after Listen when
@@ -68,33 +87,54 @@ func (r *Receiver) HTTPEndpoint() string {
 	return "http://" + r.httpLis.Addr().String() + "/v1/traces"
 }
 
-// Run serves on both ports until ctx is cancelled, binding them if needed.
+// Run serves whichever ports bound, until ctx is cancelled.
 func (r *Receiver) Run(ctx context.Context) error {
-	if err := r.Listen(); err != nil {
-		return err
-	}
-	if ctx.Err() != nil {
-		r.grpcLis.Close()
-		r.httpLis.Close()
+	_ = r.Listen() // a port that would not bind is reported by Listen's caller
+	if !r.Listening() {
 		return nil
 	}
-	return r.serve(ctx, r.grpcLis, r.httpLis)
+	if ctx.Err() != nil {
+		r.close()
+		return nil
+	}
+	return r.serve(ctx)
 }
 
-func (r *Receiver) serve(ctx context.Context, grpcLis, httpLis net.Listener) error {
+func (r *Receiver) close() {
+	if r.grpcLis != nil {
+		r.grpcLis.Close()
+	}
+	if r.httpLis != nil {
+		r.httpLis.Close()
+	}
+}
+
+func (r *Receiver) serve(ctx context.Context) error {
 	// Content-heavy batches blow past grpc's 4 MiB default; never drop data.
 	grpcSrv := grpc.NewServer(grpc.MaxRecvMsgSize(64 << 20))
 	ptraceotlp.RegisterGRPCServer(grpcSrv, &exportServer{recv: r})
 	httpSrv := &http.Server{Handler: r.handler(), ReadHeaderTimeout: 10 * time.Second}
 	errc := make(chan error, 2)
-	go func() { errc <- grpcSrv.Serve(grpcLis) }()
-	go func() {
-		if err := httpSrv.Serve(httpLis); !errors.Is(err, http.ErrServerClosed) {
-			errc <- err
-			return
+	running := 0
+	if r.grpcLis != nil {
+		running++
+		go func() { errc <- grpcSrv.Serve(r.grpcLis) }()
+	}
+	if r.httpLis != nil {
+		running++
+		go func() {
+			if err := httpSrv.Serve(r.httpLis); !errors.Is(err, http.ErrServerClosed) {
+				errc <- err
+				return
+			}
+			errc <- nil
+		}()
+	}
+	drain := func() {
+		for range running {
+			<-errc
 		}
-		errc <- nil
-	}()
+	}
 	select {
 	case <-ctx.Done():
 		grpcSrv.GracefulStop()
@@ -103,13 +143,13 @@ func (r *Receiver) serve(ctx context.Context, grpcLis, httpLis net.Listener) err
 		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 			httpSrv.Close()
 		}
-		<-errc
-		<-errc
+		drain()
 		return nil
 	case err := <-errc:
+		running--
 		grpcSrv.Stop()
 		httpSrv.Close()
-		<-errc
+		drain()
 		return fmt.Errorf("otlp serve: %w", err)
 	}
 }

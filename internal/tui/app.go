@@ -138,6 +138,7 @@ type appModel struct {
 	splash      bool
 	version     string
 	dbPath      string
+	about       About
 	spans       []store.Span
 	findings    map[string][]store.Finding
 	notice      string
@@ -608,6 +609,9 @@ func (m appModel) View() string {
 	runsW, middleW, detailW := m.paneWidths()
 	listH, summaryH := m.paneHeights(paneH)
 	middleTitle, middleView := "span tree", m.tree.view()
+	if len(m.runs.list.Items()) == 0 {
+		middleTitle, middleView = "getting started", m.waitingView(middleW-paneChrome)
+	}
 	switch m.mode {
 	case viewWaterfall:
 		middleTitle, middleView = "cost waterfall", m.waterfall.view()

@@ -70,9 +70,10 @@ func startGRPC(t *testing.T, st *store.Store) ptraceotlp.GRPCClient {
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
+	r.grpcLis, r.httpLis = grpcLis, httpLis
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- r.serve(ctx, grpcLis, httpLis) }()
+	go func() { done <- r.serve(ctx) }()
 	t.Cleanup(func() {
 		cancel()
 		if err := <-done; err != nil {
@@ -194,4 +195,28 @@ func TestHTTPRejectsUnknownContentType(t *testing.T) {
 	if resp.StatusCode != http.StatusUnsupportedMediaType {
 		t.Fatalf("status = %d, want 415", resp.StatusCode)
 	}
+}
+
+// 4317 and 4318 are the ports every tracing tool wants. Losing one to a
+// collector already running must not cost the other, and must not stop
+// capybara from opening at all.
+func TestListenKeepsTheTransportThatBound(t *testing.T) {
+	held, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer held.Close()
+	r := New(openTemp(t), true)
+	r.HTTPAddr = held.Addr().String()
+	r.GRPCAddr = "127.0.0.1:0"
+	if err := r.Listen(); err == nil {
+		t.Fatal("Listen reported no error for a port already taken")
+	}
+	if !r.Listening() {
+		t.Fatal("grpc was dropped along with the busy http port")
+	}
+	if r.HTTPBase() != "" {
+		t.Errorf("HTTPBase = %q, want empty when http did not bind", r.HTTPBase())
+	}
+	r.close()
 }

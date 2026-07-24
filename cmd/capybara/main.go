@@ -39,6 +39,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	fs.SetOutput(io.Discard)
 	dbPath := fs.String("db", "capybara.db", "database file")
 	noContent := fs.Bool("no-content", false, "drop prompt, completion and tool content")
+	otlpAddr := fs.String("otlp", "", "OTLP http address to listen on (default 127.0.0.1:4318)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return usage(out)
@@ -48,7 +49,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	capture := !*noContent
 	args = fs.Args()
 	if len(args) == 0 {
-		return receive(ctx, *dbPath, capture)
+		return receive(ctx, *dbPath, *otlpAddr, capture)
 	}
 	switch args[0] {
 	case "import":
@@ -75,7 +76,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 
 // receive runs the OTLP receiver, the claude watcher when its log directory
 // exists, and the TUI, until any of them quits.
-func receive(ctx context.Context, dbPath string, capture bool) error {
+func receive(ctx context.Context, dbPath, otlpAddr string, capture bool) error {
 	if ctx.Err() != nil {
 		return nil
 	}
@@ -89,9 +90,12 @@ func receive(ctx context.Context, dbPath string, capture bool) error {
 	}
 	defer st.Close()
 	rcv := otlp.New(st, capture)
-	if err := rcv.Listen(); err != nil {
-		return err
+	if otlpAddr != "" {
+		rcv.HTTPAddr = otlpAddr
 	}
+	// A port already taken costs that transport, not the session: the database
+	// is still worth reading, and the TUI says what is missing.
+	listenErr := rcv.Listen()
 	claudeRoot := claude.DefaultRoot()
 	if claudeRoot != "" {
 		claudeNoticeOnce(claudeRoot)
@@ -110,7 +114,13 @@ func receive(ctx context.Context, dbPath string, capture bool) error {
 		workers++
 		go func() { errc <- claude.Watch(runCtx, st, claudeRoot, capture) }()
 	}
-	about := tui.About{Version: version, DBPath: dbPath}
+	about := tui.About{
+		Version: version, DBPath: dbPath,
+		OTLP: rcv.HTTPBase(), Watching: claudeRoot,
+	}
+	if listenErr != nil {
+		about.OTLPErr = listenErr.Error()
+	}
 	errs := []error{tui.Run(runCtx, st, th, about, capture)}
 	cancel()
 	for range workers {
@@ -218,6 +228,7 @@ Flags, before the command:
 
   -db path      database file (default capybara.db)
   -no-content   drop prompt, completion and tool content
+  -otlp addr    OTLP http address to listen on (default 127.0.0.1:4318)
 `)
 	return err
 }
