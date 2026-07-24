@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -144,6 +145,9 @@ func TestAppDiffFlow(t *testing.T) {
 // The re-run flow starts with e: the recorded output goes through $EDITOR and
 // the replacement is held until r.
 func TestAppEditStagesReplacementOutput(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the stand-in editor is a shell script")
+	}
 	st := seededStore(t)
 	tool := store.Batch{
 		Source: "test",

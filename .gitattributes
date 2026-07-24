@@ -1,0 +1,4 @@
+# Windows checkouts default to core.autocrlf=true, and gofumpt reads CRLF as
+# unformatted, so every source file fails lint there.
+* text=auto eol=lf
+demo/demo.gif binary
