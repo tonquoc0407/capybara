@@ -58,6 +58,21 @@ const (
 	tlCompletionPre   = "gen_ai.completion."
 )
 
+// The Vercel AI SDK's LegacyOpenTelemetry mode. Its current mode emits gen_ai.*
+// and needs nothing here, but the legacy names are still what a lot of
+// deployed apps send, and they carry no operation name at all.
+const (
+	attrAIModel      = "ai.model.id"
+	attrAIProvider   = "ai.model.provider"
+	attrAIInputToks  = "ai.usage.promptTokens"
+	attrAIOutputToks = "ai.usage.completionTokens"
+	attrAIToolName   = "ai.toolCall.name"
+	attrAIToolArgs   = "ai.toolCall.args"
+	attrAIToolResult = "ai.toolCall.result"
+	attrAIPrompt     = "ai.prompt"
+	attrAIResponse   = "ai.response.text"
+)
+
 var kindByOISpanKind = map[string]store.Kind{
 	"LLM":       store.KindLLM,
 	"EMBEDDING": store.KindLLM,
@@ -76,11 +91,13 @@ var kindByTLSpanKind = map[string]store.Kind{
 var kindByOperation = map[string]store.Kind{
 	"invoke_agent":     store.KindAgent,
 	"create_agent":     store.KindAgent,
+	"invoke_workflow":  store.KindAgent,
 	"chat":             store.KindLLM,
 	"generate_content": store.KindLLM,
 	"text_completion":  store.KindLLM,
 	"embeddings":       store.KindLLM,
 	"execute_tool":     store.KindTool,
+	"retrieval":        store.KindRetrieval,
 }
 
 var roleByEvent = map[string]string{
@@ -114,12 +131,12 @@ func mapSemconv(span ptrace.Span) mappedSpan {
 	m := mappedSpan{
 		kind: store.KindOther,
 		attrs: store.Attrs{
-			Model:    strAttr(attrs, attrRequestModel, attrResponseModel, attrOIModel),
-			Provider: strAttr(attrs, attrProviderName, attrSystem, attrOIProvider, attrOISystem),
-			ToolName: strAttr(attrs, attrToolName, attrMCPToolName, attrOIToolName, attrTLEntityName),
+			Model:    strAttr(attrs, attrRequestModel, attrResponseModel, attrOIModel, attrAIModel),
+			Provider: strAttr(attrs, attrProviderName, attrSystem, attrOIProvider, attrOISystem, attrAIProvider),
+			ToolName: strAttr(attrs, attrToolName, attrMCPToolName, attrOIToolName, attrTLEntityName, attrAIToolName),
 		},
-		tokensIn:  intAttr(attrs, attrInputTokens, attrPromptTokens, attrOIPromptToks),
-		tokensOut: intAttr(attrs, attrOutputTokens, attrCompletionTokens, attrOIOutputToks),
+		tokensIn:  intAttr(attrs, attrInputTokens, attrPromptTokens, attrOIPromptToks, attrAIInputToks),
+		tokensOut: intAttr(attrs, attrOutputTokens, attrCompletionTokens, attrOIOutputToks, attrAIOutputToks),
 	}
 	m.kind = spanKind(attrs)
 	attrs.Range(func(key string, _ pcommon.Value) bool {
@@ -149,6 +166,20 @@ func spanKind(attrs pcommon.Map) store.Kind {
 		return k
 	}
 	if strAttr(attrs, attrTLRequestType) != "" {
+		return store.KindLLM
+	}
+	// Last resort for emitters that name the model but not the operation, which
+	// older OpenLLMetry releases did. Only inference spans carry a request model.
+	if strAttr(attrs, attrRequestModel, attrResponseModel) != "" {
+		return store.KindLLM
+	}
+	// The AI SDK's legacy spans name no operation at all, so the shape of what
+	// they carry is the only signal: a tool call names a tool, a model call
+	// names a model.
+	if strAttr(attrs, attrAIToolName) != "" {
+		return store.KindTool
+	}
+	if strAttr(attrs, attrAIModel) != "" {
 		return store.KindLLM
 	}
 	return store.KindOther
@@ -208,6 +239,10 @@ func spanContents(span ptrace.Span) []store.Content {
 	if spanKind(attrs) == store.KindLLM {
 		inRole, outRole = "user", "assistant"
 	}
+	add("input", strAttr(attrs, attrAIToolArgs))
+	add("output", strAttr(attrs, attrAIToolResult))
+	add("user", strAttr(attrs, attrAIPrompt))
+	add("assistant", strAttr(attrs, attrAIResponse))
 	add(inRole, strAttr(attrs, attrOIInput, attrTLEntityIn))
 	add(outRole, strAttr(attrs, attrOIOutput, attrTLEntityOut))
 	return contents

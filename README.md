@@ -39,10 +39,10 @@ and carries on. `-otlp 127.0.0.1:4319` moves the http listener somewhere free.
 There are three ways in, and one database can hold all of them:
 
 - **OTLP.** Point any instrumented app at it:
-  `OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318`. Three attribute
+  `OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318`. Four attribute
   conventions are read — OpenTelemetry's own `gen_ai.*`, OpenInference
-  (Arize/Phoenix), and OpenLLMetry (traceloop) — so the instrumentor you already
-  run is enough, whichever one it is.
+  (Arize/Phoenix), OpenLLMetry (traceloop), and the Vercel AI SDK's legacy
+  `ai.*` — so the instrumentor you already run is enough, whichever it is.
 - **A session file.** `capybara watch claude` tails Claude Code's own logs. No
   instrumentation and no restart: it reads what is already on disk.
 - **A file you have.** `capybara import trace.jsonl` takes span-per-line jsonl,
@@ -162,9 +162,12 @@ theme = "bara"
 `bara` is the default warm dark. `mono` drops the accent to grey; `paper` is for
 a light terminal. Red and amber mean the same thing in all three.
 
-Model rates live in a table built into the binary. Extend or override it with
+Model rates live in a table built into the binary, covering the current Claude,
+OpenAI and Gemini families. Extend or override it with
 `~/.config/capybara/pricing.json`, which is merged over the built-in one. A model
-with no entry stays unpriced rather than being guessed at.
+with no entry stays unpriced rather than being guessed at, and a rate that varies
+by context length or by date is recorded at its standard tier — the table has no
+conditions in it.
 
 ## Architecture
 

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -219,4 +220,39 @@ func TestListenKeepsTheTransportThatBound(t *testing.T) {
 		t.Errorf("HTTPBase = %q, want empty when http did not bind", r.HTTPBase())
 	}
 	r.close()
+}
+
+// Each tracing convention names the same things differently, and only the
+// OpenTelemetry one carries an operation name. Attribute names here come from
+// the conventions' own published packages.
+func TestSpanKindAcrossConventions(t *testing.T) {
+	cases := []struct {
+		name  string
+		attrs map[string]string
+		want  store.Kind
+	}{
+		{"otel agent", map[string]string{"gen_ai.operation.name": "invoke_agent"}, store.KindAgent},
+		{"otel workflow", map[string]string{"gen_ai.operation.name": "invoke_workflow"}, store.KindAgent},
+		{"otel retrieval", map[string]string{"gen_ai.operation.name": "retrieval"}, store.KindRetrieval},
+		{"openinference llm", map[string]string{"openinference.span.kind": "LLM"}, store.KindLLM},
+		{"openinference tool", map[string]string{"openinference.span.kind": "TOOL"}, store.KindTool},
+		{"openinference retriever", map[string]string{"openinference.span.kind": "RETRIEVER"}, store.KindRetrieval},
+		{"traceloop workflow", map[string]string{"traceloop.span.kind": "workflow"}, store.KindAgent},
+		{"traceloop tool", map[string]string{"traceloop.span.kind": "tool"}, store.KindTool},
+		{"vercel legacy tool", map[string]string{"ai.toolCall.name": "get_price"}, store.KindTool},
+		{"vercel legacy model", map[string]string{"ai.model.id": "gpt-5.4"}, store.KindLLM},
+		{"model without an operation", map[string]string{"gen_ai.request.model": "gpt-4o"}, store.KindLLM},
+		{"nothing recognisable", map[string]string{"http.method": "GET"}, store.KindOther},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := pcommon.NewMap()
+			for k, v := range c.attrs {
+				m.PutStr(k, v)
+			}
+			if got := spanKind(m); got != c.want {
+				t.Errorf("spanKind = %q, want %q", got, c.want)
+			}
+		})
+	}
 }
