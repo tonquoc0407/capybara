@@ -9,15 +9,14 @@ import (
 	"github.com/tonquoc0407/capybara/internal/theme"
 )
 
-// splashHold is how long the splash stays up before the panes replace it. Long
-// enough to read, short enough not to be in the way.
-const splashHold = 800 * time.Millisecond
+// splashHold is how long the splash stays up before the panes replace it. Any
+// key cuts it short, so this is the pace for someone who is not looking yet.
+const splashHold = 2 * time.Second
 
 type splashDoneMsg struct{}
 
 func (m appModel) splashView() string {
 	lines := []string{
-		"",
 		m.th.Header.Render("capybara") + "  " + m.th.Dim.Render(m.version),
 		m.th.Text.Render("trace debugger for agents"),
 		"",
@@ -25,8 +24,8 @@ func (m appModel) splashView() string {
 	}
 	// Joining two blocks keeps the sprite's left edge straight; centring the
 	// composed lines one by one would ragged it, since they differ in width.
-	info := lipgloss.NewStyle().PaddingLeft(3).Render(strings.Join(lines, "\n"))
-	body := lipgloss.JoinHorizontal(lipgloss.Top, m.th.Mascot(), info)
+	info := lipgloss.NewStyle().PaddingLeft(4).Render(strings.Join(lines, "\n"))
+	body := lipgloss.JoinHorizontal(lipgloss.Center, m.th.Mascot(), info)
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, body)
 }
 

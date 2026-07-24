@@ -33,25 +33,30 @@ func Face(m Mood) string {
 // transparent and shows the terminal through.
 type Palette map[byte]lipgloss.Color
 
-// sprite is the capybara head, 24x16 pixels. Two pixel rows share one text row,
-// so every row must be the same width and the count must stay even.
+// sprite is the capybara head, 26x18 pixels. Two pixel rows share one text row,
+// so every row must be the same width and the count must stay even. The shape
+// is what separates a capybara from cattle: a wide flat-topped skull, ears small
+// enough to be almost lost in the corners, eyes set high and far apart, and a
+// blunt nose taking up the whole lower face with no pale muzzle patch.
 const sprite = `
-........................
-.....DDDDDDDDDDDDDD.....
-...DDHHHHHHHHHHHHHHDD...
-..DIIDHHHHHHHHHHHHDIID..
-..DIIDHHHHHHHHHHHHDIID..
-..DDIDBBBBBBBBBBBBDIDD..
-...DDBBBBBBBBBBBBBBDD...
-...DBBDDDBBBBBBDDDBBD...
-...DBBEEEBBBBBBEEEBBD...
-...DBBBBBBBBBBBBBBBBD...
-...DBBMMMMMMMMMMMMBBD...
-...DBMMMMMMMMMMMMMMBD...
-...DBMMNNMMMMMMNNMMBD...
-...DBMMMMMMMMMMMMMMBD...
-....DDMMMMMMMMMMMMDD....
-......DDDDDDDDDDDD......`
+..DDDD..............DDDD..
+.DDBBDD............DDBBDD.
+.DBIIBDDDDDDDDDDDDDDBIIBD.
+.DBIIBBBBBBBBBBBBBBBBIIBD.
+.DBDBBBBBBBBBBBBBBBBBBDBD.
+.DDBBBBBBBBBBBBBBBBBBBBDD.
+..DBBBEEBBBBBBBBBBEEBBBD..
+..DBBBEEBBBBBBBBBBEEBBBD..
+..DBBBBBBBBBBBBBBBBBBBBD..
+..DBBBBBBBBBBBBBBBBBBBBD..
+..DBBBBBBBBBBBBBBBBBBBBD..
+..DBBBBBBBBBBBBBBBBBBBBD..
+..DBBBBBDNNNNNNNNDBBBBBD..
+..DBBBBBNNNNNNNNNNBBBBBD..
+..DBBBBBNNNNNNNNNNBBBBBD..
+..DDBBBBDNNNNNNNNDBBBBDD..
+...DDBBBBBBBBBBBBBBBBDD...
+....DDDDDDDDDDDDDDDDDD....`
 
 // Mascot draws the sprite as half-block rows: the upper half-block carries the
 // top pixel as foreground, the lower one the bottom pixel as background.
@@ -83,16 +88,13 @@ func (t Theme) mascotRow(top, bottom string) string {
 	return b.String()
 }
 
-// fur is the shared sprite palette: outline, fur, lit fur, muzzle, eye,
-// nostril, inner ear.
-func fur(outline, body, lit, muzzle, eye, nostril, ear string) Palette {
+// fur is the shared sprite palette: outline, coat, inner ear, eye, nose.
+func fur(outline, body, ear, eye, nose string) Palette {
 	return Palette{
 		'D': lipgloss.Color(outline),
 		'B': lipgloss.Color(body),
-		'H': lipgloss.Color(lit),
-		'M': lipgloss.Color(muzzle),
-		'E': lipgloss.Color(eye),
-		'N': lipgloss.Color(nostril),
 		'I': lipgloss.Color(ear),
+		'E': lipgloss.Color(eye),
+		'N': lipgloss.Color(nose),
 	}
 }

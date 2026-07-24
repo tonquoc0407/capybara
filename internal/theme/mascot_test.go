@@ -37,6 +37,21 @@ func TestEveryThemeColoursTheWholeSprite(t *testing.T) {
 	}
 }
 
+// A two-pixel feature that starts on an odd row is split between two text rows
+// and renders as a pair of hairlines instead of a block.
+func TestSmallFeaturesSitOnAPixelPair(t *testing.T) {
+	rows := strings.Split(strings.Trim(sprite, "\n"), "\n")
+	for _, ch := range []byte{'E', 'I'} {
+		for x := range len(rows[0]) {
+			for y := 0; y < len(rows); y += 2 {
+				if (rows[y][x] == ch) != (rows[y+1][x] == ch) {
+					t.Errorf("%q straddles the pair at rows %d-%d, column %d", ch, y, y+1, x)
+				}
+			}
+		}
+	}
+}
+
 func TestMascotRendersOneRowPerPixelPair(t *testing.T) {
 	rows := strings.Split(strings.Trim(sprite, "\n"), "\n")
 	lines := strings.Split(Bara().Mascot(), "\n")

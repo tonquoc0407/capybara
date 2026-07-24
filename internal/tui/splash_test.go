@@ -35,8 +35,9 @@ func TestSplashNamesTheBuildAndTheDatabase(t *testing.T) {
 func TestSplashKeepsTheSpriteEdgeStraight(t *testing.T) {
 	m := splashModel(t)
 	view := strings.Split(plain(m.splashView()), "\n")
-	cols := make([]int, 0, 8)
-	for _, row := range strings.Split(plain(m.th.Mascot()), "\n") {
+	sprite := strings.Split(plain(m.th.Mascot()), "\n")
+	cols := make([]int, 0, len(sprite))
+	for _, row := range sprite {
 		for _, line := range view {
 			if i := strings.Index(line, row); i >= 0 {
 				cols = append(cols, len([]rune(line[:i])))
@@ -44,8 +45,8 @@ func TestSplashKeepsTheSpriteEdgeStraight(t *testing.T) {
 			}
 		}
 	}
-	if len(cols) != 8 {
-		t.Fatalf("located %d of 8 sprite rows", len(cols))
+	if len(cols) != len(sprite) {
+		t.Fatalf("located %d of %d sprite rows", len(cols), len(sprite))
 	}
 	for _, c := range cols[1:] {
 		if c != cols[0] {

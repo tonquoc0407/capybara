@@ -16,7 +16,7 @@ func Mono() Theme {
 	return Theme{
 		Name:          "mono",
 		GlamourStyle:  "ascii",
-		MascotPalette: fur("#1c1c1c", "#6c6c6c", "#767676", "#8a8a8a", "#0a0a0a", "#303030", "#4e4e4e"),
+		MascotPalette: fur("#1c1c1c", "#767676", "#4e4e4e", "#0a0a0a", "#303030"),
 		Header:        lipgloss.NewStyle().Foreground(accent).Bold(true),
 		HeaderInfo:    lipgloss.NewStyle().Foreground(text),
 		Border:        lipgloss.NewStyle().Foreground(faint),

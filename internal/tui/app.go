@@ -100,7 +100,7 @@ func defaultKeys() keyMap {
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Nav, k.Expand, k.Search, k.Filter, k.Diff, k.Blame, k.Rerun, k.Help, k.Quit}
+	return []key.Binding{k.Nav, k.Expand, k.Search, k.Filter, k.Views, k.Diff, k.Blame, k.Rerun, k.Help, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
@@ -258,6 +258,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	case runsMsg:
 		m.runs.setRuns(msg)
+		m.layout() // the run column is sized from the item count, which just changed
 		if sel := m.runs.selectedID(); sel != m.selectedRun {
 			m.selectedRun = sel
 			return m, m.loadSpans(sel)
@@ -545,6 +546,33 @@ func (m appModel) middleSelected() (store.Span, bool) {
 	return m.tree.selected()
 }
 
+// paneWidths splits the row: a narrow run column, then the middle and detail
+// panes sharing what is left.
+func (m appModel) paneWidths() (runs, middle, detail int) {
+	runs = min(max(m.width/5, 18), 34)
+	middle = (m.width - runs) * 52 / 100
+	return runs, middle, m.width - runs - middle
+}
+
+// summaryMinHeight is what the run summary needs before it is worth drawing:
+// borders, title and the six or so fields it carries.
+const summaryMinHeight = 12
+
+// paneHeights stacks the run list over its summary. The list only claims the
+// rows its items need, so a two-run database does not leave half the column
+// empty.
+func (m appModel) paneHeights(total int) (list, summary int) {
+	// The list bubble sizes itself in whole item+spacing units and keeps a row
+	// back for the filter prompt, so both have to be paid for or the last run
+	// is scrolled out of view.
+	needed := len(m.runs.list.Items())*(runItemHeight+runItemSpacing) + runListChrome
+	list = min(max(needed, 8), max(8, total-summaryMinHeight))
+	if list > total-3 {
+		list = total
+	}
+	return list, total - list
+}
+
 func (m *appModel) layout() {
 	if m.width <= 0 || m.height <= 0 {
 		return
@@ -552,16 +580,15 @@ func (m *appModel) layout() {
 	m.help.Width = m.width
 	statusH := lipgloss.Height(m.statusView())
 	paneH := max(3, m.height-1-statusH)
-	runsW := min(max(m.width/5, 14), 28)
-	treeW := (m.width - runsW) * 45 / 100
-	detailW := m.width - runsW - treeW
+	runsW, middleW, detailW := m.paneWidths()
+	listH, _ := m.paneHeights(paneH)
 	// -2 borders, -1 pane title line
-	m.runs.setSize(runsW-2, paneH-3)
-	m.tree.setSize(treeW-2, paneH-3)
-	m.waterfall.setSize(treeW-2, paneH-3)
-	m.contextv.setSize(treeW-2, paneH-3)
-	m.diffv.setSize(treeW-2, paneH-3)
-	m.blamev.setSize(treeW-2, paneH-3)
+	m.runs.setSize(runsW-2, listH-3)
+	m.tree.setSize(middleW-2, paneH-3)
+	m.waterfall.setSize(middleW-2, paneH-3)
+	m.contextv.setSize(middleW-2, paneH-3)
+	m.diffv.setSize(middleW-2, paneH-3)
+	m.blamev.setSize(middleW-2, paneH-3)
 	m.detail.setSize(detailW-2, paneH-3)
 }
 
@@ -574,9 +601,8 @@ func (m appModel) View() string {
 	}
 	statusView := m.statusView()
 	paneH := max(3, m.height-1-lipgloss.Height(statusView))
-	runsW := min(max(m.width/5, 14), 28)
-	treeW := (m.width - runsW) * 45 / 100
-	detailW := m.width - runsW - treeW
+	runsW, middleW, detailW := m.paneWidths()
+	listH, summaryH := m.paneHeights(paneH)
 	middleTitle, middleView := "span tree", m.tree.view()
 	switch m.mode {
 	case viewWaterfall:
@@ -593,10 +619,15 @@ func (m appModel) View() string {
 		middleTitle = "blame " + shortID(m.selectedRun)
 		middleView = m.blamev.view()
 	}
+	left := m.pane("runs", m.runs.view(), runsW, listH, m.focus == focusRuns)
+	if summaryH >= 3 {
+		left = lipgloss.JoinVertical(lipgloss.Left, left,
+			m.pane("run", m.summaryView(runsW-2), runsW, summaryH, false))
+	}
 	panes := lipgloss.JoinHorizontal(
 		lipgloss.Top,
-		m.pane("runs", m.runs.view(), runsW, paneH, m.focus == focusRuns),
-		m.pane(middleTitle, middleView, treeW, paneH, m.focus == focusTree),
+		left,
+		m.pane(middleTitle, middleView, middleW, paneH, m.focus == focusTree),
 		m.pane("detail", m.detail.view(), detailW, paneH, m.focus == focusDetail),
 	)
 	return m.headerView() + "\n" + panes + "\n" + statusView

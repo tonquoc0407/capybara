@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -25,28 +26,28 @@ type runDelegate struct {
 	width *int
 }
 
-func (d runDelegate) Height() int                         { return 1 }
-func (d runDelegate) Spacing() int                        { return 0 }
+// The delegate's own geometry; the layout needs it to size the list pane to its
+// contents.
+const (
+	runItemHeight  = 2
+	runItemSpacing = 1
+	// Two borders, the pane title, and the row the list keeps for its filter.
+	runListChrome = 4
+)
+
+func (d runDelegate) Height() int                         { return runItemHeight }
+func (d runDelegate) Spacing() int                        { return runItemSpacing }
 func (d runDelegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
 func (d runDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	it, ok := item.(runItem)
 	if !ok {
 		return
 	}
-	mark := " "
-	switch {
-	case it.run.Status == "error":
-		mark = "x"
-	case it.run.Findings > 0:
-		mark = "!"
-	case it.run.Status == "running":
-		mark = "."
-	}
 	label := it.run.Label
 	if label == "" {
 		label = shortID(it.run.ID)
 	}
-	plain := truncate(fmt.Sprintf("%s %s", mark, label), max(1, *d.width))
+	width := max(1, *d.width)
 	style := d.th.Text
 	switch {
 	case index == m.Index():
@@ -58,7 +59,64 @@ func (d runDelegate) Render(w io.Writer, m list.Model, index int, item list.Item
 	case it.run.Status == "running":
 		style = d.th.StatusRun
 	}
-	fmt.Fprint(w, style.Render(plain))
+	head := style.Render(truncate(runMark(it.run)+" "+label, width))
+	fmt.Fprint(w, head+"\n"+d.th.Dim.Render(truncate("  "+runMeta(it.run), width)))
+}
+
+func runMark(r store.Run) string {
+	switch {
+	case r.Status == "error":
+		return "x"
+	case r.Findings > 0:
+		return "!"
+	case r.Status == "running":
+		return "."
+	}
+	return " "
+}
+
+// runMeta is the second line: enough to tell two runs apart without opening
+// either of them.
+func runMeta(r store.Run) string {
+	parts := []string{}
+	if !r.StartedAt.IsZero() {
+		parts = append(parts, r.StartedAt.Local().Format("15:04"))
+	}
+	if d := r.EndedAt.Sub(r.StartedAt); d > 0 && !r.StartedAt.IsZero() {
+		parts = append(parts, humanDuration(d.Seconds()))
+	}
+	if r.CostUSD != nil {
+		parts = append(parts, fmt.Sprintf("$%.2f", *r.CostUSD))
+	}
+	// Last, because it is the first thing worth losing to truncation: two runs
+	// of the same agent almost always share a model.
+	if r.ModelMain != "" {
+		parts = append(parts, shortModel(r.ModelMain))
+	}
+	return strings.Join(parts, " ")
+}
+
+// shortModel drops the vendor prefix and release stamp: claude-opus-4-8 reads
+// as opus-4-8 in a pane this narrow.
+func shortModel(model string) string {
+	for _, prefix := range []string{"claude-", "gpt-", "gemini-", "models/"} {
+		model = strings.TrimPrefix(model, prefix)
+	}
+	if i := strings.LastIndex(model, "-2"); i > 0 && len(model)-i >= 7 {
+		model = model[:i]
+	}
+	return model
+}
+
+func humanDuration(seconds float64) string {
+	switch {
+	case seconds < 1:
+		return fmt.Sprintf("%dms", int(seconds*1000))
+	case seconds < 60:
+		return fmt.Sprintf("%.1fs", seconds)
+	default:
+		return fmt.Sprintf("%dm%02ds", int(seconds)/60, int(seconds)%60)
+	}
 }
 
 type runsModel struct {

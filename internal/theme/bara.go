@@ -14,7 +14,7 @@ func Bara() Theme {
 	return Theme{
 		Name:          "bara",
 		GlamourStyle:  "dark",
-		MascotPalette: fur("#2b1e15", "#8a6642", "#936e49", "#a58059", "#140e0a", "#3a281c", "#63452f"),
+		MascotPalette: fur("#2b1e15", "#8a6642", "#5a3f2b", "#140e0a", "#3f2c1f"),
 		Header:        lipgloss.NewStyle().Foreground(accent).Bold(true),
 		HeaderInfo:    lipgloss.NewStyle().Foreground(text),
 		Border:        lipgloss.NewStyle().Foreground(faint),

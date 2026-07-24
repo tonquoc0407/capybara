@@ -15,7 +15,7 @@ func Paper() Theme {
 	return Theme{
 		Name:          "paper",
 		GlamourStyle:  "light",
-		MascotPalette: fur("#2b1e15", "#7a5836", "#6d4e2f", "#96714d", "#140e0a", "#3a281c", "#553926"),
+		MascotPalette: fur("#3a291c", "#8a6642", "#5a3f2b", "#140e0a", "#4a3423"),
 		Header:        lipgloss.NewStyle().Foreground(accent).Bold(true),
 		HeaderInfo:    lipgloss.NewStyle().Foreground(text),
 		Border:        lipgloss.NewStyle().Foreground(faint),
