@@ -40,10 +40,15 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	dbPath := fs.String("db", "capybara.db", "database file")
 	noContent := fs.Bool("no-content", false, "drop prompt, completion and tool content")
 	otlpAddr := fs.String("otlp", "", "OTLP http address to listen on (default 127.0.0.1:4318)")
+	showVersion := fs.Bool("version", false, "print the version and exit")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return usage(out)
 		}
+		return err
+	}
+	if *showVersion {
+		_, err := fmt.Fprintln(out, "capybara "+version)
 		return err
 	}
 	capture := !*noContent
@@ -229,6 +234,7 @@ Flags, before the command:
   -db path      database file (default capybara.db)
   -no-content   drop prompt, completion and tool content
   -otlp addr    OTLP http address to listen on (default 127.0.0.1:4318)
+  -version      print the version and exit
 `)
 	return err
 }

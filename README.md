@@ -28,13 +28,21 @@ capybara
 ```
 
 Traces land in `capybara.db` in the working directory. Point somewhere else with
-`-db`, and drop prompt and tool bodies with `-no-content`.
+`-db`, and drop prompt and tool bodies with `-no-content`. With an empty
+database the middle pane says what it is listening on and how to send it
+something, so there is nothing to look up.
+
+If something else already holds 4317 or 4318 — a collector, Jaeger, another
+tracing UI — capybara keeps the transport that did bind, says which one it lost,
+and carries on. `-otlp 127.0.0.1:4319` moves the http listener somewhere free.
 
 There are three ways in, and one database can hold all of them:
 
-- **OTLP.** Anything already emitting `gen_ai.*` spans works untouched —
-  OpenLLMetry, OpenInference, or your own exporter. Point it at
-  `http://127.0.0.1:4318`.
+- **OTLP.** Point any instrumented app at it:
+  `OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318`. Three attribute
+  conventions are read — OpenTelemetry's own `gen_ai.*`, OpenInference
+  (Arize/Phoenix), and OpenLLMetry (traceloop) — so the instrumentor you already
+  run is enough, whichever one it is.
 - **A session file.** `capybara watch claude` tails Claude Code's own logs. No
   instrumentation and no restart: it reads what is already on disk.
 - **A file you have.** `capybara import trace.jsonl` takes span-per-line jsonl,
