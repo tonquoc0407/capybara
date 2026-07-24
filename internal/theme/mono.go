@@ -2,19 +2,21 @@ package theme
 
 import "github.com/charmbracelet/lipgloss"
 
-// Bara is the default theme: warm dark, amber accent.
-func Bara() Theme {
+// Mono drops the accent hue to grey and leans on weight instead. Red and amber
+// stay: they are status codes, not palette.
+func Mono() Theme {
 	var (
-		accent = lipgloss.Color("172") // warm amber
-		text   = lipgloss.Color("252")
-		dim    = lipgloss.Color("243")
-		faint  = lipgloss.Color("238")
+		accent = lipgloss.Color("255")
+		text   = lipgloss.Color("250")
+		dim    = lipgloss.Color("245")
+		faint  = lipgloss.Color("239")
 		errFg  = lipgloss.Color("203")
+		warnFg = lipgloss.Color("178")
 	)
 	return Theme{
-		Name:          "bara",
-		GlamourStyle:  "dark",
-		MascotPalette: fur("#2b1e15", "#8a6642", "#936e49", "#a58059", "#140e0a", "#3a281c", "#63452f"),
+		Name:          "mono",
+		GlamourStyle:  "ascii",
+		MascotPalette: fur("#1c1c1c", "#6c6c6c", "#767676", "#8a8a8a", "#0a0a0a", "#303030", "#4e4e4e"),
 		Header:        lipgloss.NewStyle().Foreground(accent).Bold(true),
 		HeaderInfo:    lipgloss.NewStyle().Foreground(text),
 		Border:        lipgloss.NewStyle().Foreground(faint),
@@ -22,12 +24,12 @@ func Bara() Theme {
 		PaneTitle:     lipgloss.NewStyle().Foreground(dim).Bold(true),
 		Text:          lipgloss.NewStyle().Foreground(text),
 		Dim:           lipgloss.NewStyle().Foreground(dim),
-		Accent:        lipgloss.NewStyle().Foreground(accent),
+		Accent:        lipgloss.NewStyle().Foreground(accent).Bold(true),
 		Selected:      lipgloss.NewStyle().Foreground(accent).Bold(true).Reverse(true),
 		Match:         lipgloss.NewStyle().Foreground(accent).Underline(true),
 		StatusOK:      lipgloss.NewStyle().Foreground(dim),
 		StatusErr:     lipgloss.NewStyle().Foreground(errFg).Bold(true),
-		StatusWarn:    lipgloss.NewStyle().Foreground(accent),
+		StatusWarn:    lipgloss.NewStyle().Foreground(warnFg),
 		StatusRun:     lipgloss.NewStyle().Foreground(text),
 		StatusBar:     lipgloss.NewStyle().Foreground(dim),
 		HelpKey:       lipgloss.NewStyle().Foreground(text),

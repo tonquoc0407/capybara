@@ -2,19 +2,20 @@ package theme
 
 import "github.com/charmbracelet/lipgloss"
 
-// Bara is the default theme: warm dark, amber accent.
-func Bara() Theme {
+// Paper is bara for a light terminal: the same amber accent darkened until it
+// reads on white, with the greys inverted.
+func Paper() Theme {
 	var (
-		accent = lipgloss.Color("172") // warm amber
-		text   = lipgloss.Color("252")
+		accent = lipgloss.Color("130")
+		text   = lipgloss.Color("236")
 		dim    = lipgloss.Color("243")
-		faint  = lipgloss.Color("238")
-		errFg  = lipgloss.Color("203")
+		faint  = lipgloss.Color("250")
+		errFg  = lipgloss.Color("124")
 	)
 	return Theme{
-		Name:          "bara",
-		GlamourStyle:  "dark",
-		MascotPalette: fur("#2b1e15", "#8a6642", "#936e49", "#a58059", "#140e0a", "#3a281c", "#63452f"),
+		Name:          "paper",
+		GlamourStyle:  "light",
+		MascotPalette: fur("#2b1e15", "#7a5836", "#6d4e2f", "#96714d", "#140e0a", "#3a281c", "#553926"),
 		Header:        lipgloss.NewStyle().Foreground(accent).Bold(true),
 		HeaderInfo:    lipgloss.NewStyle().Foreground(text),
 		Border:        lipgloss.NewStyle().Foreground(faint),

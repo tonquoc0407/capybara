@@ -20,6 +20,9 @@ import (
 	"github.com/tonquoc0407/capybara/internal/tui"
 )
 
+// version is stamped by the release build; a plain `go build` leaves it "dev".
+var version = "dev"
+
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -107,7 +110,8 @@ func receive(ctx context.Context, dbPath string, capture bool) error {
 		workers++
 		go func() { errc <- claude.Watch(runCtx, st, claudeRoot, capture) }()
 	}
-	errs := []error{tui.Run(runCtx, st, th, capture)}
+	about := tui.About{Version: version, DBPath: dbPath}
+	errs := []error{tui.Run(runCtx, st, th, about, capture)}
 	cancel()
 	for range workers {
 		errs = append(errs, <-errc)

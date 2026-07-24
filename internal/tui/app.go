@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -134,6 +135,9 @@ type appModel struct {
 	edit        edit
 	capture     bool
 	replaying   bool
+	splash      bool
+	version     string
+	dbPath      string
 	spans       []store.Span
 	findings    map[string][]store.Finding
 	notice      string
@@ -163,11 +167,13 @@ func newApp(st *store.Store, th theme.Theme, events <-chan struct{}, captureCont
 		detail:    newDetail(th),
 		focus:     focusTree,
 		capture:   captureContent,
+		splash:    true,
 	}
 }
 
 func (m appModel) Init() tea.Cmd {
-	return tea.Batch(m.loadRuns(), m.listen())
+	hold := tea.Tick(splashHold, func(time.Time) tea.Msg { return splashDoneMsg{} })
+	return tea.Batch(m.loadRuns(), m.listen(), hold)
 }
 
 func (m appModel) listen() tea.Cmd {
@@ -240,6 +246,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.layout()
+		return m, nil
+	case splashDoneMsg:
+		m.splash = false
 		return m, nil
 	case refreshMsg:
 		cmds := []tea.Cmd{m.loadRuns(), m.listen()}
@@ -316,6 +325,10 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lastErr = msg.err
 		return m, nil
 	case tea.KeyMsg:
+		if m.splash && !key.Matches(msg, m.keys.Quit) {
+			m.splash = false
+			return m, nil
+		}
 		return m.handleKey(msg)
 	}
 	return m, nil
@@ -556,6 +569,9 @@ func (m appModel) View() string {
 	if m.width <= 0 {
 		return ""
 	}
+	if m.splash {
+		return m.splashView()
+	}
 	statusView := m.statusView()
 	paneH := max(3, m.height-1-lipgloss.Height(statusView))
 	runsW := min(max(m.width/5, 14), 28)
@@ -646,5 +662,16 @@ func (m appModel) statusView() string {
 		line = m.th.StatusErr.Render(truncate(m.lastErr.Error(), m.width/2)) +
 			m.th.StatusBar.Render(" | ") + line
 	}
-	return line
+	return m.faceStyle().Render(theme.Face(m.mood())) + " " + line
+}
+
+func (m appModel) faceStyle() lipgloss.Style {
+	switch m.mood() {
+	case theme.Concerned:
+		return m.th.StatusErr
+	case theme.Alert:
+		return m.th.StatusWarn
+	default:
+		return m.th.StatusBar
+	}
 }

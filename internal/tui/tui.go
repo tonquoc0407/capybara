@@ -11,11 +11,19 @@ import (
 	"github.com/tonquoc0407/capybara/internal/theme"
 )
 
+// About is what the splash screen says about this build.
+type About struct {
+	Version string
+	DBPath  string
+}
+
 // Run starts the TUI and blocks until quit or ctx cancellation.
-func Run(ctx context.Context, st *store.Store, th theme.Theme, captureContent bool) error {
+func Run(ctx context.Context, st *store.Store, th theme.Theme, about About, captureContent bool) error {
 	ch, cancel := st.Subscribe()
 	defer cancel()
-	p := tea.NewProgram(newApp(st, th, ch, captureContent), tea.WithAltScreen(), tea.WithContext(ctx))
+	m := newApp(st, th, ch, captureContent)
+	m.version, m.dbPath = about.Version, about.DBPath
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(ctx))
 	if _, err := p.Run(); err != nil {
 		if ctx.Err() != nil {
 			return nil
