@@ -256,3 +256,24 @@ func TestSpanKindAcrossConventions(t *testing.T) {
 		})
 	}
 }
+
+// OpenLLMetry labels every Gemini turn "unknown", and the improvise check only
+// reads assistant text, so a whole provider's answers were invisible to it.
+func TestUnknownRoleFallsBackToTheAttributeDirection(t *testing.T) {
+	cases := []struct {
+		role, fallback, want string
+	}{
+		{"unknown", "assistant", "assistant"},
+		{"model", "assistant", "assistant"},
+		{"ai", "assistant", "assistant"},
+		{"human", "assistant", "user"},
+		{"Assistant", "user", "assistant"},
+		{"tool", "assistant", "tool"},
+		{"", "user", "user"},
+	}
+	for _, c := range cases {
+		if got := normalizeRole(c.role, c.fallback); got != c.want {
+			t.Errorf("normalizeRole(%q, %q) = %q, want %q", c.role, c.fallback, got, c.want)
+		}
+	}
+}

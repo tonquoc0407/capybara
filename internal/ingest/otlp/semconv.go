@@ -354,7 +354,7 @@ func parseMessages(raw, defaultRole string) []message {
 		role, body := defaultRole, string(el)
 		if err := json.Unmarshal(el, &m); err == nil {
 			if m.Role != "" {
-				role = m.Role
+				role = normalizeRole(m.Role, defaultRole)
 			}
 			if len(m.Parts) > 0 {
 				body = string(m.Parts)
@@ -363,6 +363,23 @@ func parseMessages(raw, defaultRole string) []message {
 		msgs = append(msgs, message{role: role, body: body})
 	}
 	return msgs
+}
+
+// normalizeRole keeps a message under one of the roles the rest of capybara
+// reads. Instrumentors emit vendor spellings, and OpenLLMetry labels every
+// Gemini turn "unknown" - which left a whole provider's answers invisible to
+// the improvise check. A role nobody recognises must not override the direction
+// the attribute already stated.
+func normalizeRole(role, fallback string) string {
+	switch strings.ToLower(role) {
+	case "system", "user", "assistant", "tool":
+		return strings.ToLower(role)
+	case "model", "ai", "bot":
+		return "assistant"
+	case "human":
+		return "user"
+	}
+	return fallback
 }
 
 func mediaType(body string) string {

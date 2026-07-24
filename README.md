@@ -70,6 +70,12 @@ Below, the LangGraph one runs while the TUI is open: the quote tool raises, Lang
   <img src="demo/frameworks.gif" alt="a real LangGraph agent traced into capybara" width="720">
 </p>
 
+Nothing above is written for capybara. Below is somebody else's project — a chess analytics agent answering questions over a DuckDB warehouse of 9.4M Lichess games — traced without a line of its code being touched, and priced from the token counts Gemini reported.
+
+<p align="center">
+  <img src="demo/knightvision.gif" alt="a third-party LangChain agent traced without modification" width="720">
+</p>
+
 ### A session file
 
 ```sh
