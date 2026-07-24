@@ -36,10 +36,24 @@ class EntrypointSpanProcessor(SpanProcessor):
         span.set_attribute(CWD_ATTR, os.getcwd())
 
 
+def _resolved_endpoint(endpoint: str | None) -> str | None:
+    """None lets the OTel exporter resolve OTEL_EXPORTER_OTLP_* itself.
+
+    Only fall back to a local capybara when nothing else is configured, so
+    moving the collector with `capybara -otlp` needs no code change here.
+    """
+    if endpoint is not None:
+        return endpoint
+    for var in ("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "OTEL_EXPORTER_OTLP_ENDPOINT"):
+        if os.getenv(var):
+            return None
+    return DEFAULT_ENDPOINT
+
+
 def init(
     *,
     service_name: str = "capybara",
-    endpoint: str = DEFAULT_ENDPOINT,
+    endpoint: str | None = None,
 ) -> TracerProvider:
     """Export spans to a local capybara, reusing any provider already installed."""
     global _configured
@@ -53,7 +67,7 @@ def init(
         provider.add_span_processor(EntrypointSpanProcessor())
         provider.add_span_processor(SchemaSpanProcessor())
         provider.add_span_processor(
-            BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint))
+            BatchSpanProcessor(OTLPSpanExporter(endpoint=_resolved_endpoint(endpoint)))
         )
         _configured = True
     return provider

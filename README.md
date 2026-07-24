@@ -59,6 +59,7 @@ import capybara
 
 capybara.init()  # export to a local capybara on 127.0.0.1:4318
 
+
 @capybara.trace(tool="lookup_price")
 def lookup_price(sku: str) -> dict:
     return {"price": 42.0, "currency": "USD"}
