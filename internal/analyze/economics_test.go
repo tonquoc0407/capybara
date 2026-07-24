@@ -11,7 +11,21 @@ import (
 )
 
 func toolCall(id, tool, input string) store.ToolCall {
-	return store.ToolCall{SpanID: id, Tool: tool, Input: input}
+	return store.ToolCall{SpanID: id, Tool: tool, Input: input, Recorded: true}
+}
+
+// A database recorded with -no-content, or fed by an instrumentor that does not
+// capture arguments, has no input to compare. Hashing the missing input made
+// every call to one tool look identical: a real session of 191 spans reported
+// nine loops that way, all of them different files being read.
+func TestNoLoopWhenArgumentsWereNeverRecorded(t *testing.T) {
+	var calls []store.ToolCall
+	for i := range 10 {
+		calls = append(calls, store.ToolCall{SpanID: fmt.Sprintf("s%d", i), Tool: "read"})
+	}
+	if fs := loopFindings("r1", calls); len(fs) != 0 {
+		t.Fatalf("unrecorded arguments flagged as loop: %+v", fs)
+	}
 }
 
 func TestLoopOnRepeatedIdenticalCalls(t *testing.T) {

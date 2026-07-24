@@ -30,6 +30,14 @@ const (
 func loopFindings(runID string, calls []store.ToolCall) []store.Finding {
 	keys := make([]string, len(calls))
 	for i, c := range calls {
+		if !c.Recorded {
+			// Arguments were never captured, so nothing here is known to
+			// repeat. A unique key keeps the call in the sequence as a break
+			// rather than letting every call to one tool look identical. The
+			// cost is missing a loop of a tool that takes no arguments.
+			keys[i] = c.Tool + "\x00" + c.SpanID
+			continue
+		}
 		sum := sha256.Sum256([]byte(c.Input))
 		keys[i] = c.Tool + "\x00" + hex.EncodeToString(sum[:8])
 	}

@@ -210,11 +210,15 @@ func (s *Store) ResolveRunID(ctx context.Context, prefix string) (string, error)
 	return "", fmt.Errorf("run id %q is ambiguous", prefix)
 }
 
-// ToolCall is one completed tool invocation in run order.
+// ToolCall is one completed tool invocation in run order. Recorded separates a
+// call whose arguments were captured from one whose were not, which a caller
+// comparing inputs has to know: -no-content and instrumentors that skip
+// arguments both leave Input empty without the calls being alike.
 type ToolCall struct {
-	SpanID string
-	Tool   string
-	Input  string
+	SpanID   string
+	Tool     string
+	Input    string
+	Recorded bool
 }
 
 // ToolCalls returns a run's completed tool calls with their inputs, in order.
@@ -222,9 +226,9 @@ func (s *Store) ToolCalls(ctx context.Context, runID string) ([]ToolCall, error)
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT s.id,
 		        COALESCE(json_extract(s.attrs_json, '$.tool_name'), s.name),
-		        COALESCE((SELECT c.body FROM contents c
-		                  WHERE c.span_id = s.id AND c.role = 'input'
-		                  ORDER BY c.seq LIMIT 1), '')
+		        (SELECT c.body FROM contents c
+		         WHERE c.span_id = s.id AND c.role = 'input'
+		         ORDER BY c.seq LIMIT 1)
 		 FROM spans s
 		 WHERE s.run_id = ? AND s.kind = 'tool' AND s.ended_at IS NOT NULL
 		 ORDER BY s.ended_at, s.id`, runID)
@@ -235,9 +239,11 @@ func (s *Store) ToolCalls(ctx context.Context, runID string) ([]ToolCall, error)
 	var calls []ToolCall
 	for rows.Next() {
 		var c ToolCall
-		if err := rows.Scan(&c.SpanID, &c.Tool, &c.Input); err != nil {
+		var input sql.NullString
+		if err := rows.Scan(&c.SpanID, &c.Tool, &input); err != nil {
 			return nil, fmt.Errorf("scan tool call: %w", err)
 		}
+		c.Input, c.Recorded = input.String, input.Valid
 		calls = append(calls, c)
 	}
 	if err := rows.Err(); err != nil {
