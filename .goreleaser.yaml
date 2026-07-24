@@ -7,6 +7,8 @@ builds:
     binary: capybara
     env:
       - CGO_ENABLED=0
+    # Fills main.version, which the splash prints.
+    ldflags: ["-s -w -X main.version={{.Version}}"]
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
 
