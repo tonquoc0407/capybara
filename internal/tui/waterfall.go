@@ -140,6 +140,11 @@ func (m *waterfallModel) renderBar(sp store.Span, i int, maxMetric float64, name
 	if sp.Kind == store.KindTool && sp.Attrs.ToolName != "" {
 		name = sp.Attrs.ToolName
 	}
+	if sp.Kind == store.KindLLM && sp.Attrs.Model != "" {
+		// Every turn of one session carries the same model, so the vendor
+		// prefix is column width spent saying nothing.
+		name = strings.ReplaceAll(name, sp.Attrs.Model, shortModel(sp.Attrs.Model))
+	}
 	name = truncate(name, nameW)
 	fill := 0
 	if maxMetric > 0 {
