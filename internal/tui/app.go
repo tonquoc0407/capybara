@@ -554,6 +554,10 @@ func (m appModel) paneWidths() (runs, middle, detail int) {
 	return runs, middle, m.width - runs - middle
 }
 
+// paneChrome is what a pane spends on itself: two border columns and a column
+// of padding on each side, so text never touches the frame.
+const paneChrome = 4
+
 // summaryMinHeight is what the run summary needs before it is worth drawing:
 // borders, title and the six or so fields it carries.
 const summaryMinHeight = 12
@@ -583,13 +587,13 @@ func (m *appModel) layout() {
 	runsW, middleW, detailW := m.paneWidths()
 	listH, _ := m.paneHeights(paneH)
 	// -2 borders, -1 pane title line
-	m.runs.setSize(runsW-2, listH-3)
-	m.tree.setSize(middleW-2, paneH-3)
-	m.waterfall.setSize(middleW-2, paneH-3)
-	m.contextv.setSize(middleW-2, paneH-3)
-	m.diffv.setSize(middleW-2, paneH-3)
-	m.blamev.setSize(middleW-2, paneH-3)
-	m.detail.setSize(detailW-2, paneH-3)
+	m.runs.setSize(runsW-paneChrome, listH-3)
+	m.tree.setSize(middleW-paneChrome, paneH-3)
+	m.waterfall.setSize(middleW-paneChrome, paneH-3)
+	m.contextv.setSize(middleW-paneChrome, paneH-3)
+	m.diffv.setSize(middleW-paneChrome, paneH-3)
+	m.blamev.setSize(middleW-paneChrome, paneH-3)
+	m.detail.setSize(detailW-paneChrome, paneH-3)
 }
 
 func (m appModel) View() string {
@@ -622,7 +626,7 @@ func (m appModel) View() string {
 	left := m.pane("runs", m.runs.view(), runsW, listH, m.focus == focusRuns)
 	if summaryH >= 3 {
 		left = lipgloss.JoinVertical(lipgloss.Left, left,
-			m.pane("run", m.summaryView(runsW-2), runsW, summaryH, false))
+			m.pane("run", m.summaryView(runsW-paneChrome), runsW, summaryH, false))
 	}
 	panes := lipgloss.JoinHorizontal(
 		lipgloss.Top,
@@ -638,9 +642,10 @@ func (m appModel) pane(title, content string, w, h int, focused bool) string {
 	if focused {
 		border = m.th.BorderFocus
 	}
-	inner := m.th.PaneTitle.Render(truncate(title, max(1, w-2))) + "\n" + content
+	inner := m.th.PaneTitle.Render(truncate(title, max(1, w-paneChrome))) + "\n" + content
 	return border.
 		Border(lipgloss.NormalBorder()).
+		Padding(0, 1).
 		Width(w - 2).
 		Height(h - 2).
 		Render(inner)
