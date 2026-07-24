@@ -4,6 +4,7 @@ package otlp
 
 import (
 	"encoding/json"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -34,6 +35,43 @@ const (
 	attrToolArguments    = "gen_ai.tool.call.arguments"
 	attrToolResult       = "gen_ai.tool.call.result"
 )
+
+// OpenInference (Arize/Phoenix) and OpenLLMetry (traceloop) predate the gen_ai
+// conventions and name most things differently. Neither sets
+// gen_ai.operation.name, so without these every span they emit is untyped.
+const (
+	attrOISpanKind    = "openinference.span.kind"
+	attrOIModel       = "llm.model_name"
+	attrOIProvider    = "llm.provider"
+	attrOISystem      = "llm.system"
+	attrOIPromptToks  = "llm.token_count.prompt"
+	attrOIOutputToks  = "llm.token_count.completion"
+	attrOIToolName    = "tool.name"
+	attrOIInput       = "input.value"
+	attrOIOutput      = "output.value"
+	attrTLSpanKind    = "traceloop.span.kind"
+	attrTLEntityName  = "traceloop.entity.name"
+	attrTLEntityIn    = "traceloop.entity.input"
+	attrTLEntityOut   = "traceloop.entity.output"
+	attrTLRequestType = "llm.request.type"
+	tlPromptPrefix    = "gen_ai.prompt."
+	tlCompletionPre   = "gen_ai.completion."
+)
+
+var kindByOISpanKind = map[string]store.Kind{
+	"LLM":       store.KindLLM,
+	"EMBEDDING": store.KindLLM,
+	"TOOL":      store.KindTool,
+	"AGENT":     store.KindAgent,
+	"CHAIN":     store.KindAgent,
+	"RETRIEVER": store.KindRetrieval,
+}
+
+var kindByTLSpanKind = map[string]store.Kind{
+	"workflow": store.KindAgent,
+	"agent":    store.KindAgent,
+	"tool":     store.KindTool,
+}
 
 var kindByOperation = map[string]store.Kind{
 	"invoke_agent":     store.KindAgent,
@@ -76,16 +114,14 @@ func mapSemconv(span ptrace.Span) mappedSpan {
 	m := mappedSpan{
 		kind: store.KindOther,
 		attrs: store.Attrs{
-			Model:    strAttr(attrs, attrRequestModel, attrResponseModel),
-			Provider: strAttr(attrs, attrProviderName, attrSystem),
-			ToolName: strAttr(attrs, attrToolName, attrMCPToolName),
+			Model:    strAttr(attrs, attrRequestModel, attrResponseModel, attrOIModel),
+			Provider: strAttr(attrs, attrProviderName, attrSystem, attrOIProvider, attrOISystem),
+			ToolName: strAttr(attrs, attrToolName, attrMCPToolName, attrOIToolName, attrTLEntityName),
 		},
-		tokensIn:  intAttr(attrs, attrInputTokens, attrPromptTokens),
-		tokensOut: intAttr(attrs, attrOutputTokens, attrCompletionTokens),
+		tokensIn:  intAttr(attrs, attrInputTokens, attrPromptTokens, attrOIPromptToks),
+		tokensOut: intAttr(attrs, attrOutputTokens, attrCompletionTokens, attrOIOutputToks),
 	}
-	if k, ok := kindByOperation[strAttr(attrs, attrOperationName)]; ok {
-		m.kind = k
-	}
+	m.kind = spanKind(attrs)
 	attrs.Range(func(key string, _ pcommon.Value) bool {
 		if strings.HasPrefix(key, mcpAttrPrefix) {
 			m.attrs.MCP = true
@@ -97,6 +133,25 @@ func mapSemconv(span ptrace.Span) mappedSpan {
 		m.kind = store.KindTool
 	}
 	return m
+}
+
+// spanKind reads whichever convention the emitter speaks. OpenLLMetry marks
+// only its wrapper spans; its model calls are recognised by llm.request.type,
+// which is the one attribute it always sets on them.
+func spanKind(attrs pcommon.Map) store.Kind {
+	if k, ok := kindByOperation[strAttr(attrs, attrOperationName)]; ok {
+		return k
+	}
+	if k, ok := kindByOISpanKind[strings.ToUpper(strAttr(attrs, attrOISpanKind))]; ok {
+		return k
+	}
+	if k, ok := kindByTLSpanKind[strings.ToLower(strAttr(attrs, attrTLSpanKind))]; ok {
+		return k
+	}
+	if strAttr(attrs, attrTLRequestType) != "" {
+		return store.KindLLM
+	}
+	return store.KindOther
 }
 
 // spanContents gathers conversation and tool io from legacy span events and
@@ -144,7 +199,62 @@ func spanContents(span ptrace.Span) []store.Content {
 	}
 	add("input", strAttr(attrs, attrToolArguments))
 	add("output", strAttr(attrs, attrToolResult))
+	for _, m := range indexedMessages(attrs) {
+		add(m.role, m.body)
+	}
+	// OpenInference and OpenLLMetry both carry one blob each way. What they mean
+	// depends on the span: a tool's input is arguments, a model's is a prompt.
+	inRole, outRole := "input", "output"
+	if spanKind(attrs) == store.KindLLM {
+		inRole, outRole = "user", "assistant"
+	}
+	add(inRole, strAttr(attrs, attrOIInput, attrTLEntityIn))
+	add(outRole, strAttr(attrs, attrOIOutput, attrTLEntityOut))
 	return contents
+}
+
+// indexedMessages reads OpenLLMetry's flattened conversation, which arrives as
+// gen_ai.prompt.0.role, gen_ai.prompt.0.content and so on rather than as one
+// serialized list.
+func indexedMessages(attrs pcommon.Map) []message {
+	bodies := map[string]string{}
+	roles := map[string]string{}
+	attrs.Range(func(key string, v pcommon.Value) bool {
+		for _, prefix := range []string{tlPromptPrefix, tlCompletionPre} {
+			rest, ok := strings.CutPrefix(key, prefix)
+			if !ok {
+				continue
+			}
+			idx, field, ok := strings.Cut(rest, ".")
+			if !ok {
+				continue
+			}
+			switch field {
+			case "content":
+				bodies[prefix+idx] = v.AsString()
+			case "role":
+				roles[prefix+idx] = v.AsString()
+			}
+		}
+		return true
+	})
+	keys := make([]string, 0, len(bodies))
+	for k := range bodies {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	msgs := make([]message, 0, len(keys))
+	for _, k := range keys {
+		role := roles[k]
+		if role == "" {
+			role = "user"
+			if strings.HasPrefix(k, tlCompletionPre) {
+				role = "assistant"
+			}
+		}
+		msgs = append(msgs, message{role: role, body: bodies[k]})
+	}
+	return msgs
 }
 
 type message struct {

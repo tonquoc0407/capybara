@@ -33,30 +33,33 @@ func Face(m Mood) string {
 // transparent and shows the terminal through.
 type Palette map[byte]lipgloss.Color
 
-// sprite is the capybara head, 26x18 pixels. Two pixel rows share one text row,
-// so every row must be the same width and the count must stay even. The shape
-// is what separates a capybara from cattle: a wide flat-topped skull, ears small
-// enough to be almost lost in the corners, eyes set high and far apart, and a
-// blunt nose taking up the whole lower face with no pale muzzle patch.
+// sprite is the capybara head, 22x18 pixels. Two pixel rows share one text row,
+// so every row must be the same width, the count must stay even, and any
+// two-pixel feature must start on an even row or it renders as two hairlines.
+//
+// The shape is what separates a capybara from cattle: ears standing proud of a
+// flat crown rather than sticking out at the sides, eyes set high and far apart
+// under a heavy brow, and a blunt muzzle block with two nostrils filling the
+// lower face, with the chin below it.
 const sprite = `
-..DDDD..............DDDD..
-.DDBBDD............DDBBDD.
-.DBIIBDDDDDDDDDDDDDDBIIBD.
-.DBIIBBBBBBBBBBBBBBBBIIBD.
-.DBDBBBBBBBBBBBBBBBBBBDBD.
-.DDBBBBBBBBBBBBBBBBBBBBDD.
-..DBBBEEBBBBBBBBBBEEBBBD..
-..DBBBEEBBBBBBBBBBEEBBBD..
-..DBBBBBBBBBBBBBBBBBBBBD..
-..DBBBBBBBBBBBBBBBBBBBBD..
-..DBBBBBBBBBBBBBBBBBBBBD..
-..DBBBBBBBBBBBBBBBBBBBBD..
-..DBBBBBDNNNNNNNNDBBBBBD..
-..DBBBBBNNNNNNNNNNBBBBBD..
-..DBBBBBNNNNNNNNNNBBBBBD..
-..DDBBBBDNNNNNNNNDBBBBDD..
-...DDBBBBBBBBBBBBBBBBDD...
-....DDDDDDDDDDDDDDDDDD....`
+..DDDD..........DDDD..
+.DDBBDDDDDDDDDDDDBBDD.
+.DBIIBBBBBBBBBBBBIIBD.
+.DBIIHHHHHHHHHHHHIIBD.
+.DDBHDHHHHHHHHHHDHBDD.
+.DBBBBBBHHHHHHBBBBBBD.
+.DBBHEEHHHHHHHHEEHBBD.
+.DBBHEEHHHHHHHHEEHBBD.
+.DBBHHHHHHHHHHHHHHBBD.
+.DBBHHHHHHHHHHHHHHBBD.
+.DBBBBDMMMMMMMMDBBBBD.
+.DBBBBMMMMMMMMMMBBBBD.
+.DBBBBMMNNMMNNMMBBBBD.
+.DBBBBMMNNMMNNMMBBBBD.
+.DDBBBMMMMMMMMMMBBBDD.
+..DDBBDMMMMMMMMDBBDD..
+...DDDDPPPPPPPPDDDD...
+......DPPPPPPPPD......`
 
 // Mascot draws the sprite as half-block rows: the upper half-block carries the
 // top pixel as foreground, the lower one the bottom pixel as background.
@@ -88,13 +91,21 @@ func (t Theme) mascotRow(top, bottom string) string {
 	return b.String()
 }
 
-// fur is the shared sprite palette: outline, coat, inner ear, eye, nose.
-func fur(outline, body, ear, eye, nose string) Palette {
+// Coat is one theme's mascot colours, named rather than ordered because eight
+// hex strings in a row is a mistake waiting to happen.
+type Coat struct {
+	Outline, Fur, Lit, Ear, Eye, Muzzle, Nostril, Chin string
+}
+
+func fur(c Coat) Palette {
 	return Palette{
-		'D': lipgloss.Color(outline),
-		'B': lipgloss.Color(body),
-		'I': lipgloss.Color(ear),
-		'E': lipgloss.Color(eye),
-		'N': lipgloss.Color(nose),
+		'D': lipgloss.Color(c.Outline),
+		'B': lipgloss.Color(c.Fur),
+		'H': lipgloss.Color(c.Lit),
+		'I': lipgloss.Color(c.Ear),
+		'E': lipgloss.Color(c.Eye),
+		'M': lipgloss.Color(c.Muzzle),
+		'N': lipgloss.Color(c.Nostril),
+		'P': lipgloss.Color(c.Chin),
 	}
 }
