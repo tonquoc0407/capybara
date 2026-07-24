@@ -222,3 +222,20 @@ func TestCachedUsagePricing(t *testing.T) {
 		t.Fatalf("cached cost = %v, want 0.236", spans[0].CostUSD)
 	}
 }
+
+// Google's SDKs report the model as a resource name, so a Gemini run through
+// LangChain arrives as models/gemini-2.5-flash and used to be left unpriced.
+func TestGeminiResourceNameIsPriced(t *testing.T) {
+	p, err := loadPricing("")
+	if err != nil {
+		t.Fatalf("loadPricing: %v", err)
+	}
+	bare, ok := p.lookup("gemini-2.5-flash")
+	if !ok {
+		t.Fatal("gemini-2.5-flash is not in the table")
+	}
+	full, ok := p.lookup("models/gemini-2.5-flash")
+	if !ok || full != bare {
+		t.Errorf("models/ prefix priced as %+v, want %+v", full, bare)
+	}
+}

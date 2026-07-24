@@ -66,6 +66,9 @@ func DefaultPricingPath() string {
 }
 
 func (p pricing) lookup(model string) (rates, bool) {
+	// Google's SDKs report the full resource name, so a LangChain run through
+	// Gemini arrives as models/gemini-2.5-flash and matches nothing.
+	model = strings.TrimPrefix(model, "models/")
 	best, found := "", false
 	var r rates
 	for prefix, pr := range p {
