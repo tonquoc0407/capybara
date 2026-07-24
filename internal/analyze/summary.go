@@ -61,6 +61,16 @@ func FindingSummary(f store.Finding) string {
 	return f.Type
 }
 
+// FindingLine labels a summary with its type, except when the summary already
+// fell back to the type and would stutter.
+func FindingLine(f store.Finding) string {
+	summary := FindingSummary(f)
+	if summary == f.Type {
+		return f.Type
+	}
+	return f.Type + ": " + summary
+}
+
 func driftSummary(d FindingDetail) string {
 	extra := len(d.Missing) + len(d.Retyped) - 1
 	switch {

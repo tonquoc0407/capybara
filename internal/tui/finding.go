@@ -11,7 +11,7 @@ import (
 // schema diff or evidence.
 func findingLines(f store.Finding) []string {
 	d := analyze.ParseDetail(f)
-	lines := []string{f.Type + ": " + analyze.FindingSummary(f)}
+	lines := []string{analyze.FindingLine(f)}
 	for _, field := range d.Missing {
 		lines = append(lines, "  missing: "+field)
 	}
