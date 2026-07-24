@@ -24,8 +24,8 @@ func TestFindingLineLabelsOnlyWhatItCanWord(t *testing.T) {
 		},
 		{
 			name: "unknown type falls back without stuttering",
-			f:    store.Finding{Type: "tool_error", Detail: `{"status":502}`},
-			want: "tool_error",
+			f:    store.Finding{Type: "unwordable", Detail: `{"status":502}`},
+			want: "unwordable",
 		},
 		{
 			name: "summary that opens with its type is not labelled again",

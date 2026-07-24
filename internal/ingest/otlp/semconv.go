@@ -239,13 +239,53 @@ func spanContents(span ptrace.Span) []store.Content {
 	if spanKind(attrs) == store.KindLLM {
 		inRole, outRole = "user", "assistant"
 	}
-	add("input", strAttr(attrs, attrAIToolArgs))
-	add("output", strAttr(attrs, attrAIToolResult))
+	add("input", unwrapEnvelope(strAttr(attrs, attrAIToolArgs)))
+	add("output", unwrapEnvelope(strAttr(attrs, attrAIToolResult)))
 	add("user", strAttr(attrs, attrAIPrompt))
 	add("assistant", strAttr(attrs, attrAIResponse))
-	add(inRole, strAttr(attrs, attrOIInput, attrTLEntityIn))
-	add(outRole, strAttr(attrs, attrOIOutput, attrTLEntityOut))
+	add(inRole, unwrapEnvelope(strAttr(attrs, attrOIInput, attrTLEntityIn)))
+	add(outRole, unwrapEnvelope(strAttr(attrs, attrOIOutput, attrTLEntityOut)))
 	return contents
+}
+
+// unwrapEnvelope digs the tool's own payload out of a framework wrapper.
+// LangChain hands OpenLLMetry a serialized ToolMessage rather than the value the
+// tool returned, so what arrives on the span is
+// {"output":{"lc":1,...,"kwargs":{"content":"<the payload>"}}} and the input is
+// the call arguments buried under per-run checkpoint ids. Storing the wrapper
+// means every later reader - the learned contract, the error signal, the
+// detail pane, the hash that decides whether two calls are identical - is
+// looking at the framework instead of the tool. Anything that does not match a
+// known wrapper is returned untouched.
+func unwrapEnvelope(body string) string {
+	var obj map[string]any
+	if body == "" || json.Unmarshal([]byte(body), &obj) != nil {
+		return body
+	}
+	if s, ok := obj["input_str"].(string); ok {
+		return s
+	}
+	inner, ok := obj["output"]
+	if !ok {
+		return body
+	}
+	if nested, ok := inner.(map[string]any); ok {
+		if _, serialized := nested["lc"]; serialized {
+			if kwargs, ok := nested["kwargs"].(map[string]any); ok {
+				if content, ok := kwargs["content"].(string); ok {
+					return content
+				}
+			}
+		}
+	}
+	if s, ok := inner.(string); ok {
+		return s
+	}
+	raw, err := json.Marshal(inner)
+	if err != nil {
+		return body
+	}
+	return string(raw)
 }
 
 // indexedMessages reads OpenLLMetry's flattened conversation, which arrives as

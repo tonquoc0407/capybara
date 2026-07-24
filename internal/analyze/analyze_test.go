@@ -377,3 +377,48 @@ func TestWatchAnalyzesOnWrite(t *testing.T) {
 		t.Fatalf("Watch: %v", err)
 	}
 }
+
+// Agent frameworks report a failed call two ways: the span ends in error, or the
+// span succeeds and the payload says the call did not. Only the first was ever
+// recognised, so a tool returning {"error": ...} looked like a clean result.
+func TestToolOutputThatAnnouncesItsOwnFailure(t *testing.T) {
+	cases := []struct {
+		name   string
+		output string
+		want   bool
+	}{
+		{"error string", `{"status":502,"error":"upstream unavailable"}`, true},
+		{"mcp is_error", `{"isError":true,"content":"boom"}`, true},
+		{"not ok", `{"ok":false,"data":null}`, true},
+		{"http status alone", `{"status":503}`, true},
+		{"empty error field", `{"error":"","rows":[1,2]}`, false},
+		{"null error field", `{"error":null,"rows":[1,2]}`, false},
+		{"ordinary payload", `{"price":42,"currency":"USD"}`, false},
+		{"success status", `{"status":200,"price":42}`, false},
+		{"array payload", `[{"price":42}]`, false},
+		// Text is the common shape: LangChain's caught-error format opens with
+		// "Error:", and tools wrapping a query or a shell command do the same.
+		{"langchain caught error", "Error: RuntimeError('upstream down')", true},
+		{"query error", "Query error: Catalog Error: Table x does not exist", true},
+		{"git failure", "fatal: pathspec 'nope' did not match any file", true},
+		{"python traceback", "Traceback (most recent call last):\n  File ...", true},
+		{"prose that mentions an error", "The report explains one error in the data.", false},
+		{"ordinary text", "3 rows returned", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			st := openTemp(t)
+			toolRun(t, st, "r1", "quote", c.output, t0)
+			sweep(t, st)
+			var got bool
+			for _, f := range runFindings(t, st, "r1") {
+				if f.Type == "tool_error" {
+					got = true
+				}
+			}
+			if got != c.want {
+				t.Errorf("tool_error = %v, want %v for %s", got, c.want, c.output)
+			}
+		})
+	}
+}

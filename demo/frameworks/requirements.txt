@@ -1,0 +1,8 @@
+langchain
+langchain-openai
+langgraph
+openai
+opentelemetry-instrumentation-langchain
+openinference-instrumentation-openai
+opentelemetry-sdk
+opentelemetry-exporter-otlp-proto-http

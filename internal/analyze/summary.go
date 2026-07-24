@@ -49,6 +49,8 @@ func FindingSummary(f store.Finding) string {
 		return "malformed output"
 	case "empty_payload":
 		return "empty payload"
+	case "tool_error":
+		return "tool reported an error in its output"
 	case "improvised":
 		return "improvised after " + d.Tool + " failure"
 	case "parse_error":

@@ -46,32 +46,88 @@ func (a *Analyzer) checkTool(ctx context.Context, sp store.Span) ([]store.Findin
 	if err := json.Unmarshal([]byte(output.Body), &value); err != nil {
 		return a.nonJSONOutput(ctx, sp, tool, output.Body, current, declared)
 	}
+	reported := reportedError(sp, tool, value)
 	obs := infer(value, 0)
 	if current == nil {
-		return nil, a.learn(ctx, sp, tool, obs)
+		return reported, a.learn(ctx, sp, tool, obs)
 	}
 	d := diffSchemas(current, obs, "")
 	if d.breaking() {
 		if !declared && rootEncodingFlip(current, obs, d) {
-			return nil, a.touch(ctx, sp, tool, mergeSchemas(current, obs))
+			return reported, a.touch(ctx, sp, tool, mergeSchemas(current, obs))
 		}
 		if !declared {
 			if err := a.adopt(ctx, sp, tool, obs); err != nil {
 				return nil, err
 			}
 		}
-		return []store.Finding{finding(sp, "drift", "warning", map[string]any{
+		return append(reported, finding(sp, "drift", "warning", map[string]any{
 			"tool": tool, "missing": d.Missing, "retyped": d.Retyped,
-		})}, nil
+		})), nil
 	}
 	if declared {
-		return nil, nil
+		return reported, nil
 	}
 	merged := current
 	if d.widened {
 		merged = mergeSchemas(current, obs)
 	}
-	return nil, a.touch(ctx, sp, tool, merged)
+	return reported, a.touch(ctx, sp, tool, merged)
+}
+
+// reportedError catches the output that announces its own failure. Agent
+// frameworks overwhelmingly return an error value rather than raising, so the
+// span still ends "ok" and nothing downstream — least of all the improvise
+// check — ever learns the call went wrong. Only top-level keys of a JSON object
+// are read: scanning free text for the word "error" would flag every search
+// result that mentions one.
+func reportedError(sp store.Span, tool string, value any) []store.Finding {
+	obj, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	reason := ""
+	switch {
+	case truthy(obj["error"]):
+		reason = "error"
+	case obj["isError"] == true: // the MCP tool-result convention
+		reason = "isError"
+	case obj["ok"] == false || obj["success"] == false:
+		reason = "not ok"
+	case httpFailure(obj["status"]) || httpFailure(obj["status_code"]):
+		reason = "status"
+	}
+	if reason == "" {
+		return nil
+	}
+	return []store.Finding{finding(sp, "tool_error", "warning", map[string]any{
+		"tool": tool, "reason": reason,
+	})}
+}
+
+// truthy treats absent, null, false and the empty string as "no error", so a
+// tool that always carries an empty error field is not flagged on every call.
+func truthy(v any) bool {
+	switch t := v.(type) {
+	case nil:
+		return false
+	case bool:
+		return t
+	case string:
+		return strings.TrimSpace(t) != ""
+	case float64:
+		return t != 0
+	case []any:
+		return len(t) > 0
+	case map[string]any:
+		return len(t) > 0
+	}
+	return false
+}
+
+func httpFailure(v any) bool {
+	n, ok := v.(float64)
+	return ok && n >= 400 && n < 600
 }
 
 // nonJSONOutput handles unparseable bodies: malformed only when the contract
@@ -80,8 +136,9 @@ func (a *Analyzer) checkTool(ctx context.Context, sp store.Span) ([]store.Findin
 func (a *Analyzer) nonJSONOutput(ctx context.Context, sp store.Span, tool, body string,
 	current *jsonSchema, declared bool,
 ) ([]store.Finding, error) {
+	reported := textError(sp, tool, body)
 	if current == nil {
-		return nil, a.learn(ctx, sp, tool, infer(body, 0))
+		return reported, a.learn(ctx, sp, tool, infer(body, 0))
 	}
 	if !current.Types.has("string") && hasContainer(current.Types) {
 		return []store.Finding{finding(sp, "malformed", "warning", map[string]any{
@@ -89,9 +146,35 @@ func (a *Analyzer) nonJSONOutput(ctx context.Context, sp store.Span, tool, body 
 		})}, nil
 	}
 	if declared {
-		return nil, nil
+		return reported, nil
 	}
-	return nil, a.touch(ctx, sp, tool, current)
+	return reported, a.touch(ctx, sp, tool, current)
+}
+
+// errorPrefixes are how a tool that returns text rather than raising announces
+// a failure. LangChain's own caught-error format opens with "Error:", and tools
+// that wrap a query or a shell command follow the same habit.
+var errorPrefixes = []string{
+	"error:", "error ", "query error", "traceback (most recent call last)",
+	"exception:", "fatal:", "failed:",
+}
+
+// textError reads only the opening of the payload. Searching the whole body for
+// the word "error" would flag every document that happens to discuss one; a
+// tool that has failed says so first.
+func textError(sp store.Span, tool, body string) []store.Finding {
+	head := strings.ToLower(strings.TrimSpace(body))
+	if i := strings.IndexByte(head, '\n'); i >= 0 {
+		head = head[:i]
+	}
+	for _, p := range errorPrefixes {
+		if strings.HasPrefix(head, p) {
+			return []store.Finding{finding(sp, "tool_error", "warning", map[string]any{
+				"tool": tool, "reason": "text",
+			})}
+		}
+	}
+	return nil
 }
 
 // currentSchema returns the schema to validate against and whether it was

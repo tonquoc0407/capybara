@@ -104,6 +104,7 @@ func nextLLMConsumer(tool store.Span, llms []store.Span, byID map[string]store.S
 	if p, ok := byID[tool.ParentID]; ok {
 		grandparent = p.ParentID
 	}
+	scope := agentScope(tool, byID)
 	for _, llm := range llms {
 		if !llm.EndedAt.After(tool.EndedAt) || llm.ID == tool.ParentID {
 			continue
@@ -111,8 +112,32 @@ func nextLLMConsumer(tool store.Span, llms []store.Span, byID map[string]store.S
 		if llm.ParentID == tool.ParentID || (grandparent != "" && llm.ParentID == grandparent) {
 			return llm, true
 		}
+		// Frameworks that nest deeply - a LangGraph run puts four wrapper spans
+		// between the tool and the turn that reads it - never satisfy the sibling
+		// rules. Sharing the nearest agent still separates parallel subagents,
+		// which is what those rules were protecting.
+		if agentScope(llm, byID) == scope {
+			return llm, true
+		}
 	}
 	return store.Span{}, false
+}
+
+// agentScope is the id of the nearest agent ancestor, or "" for a span that has
+// none. The walk is bounded: a malformed parent chain must not spin.
+func agentScope(sp store.Span, byID map[string]store.Span) string {
+	const maxDepth = 32
+	for range maxDepth {
+		parent, ok := byID[sp.ParentID]
+		if !ok {
+			return ""
+		}
+		if parent.Kind == store.KindAgent {
+			return parent.ID
+		}
+		sp = parent
+	}
+	return ""
 }
 
 // nextLLMTurn is the next conversation turn after llm in the same chain, whose

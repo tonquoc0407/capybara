@@ -52,8 +52,10 @@ func newRunContext(spans []store.Span, findings []store.Finding, fresh map[strin
 		if f.SpanID == "" {
 			continue
 		}
-		if f.Type == "malformed" || f.Type == "empty_payload" {
-			// A broken payload is a stronger cause than a bare error status.
+		switch f.Type {
+		case "malformed", "empty_payload", "tool_error":
+			// A payload that is broken, empty, or says so itself is a stronger
+			// cause than a bare error status.
 			rc.failType[f.SpanID] = f.Type
 		}
 	}
