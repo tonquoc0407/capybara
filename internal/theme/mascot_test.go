@@ -41,7 +41,7 @@ func TestEveryThemeColoursTheWholeSprite(t *testing.T) {
 // and renders as a pair of hairlines instead of a block.
 func TestSmallFeaturesSitOnAPixelPair(t *testing.T) {
 	rows := strings.Split(strings.Trim(sprite, "\n"), "\n")
-	for _, ch := range []byte{'E', 'I'} {
+	for _, ch := range []byte{'E', 'I', 'N'} {
 		for x := range len(rows[0]) {
 			for y := 0; y < len(rows); y += 2 {
 				if (rows[y][x] == ch) != (rows[y+1][x] == ch) {
