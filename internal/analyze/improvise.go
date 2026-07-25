@@ -2,17 +2,24 @@ package analyze
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/tonquoc0407/capybara/internal/store"
 )
 
-// Improvise detection is tuned for low false positives: it fires only when the
-// next llm turn demonstrably references a failed tool call (by name or by
-// quoting its broken output) without acknowledging the failure. Acknowledgment
-// is read two ways — calling the tool again, which needs no language at all,
-// and saying so, which needs a word list per language the agent answers in.
+// Improvise detection is tuned for low false positives. It fires when the turn
+// that consumed a failed tool call answered past the failure without
+// acknowledging it — either demonstrably referencing the call (naming the tool
+// or quoting its broken output), or committing to a final answer: the model's
+// last word in its agent scope, with no further tool call to recover. A model
+// still working produces a later turn, so the terminal test is what separates a
+// fabricated answer from an agent mid-recovery. Acknowledgment is read two ways
+// — calling the tool again, which needs no language at all, and saying so, which
+// needs a word list per language the agent answers in.
 
 var failureWords = []string{
 	"error", "fail", "failed", "failure", "unable", "cannot", "can't",
@@ -137,12 +144,89 @@ func (a *Analyzer) consumedEvidence(ctx context.Context, rc *runContext, tool, l
 	if err != nil {
 		return "", err
 	}
+	var input string
 	for _, c := range toolContents {
 		if c.Role == "output" && sharesSubstring(strings.ToLower(c.Body), output) {
 			return "output quotes the failed result", nil
 		}
+		if c.Role == "input" {
+			input = c.Body
+		}
+	}
+	// A model that neither named the tool nor quoted it can still have answered
+	// past its failure — real fabrications rarely cite the function that failed.
+	// Two guards keep this from firing on an agent that recovered or moved on:
+	// the turn must be terminal, and it must answer about the thing the failed
+	// call was for, so a sign-off or a system notice after an unrelated failure
+	// is not mistaken for one.
+	if terminalTurn(rc, llm) && responsive(input, output) {
+		return "committed to an answer after the failure", nil
 	}
 	return "", nil
+}
+
+// terminalTurn reports whether no later llm turn shares this turn's agent scope:
+// the model's last word there, with nothing after it to walk the failure back.
+func terminalTurn(rc *runContext, llm store.Span) bool {
+	scope := agentScope(llm, rc.byID)
+	for _, other := range rc.llms {
+		if other.ID != llm.ID && other.EndedAt.After(llm.EndedAt) &&
+			agentScope(other, rc.byID) == scope {
+			return false
+		}
+	}
+	return true
+}
+
+// responsive reports whether the answer names the subject of the failed call —
+// a value token from the tool's input, not a structural key. It is the
+// difference between "NVDA is worth $875" after a failed quote and an unrelated
+// goodbye after a failed shell command.
+func responsive(input, output string) bool {
+	for tok := range inputValueTokens(input) {
+		if strings.Contains(output, tok) {
+			return true
+		}
+	}
+	return false
+}
+
+// inputValueTokens returns the lowercased word tokens of an input's string
+// values, four runes or longer. JSON keys are skipped so a match is on what was
+// looked up, not on the argument names every call to a tool shares.
+func inputValueTokens(input string) map[string]struct{} {
+	toks := map[string]struct{}{}
+	emit := func(s string) {
+		for _, f := range strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
+			return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+		}) {
+			if utf8.RuneCountInString(f) >= 4 {
+				toks[f] = struct{}{}
+			}
+		}
+	}
+	var v any
+	if json.Unmarshal([]byte(input), &v) == nil {
+		collectValues(v, emit)
+	} else {
+		emit(input)
+	}
+	return toks
+}
+
+func collectValues(v any, emit func(string)) {
+	switch t := v.(type) {
+	case string:
+		emit(t)
+	case []any:
+		for _, e := range t {
+			collectValues(e, emit)
+		}
+	case map[string]any:
+		for _, e := range t {
+			collectValues(e, emit)
+		}
+	}
 }
 
 // retried reports whether the turn that consumed the failure called the same

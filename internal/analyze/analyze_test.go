@@ -307,6 +307,70 @@ func TestNotImprovisedWithoutReference(t *testing.T) {
 	}
 }
 
+// A real fabrication rarely names the internal tool: a live model answered past
+// a failed quote with a price it invented, citing neither the function nor its
+// output. It is caught because the turn is terminal and answers about the very
+// symbol the failed call looked up.
+func TestImprovisedWhenTerminalAnswerNamesTheSubject(t *testing.T) {
+	st := openTemp(t)
+	b := improviseRunBatch("r1", "connection refused",
+		"NVDA last closed at $875, so your 120 shares are worth $105000.", "error")
+	b.Contents = append(b.Contents, store.Content{
+		SpanID: "r1-tool", Role: "input", Seq: 0, Body: `{"symbol":"NVDA"}`, MediaType: "text/plain",
+	})
+	if err := st.WriteBatch(context.Background(), b); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	sweep(t, st)
+	fs := runFindings(t, st, "r1")
+	if len(fs) != 1 || fs[0].Type != "improvised" || fs[0].SpanID != "r1-llm2" {
+		t.Fatalf("findings = %+v", fs)
+	}
+}
+
+// The turn after an unrelated failure - a shell command that errored while the
+// user was signing off - is terminal too, but says nothing about what the call
+// was for. Terminal alone must not be enough.
+func TestNotImprovisedWhenTerminalAnswerIsUnrelated(t *testing.T) {
+	st := openTemp(t)
+	b := improviseRunBatch("r1", "connection refused",
+		"Ok, talk to you later!", "error")
+	b.Contents = append(b.Contents, store.Content{
+		SpanID: "r1-tool", Role: "input", Seq: 0,
+		Body: `{"command":"curl https://vm.internal:22"}`, MediaType: "text/plain",
+	})
+	if err := st.WriteBatch(context.Background(), b); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	sweep(t, st)
+	if fs := runFindings(t, st, "r1"); len(fs) != 0 {
+		t.Fatalf("unrelated sign-off flagged: %+v", fs)
+	}
+}
+
+// A turn that answers about the subject but is followed by another turn in the
+// same agent went on to recover; only the model's last word is a fabrication.
+func TestNotImprovisedWhenAnswerIsNotTerminal(t *testing.T) {
+	st := openTemp(t)
+	b := improviseRunBatch("r1", "connection refused",
+		"NVDA should be around $875 for your 120 shares.", "error")
+	b.Contents = append(b.Contents, store.Content{
+		SpanID: "r1-tool", Role: "input", Seq: 0, Body: `{"symbol":"NVDA"}`, MediaType: "text/plain",
+	})
+	b.Spans = append(b.Spans, store.Span{
+		ID: "r1-llm3", RunID: "r1", ParentID: "r1-root", Kind: store.KindLLM,
+		Name: "chat", StartedAt: t0.Add(7 * time.Second), EndedAt: t0.Add(9 * time.Second),
+		Status: "ok",
+	})
+	if err := st.WriteBatch(context.Background(), b); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	sweep(t, st)
+	if fs := runFindings(t, st, "r1"); len(fs) != 0 {
+		t.Fatalf("non-terminal answer flagged: %+v", fs)
+	}
+}
+
 func TestImprovisedWhenQuotingBrokenOutput(t *testing.T) {
 	st := openTemp(t)
 	// The lookup tool has a JSON contract from r0, then emits garbage in r1.
