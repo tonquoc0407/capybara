@@ -27,7 +27,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx, os.Args[1:], os.Stdout); err != nil {
-		if !errors.Is(err, errDiverged) {
+		if !errors.Is(err, errDiverged) && !errors.Is(err, errFindings) {
 			fmt.Fprintf(os.Stderr, "capybara: %v\n", err)
 		}
 		os.Exit(1)
@@ -75,6 +75,8 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return evalCmd(ctx, *dbPath, args[1:], out)
 	case "coverage":
 		return coverageCmd(ctx, *dbPath, args[1:], out)
+	case "findings":
+		return findingsCmd(ctx, *dbPath, args[1:], out)
 	case "serve":
 		return serveCmd(ctx, *dbPath, args[1:], out)
 	case "help":
@@ -233,6 +235,7 @@ watcher when ~/.claude/projects exists.
   check    compare a run against a golden snapshot, non-zero on divergence
   eval     score detectors against a labelled corpus (precision, recall)
   coverage report typed-span coverage and unmapped ingest namespaces
+  findings list findings (--sarif, --fail-on for a CI gate)
   help     print this message
 
 Flags, before the command:

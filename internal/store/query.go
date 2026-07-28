@@ -153,6 +153,32 @@ func (s *Store) Findings(ctx context.Context, runID string) ([]Finding, error) {
 	return findings, nil
 }
 
+// AllFindings returns every finding in the store, oldest first, for reporting
+// across a whole ingested corpus.
+func (s *Store) AllFindings(ctx context.Context) ([]Finding, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, run_id, span_id, type, severity, detail_json
+		 FROM findings ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("list findings: %w", err)
+	}
+	defer rows.Close()
+	var findings []Finding
+	for rows.Next() {
+		var f Finding
+		var spanID sql.NullString
+		if err := rows.Scan(&f.ID, &f.RunID, &spanID, &f.Type, &f.Severity, &f.Detail); err != nil {
+			return nil, fmt.Errorf("scan finding: %w", err)
+		}
+		f.SpanID = spanID.String
+		findings = append(findings, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list findings: %w", err)
+	}
+	return findings, nil
+}
+
 // Taints returns a run's taint edges.
 func (s *Store) Taints(ctx context.Context, runID string) ([]Taint, error) {
 	rows, err := s.db.QueryContext(ctx,
