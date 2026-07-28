@@ -73,6 +73,8 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return checkCmd(ctx, *dbPath, args[1:], out)
 	case "eval":
 		return evalCmd(ctx, *dbPath, args[1:], out)
+	case "coverage":
+		return coverageCmd(ctx, *dbPath, args[1:], out)
 	case "serve":
 		return serveCmd(ctx, *dbPath, args[1:], out)
 	case "help":
@@ -230,6 +232,7 @@ watcher when ~/.claude/projects exists.
   export   export a run (--golden a CI fixture, --html a shareable page)
   check    compare a run against a golden snapshot, non-zero on divergence
   eval     score detectors against a labelled corpus (precision, recall)
+  coverage report typed-span coverage and unmapped ingest namespaces
   help     print this message
 
 Flags, before the command:

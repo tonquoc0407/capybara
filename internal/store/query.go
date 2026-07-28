@@ -59,6 +59,23 @@ func (s *Store) Spans(ctx context.Context, runID string) ([]Span, error) {
 	return spans, nil
 }
 
+// AllSpans returns every span in the store, for whole-corpus diagnostics.
+func (s *Store) AllSpans(ctx context.Context) ([]Span, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, run_id, parent_id, kind, name, started_at, ended_at,
+		        tokens_in, tokens_out, cost_usd, status, attrs_json
+		 FROM spans ORDER BY started_at, id`)
+	if err != nil {
+		return nil, fmt.Errorf("list spans: %w", err)
+	}
+	defer rows.Close()
+	spans, err := scanSpans(rows)
+	if err != nil {
+		return nil, fmt.Errorf("list spans: %w", err)
+	}
+	return spans, nil
+}
+
 func scanSpans(rows *sql.Rows) ([]Span, error) {
 	var spans []Span
 	for rows.Next() {
