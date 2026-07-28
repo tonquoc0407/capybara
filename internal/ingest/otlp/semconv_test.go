@@ -189,6 +189,53 @@ func TestCapturesToolCallIO(t *testing.T) {
 	}
 }
 
+func TestOpenInferenceStructuredMessagesPreferClean(t *testing.T) {
+	td, span := singleSpan()
+	span.Attributes().PutStr("openinference.span.kind", "LLM")
+	span.Attributes().PutStr("llm.input_messages.0.message.role", "system")
+	span.Attributes().PutStr("llm.input_messages.0.message.content", "You are terse.")
+	span.Attributes().PutStr("llm.input_messages.1.message.role", "user")
+	span.Attributes().PutStr("llm.input_messages.1.message.content", "price of NVDA?")
+	span.Attributes().PutStr("llm.output_messages.0.message.role", "assistant")
+	span.Attributes().PutStr("llm.output_messages.0.message.content", "$875.00")
+	// The raw blob carries the whole ChatCompletion JSON and must be ignored
+	// once the structured turns are present.
+	span.Attributes().PutStr("output.value", `{"choices":[{"message":{"content":"$875.00"}}]}`)
+	span.Attributes().PutStr("input.value", `{"messages":[{"role":"user"}]}`)
+	b := ToBatch(td, true)
+	if len(b.Contents) != 3 {
+		t.Fatalf("got %d contents, want 3: %+v", len(b.Contents), b.Contents)
+	}
+	want := []store.Content{
+		{Role: "system", Body: "You are terse."},
+		{Role: "user", Body: "price of NVDA?"},
+		{Role: "assistant", Body: "$875.00"},
+	}
+	for i, w := range want {
+		if b.Contents[i].Role != w.Role || b.Contents[i].Body != w.Body {
+			t.Errorf("contents[%d] = %+v, want role=%q body=%q", i, b.Contents[i], w.Role, w.Body)
+		}
+	}
+}
+
+func TestOpenInferenceToolSpanKeepsRawBlob(t *testing.T) {
+	td, span := singleSpan()
+	span.Attributes().PutStr("openinference.span.kind", "TOOL")
+	span.Attributes().PutStr("tool.name", "get_stock_price")
+	span.Attributes().PutStr("input.value", `{"symbol":"NVDA"}`)
+	span.Attributes().PutStr("output.value", `{"status":502,"error":"upstream quote feed unavailable"}`)
+	b := ToBatch(td, true)
+	if len(b.Contents) != 2 {
+		t.Fatalf("got %d contents, want 2: %+v", len(b.Contents), b.Contents)
+	}
+	if b.Contents[0].Role != "input" || b.Contents[0].Body != `{"symbol":"NVDA"}` {
+		t.Errorf("contents[0] = %+v", b.Contents[0])
+	}
+	if b.Contents[1].Role != "output" || !strings.Contains(b.Contents[1].Body, "upstream quote feed") {
+		t.Errorf("contents[1] = %+v", b.Contents[1])
+	}
+}
+
 func TestNoContentDropsEvents(t *testing.T) {
 	td, span := singleSpan()
 	ev := span.Events().AppendEmpty()

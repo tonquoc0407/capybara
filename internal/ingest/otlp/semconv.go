@@ -49,6 +49,8 @@ const (
 	attrOIToolName    = "tool.name"
 	attrOIInput       = "input.value"
 	attrOIOutput      = "output.value"
+	oiInputMsgPrefix  = "llm.input_messages."
+	oiOutputMsgPrefix = "llm.output_messages."
 	attrTLSpanKind    = "traceloop.span.kind"
 	attrTLEntityName  = "traceloop.entity.name"
 	attrTLEntityIn    = "traceloop.entity.input"
@@ -243,8 +245,20 @@ func spanContents(span ptrace.Span) []store.Content {
 	add("output", unwrapEnvelope(strAttr(attrs, attrAIToolResult)))
 	add("user", strAttr(attrs, attrAIPrompt))
 	add("assistant", strAttr(attrs, attrAIResponse))
-	add(inRole, unwrapEnvelope(strAttr(attrs, attrOIInput, attrTLEntityIn)))
-	add(outRole, unwrapEnvelope(strAttr(attrs, attrOIOutput, attrTLEntityOut)))
+	// OpenInference's per-turn messages are the clean text; its input.value /
+	// output.value hold the whole ChatCompletion JSON on a tool-calling model.
+	// Prefer the messages and fall back to the blob only when they are absent —
+	// a tool span carries no llm.*_messages, so the blob still stores its io.
+	oiMsgs := openInferenceMessages(attrs)
+	for _, m := range oiMsgs {
+		add(m.role, m.body)
+	}
+	if len(oiMsgs) == 0 {
+		add(inRole, unwrapEnvelope(strAttr(attrs, attrOIInput)))
+		add(outRole, unwrapEnvelope(strAttr(attrs, attrOIOutput)))
+	}
+	add(inRole, unwrapEnvelope(strAttr(attrs, attrTLEntityIn)))
+	add(outRole, unwrapEnvelope(strAttr(attrs, attrTLEntityOut)))
 	return contents
 }
 
@@ -328,6 +342,68 @@ func indexedMessages(attrs pcommon.Map) []message {
 			}
 		}
 		msgs = append(msgs, message{role: role, body: bodies[k]})
+	}
+	return msgs
+}
+
+// openInferenceMessages reads OpenInference's structured conversation, keyed as
+// llm.input_messages.0.message.role, llm.input_messages.0.message.content and
+// the matching llm.output_messages.* attributes. Input turns precede output
+// turns; within each, numeric index orders them. A turn that only calls a tool
+// has empty content and is dropped by the caller.
+func openInferenceMessages(attrs pcommon.Map) []message {
+	type turn struct {
+		order      int
+		idx        int
+		role, body string
+	}
+	turns := map[string]*turn{}
+	attrs.Range(func(key string, v pcommon.Value) bool {
+		var order int
+		var rest string
+		if r, ok := strings.CutPrefix(key, oiInputMsgPrefix); ok {
+			order, rest = 0, r
+		} else if r, ok := strings.CutPrefix(key, oiOutputMsgPrefix); ok {
+			order, rest = 1, r
+		} else {
+			return true
+		}
+		idxStr, field, ok := strings.Cut(rest, ".")
+		if !ok {
+			return true
+		}
+		mapKey := strconv.Itoa(order) + "." + idxStr
+		t := turns[mapKey]
+		if t == nil {
+			idx, _ := strconv.Atoi(idxStr)
+			t = &turn{order: order, idx: idx}
+			turns[mapKey] = t
+		}
+		switch field {
+		case "message.role":
+			t.role = v.AsString()
+		case "message.content":
+			t.body = v.AsString()
+		}
+		return true
+	})
+	ordered := make([]*turn, 0, len(turns))
+	for _, t := range turns {
+		ordered = append(ordered, t)
+	}
+	sort.Slice(ordered, func(i, j int) bool {
+		if ordered[i].order != ordered[j].order {
+			return ordered[i].order < ordered[j].order
+		}
+		return ordered[i].idx < ordered[j].idx
+	})
+	msgs := make([]message, 0, len(ordered))
+	for _, t := range ordered {
+		role := normalizeRole(t.role, "user")
+		if t.role == "" && t.order == 1 {
+			role = "assistant"
+		}
+		msgs = append(msgs, message{role: role, body: t.body})
 	}
 	return msgs
 }
