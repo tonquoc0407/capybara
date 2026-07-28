@@ -80,6 +80,22 @@ func (s *Store) UnanalyzedSpans(ctx context.Context) ([]Span, error) {
 	return scanSpans(rows)
 }
 
+// ResetAnalysis drops every derived finding and taint and marks all spans
+// unanalyzed, so the next sweep re-evaluates the whole store with the current
+// detectors. Spans and their content are left untouched.
+func (s *Store) ResetAnalysis(ctx context.Context) error {
+	for _, stmt := range []string{
+		"DELETE FROM findings",
+		"DELETE FROM taints",
+		"UPDATE spans SET analyzed = 0",
+	} {
+		if _, err := s.db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("reset analysis: %w", err)
+		}
+	}
+	return nil
+}
+
 // MarkAnalyzed flags spans as processed by the analyzer.
 func (s *Store) MarkAnalyzed(ctx context.Context, ids []string) error {
 	if len(ids) == 0 {

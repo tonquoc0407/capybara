@@ -71,6 +71,8 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return exportCmd(ctx, *dbPath, args[1:], out)
 	case "check":
 		return checkCmd(ctx, *dbPath, args[1:], out)
+	case "eval":
+		return evalCmd(ctx, *dbPath, args[1:], out)
 	case "serve":
 		return serveCmd(ctx, *dbPath, args[1:], out)
 	case "help":
@@ -227,6 +229,7 @@ watcher when ~/.claude/projects exists.
   serve    serve the read-only web view
   export   export a run (--golden a CI fixture, --html a shareable page)
   check    compare a run against a golden snapshot, non-zero on divergence
+  eval     score detectors against a labelled corpus (precision, recall)
   help     print this message
 
 Flags, before the command:
