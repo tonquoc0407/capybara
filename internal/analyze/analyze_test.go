@@ -371,6 +371,44 @@ func TestNotImprovisedWhenAnswerIsNotTerminal(t *testing.T) {
 	}
 }
 
+// The most common real fabrication is a bare number: the model drops the price
+// the failed quote tool never returned, with no ticker to echo and no sentence
+// to hedge it. Terminal and predominantly digits is the whole signal.
+func TestImprovisedWhenTerminalAnswerIsBareNumber(t *testing.T) {
+	st := openTemp(t)
+	b := improviseRunBatch("r1", "connection refused", "$242.50", "error")
+	b.Contents = append(b.Contents, store.Content{
+		SpanID: "r1-tool", Role: "input", Seq: 0, Body: `{"symbol":"NVDA"}`, MediaType: "text/plain",
+	})
+	if err := st.WriteBatch(context.Background(), b); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	sweep(t, st)
+	fs := runFindings(t, st, "r1")
+	if len(fs) != 1 || fs[0].Type != "improvised" || fs[0].SpanID != "r1-llm2" {
+		t.Fatalf("findings = %+v", fs)
+	}
+}
+
+// A short prose answer with a single number in it is not a bare value; the
+// clock reading in a session notice must not read as a fabricated price.
+func TestNotImprovisedWhenAnswerIsProseWithANumber(t *testing.T) {
+	st := openTemp(t)
+	b := improviseRunBatch("r1", "connection refused",
+		"You have hit your session limit, it resets at 12:20pm today.", "error")
+	b.Contents = append(b.Contents, store.Content{
+		SpanID: "r1-tool", Role: "input", Seq: 0,
+		Body: `{"command":"curl https://vm.internal:22"}`, MediaType: "text/plain",
+	})
+	if err := st.WriteBatch(context.Background(), b); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	sweep(t, st)
+	if fs := runFindings(t, st, "r1"); len(fs) != 0 {
+		t.Fatalf("prose notice flagged: %+v", fs)
+	}
+}
+
 func TestImprovisedWhenQuotingBrokenOutput(t *testing.T) {
 	st := openTemp(t)
 	// The lookup tool has a JSON contract from r0, then emits garbage in r1.

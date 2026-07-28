@@ -156,10 +156,11 @@ func (a *Analyzer) consumedEvidence(ctx context.Context, rc *runContext, tool, l
 	// A model that neither named the tool nor quoted it can still have answered
 	// past its failure — real fabrications rarely cite the function that failed.
 	// Two guards keep this from firing on an agent that recovered or moved on:
-	// the turn must be terminal, and it must answer about the thing the failed
-	// call was for, so a sign-off or a system notice after an unrelated failure
-	// is not mistaken for one.
-	if terminalTurn(rc, llm) && responsive(input, output) {
+	// the turn must be terminal, and it must commit to the answer the failed call
+	// was supposed to supply. That commitment shows two ways: echoing a value from
+	// the call's input, or being itself a bare value — the number the tool would
+	// have returned, standing alone where a sign-off or system notice never is.
+	if terminalTurn(rc, llm) && (responsive(input, output) || bareValue(output)) {
 		return "committed to an answer after the failure", nil
 	}
 	return "", nil
@@ -212,6 +213,24 @@ func inputValueTokens(input string) map[string]struct{} {
 		emit(input)
 	}
 	return toks
+}
+
+// bareValue reports whether the answer is dominated by digits: a number the
+// tool would have returned, delivered without a sentence to hedge it. A price
+// like "$242.50" passes; a goodbye has no digit and a session notice drowns its
+// clock reading in letters, so both fail. Currency and thousands punctuation do
+// not count against it.
+func bareValue(output string) bool {
+	var digits, letters int
+	for _, r := range output {
+		switch {
+		case unicode.IsDigit(r):
+			digits++
+		case unicode.IsLetter(r):
+			letters++
+		}
+	}
+	return digits >= 2 && letters <= digits
 }
 
 func collectValues(v any, emit func(string)) {
