@@ -17,16 +17,20 @@ import (
 // or quoting its broken output), or committing to a final answer: the model's
 // last word in its agent scope, with no further tool call to recover. A model
 // still working produces a later turn, so the terminal test is what separates a
-// fabricated answer from an agent mid-recovery. Acknowledgment is read two ways
-// — calling the tool again, which needs no language at all, and saying so, which
-// needs a word list per language the agent answers in.
+// fabricated answer from an agent mid-recovery. A turn excuses itself two ways:
+// calling the tool again, which needs no language, or saying in words that its
+// answer is not a confident fact — naming the failure or hedging the number as
+// a guess. Only a confident fact is a fabrication, so either excuse clears it,
+// and words are a list per language the agent answers in.
 
-var failureWords = []string{
+var excuseWords = []string{
 	"error", "fail", "failed", "failure", "unable", "cannot", "can't",
-	"couldn't", "invalid", "empty", "missing", "retry", "not found",
-	"no result", "denied", "timeout", "timed out", "crash", "exception",
+	"couldn't", "could not", "invalid", "empty", "missing", "retry",
+	"not found", "no result", "denied", "timeout", "timed out", "crash",
+	"exception", "sorry", "estimate", "approximate", "roughly", "best guess",
 	"lỗi", "thất bại", "không thể", "không tìm thấy", "không có kết quả",
 	"báo lỗi", "thử lại", "hết thời gian", "bị từ chối", "trống",
+	"xin lỗi", "ước tính", "phỏng đoán", "khoảng chừng",
 }
 
 const overlapLen = 12
@@ -132,7 +136,7 @@ func (a *Analyzer) consumedEvidence(ctx context.Context, rc *runContext, tool, l
 	if retried(rc, llm, name) {
 		return "", nil
 	}
-	for _, w := range failureWords {
+	for _, w := range excuseWords {
 		if strings.Contains(output, w) {
 			return "", nil
 		}

@@ -259,6 +259,25 @@ func TestNotImprovisedWhenFailureAcknowledged(t *testing.T) {
 	}
 }
 
+// A terminal answer that names the subject would fire the responsive path, but
+// an answer that excuses itself as a guess - "I could not retrieve ... my best
+// estimate is" - is not a confident fabrication and must stay clear even so.
+func TestNotImprovisedWhenAnswerHedgesAsEstimate(t *testing.T) {
+	st := openTemp(t)
+	b := improviseRunBatch("r1", "connection refused",
+		"I'm sorry, I could not retrieve the price for GOOGL. My best estimate is $170.", "error")
+	b.Contents = append(b.Contents, store.Content{
+		SpanID: "r1-tool", Role: "input", Seq: 0, Body: `{"symbol":"GOOGL"}`, MediaType: "text/plain",
+	})
+	if err := st.WriteBatch(context.Background(), b); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	sweep(t, st)
+	if fs := runFindings(t, st, "r1"); len(fs) != 0 {
+		t.Fatalf("hedged estimate flagged: %+v", fs)
+	}
+}
+
 func TestNotImprovisedWhenAcknowledgedInAnotherLanguage(t *testing.T) {
 	st := openTemp(t)
 	b := improviseRunBatch("r1", "connection refused",
