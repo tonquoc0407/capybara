@@ -53,6 +53,8 @@ func FindingSummary(f store.Finding) string {
 		return "tool reported an error in its output"
 	case "improvised":
 		return "improvised after " + d.Tool + " failure"
+	case "prompt_injection":
+		return "prompt injection in " + d.Tool + " output: " + d.Evidence
 	case "parse_error":
 		return fmt.Sprintf("parse error at line %d", d.Line)
 	case "loop":

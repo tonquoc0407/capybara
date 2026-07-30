@@ -106,10 +106,16 @@ func (a *Analyzer) checkRun(ctx context.Context, runID string,
 			known = append(known, f)
 		}
 	}
-	findings, err := a.improviseRun(ctx, newRunContext(spans, known, fresh))
+	rc := newRunContext(spans, known, fresh)
+	findings, err := a.improviseRun(ctx, rc)
 	if err != nil {
 		return nil, nil, err
 	}
+	injections, err := a.injectionRun(ctx, rc)
+	if err != nil {
+		return nil, nil, err
+	}
+	findings = append(findings, injections...)
 	calls, err := a.st.ToolCalls(ctx, runID)
 	if err != nil {
 		return nil, nil, err
