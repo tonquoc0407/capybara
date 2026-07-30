@@ -75,6 +75,8 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return evalCmd(ctx, *dbPath, args[1:], out)
 	case "coverage":
 		return coverageCmd(ctx, *dbPath, args[1:], out)
+	case "runs":
+		return runsCmd(ctx, *dbPath, args[1:], out)
 	case "findings":
 		return findingsCmd(ctx, *dbPath, args[1:], out)
 	case "faithfulness":
@@ -238,6 +240,7 @@ watcher when ~/.claude/projects exists.
   export   export a run (--golden a CI fixture, --html a shareable page)
   check    compare a run against a golden snapshot, non-zero on divergence
   eval     score detectors against a labelled corpus (precision, recall)
+  runs     list runs, filtered by finding, model, status, source or cost
   coverage report typed-span coverage and unmapped ingest namespaces
   findings list findings (--sarif, --fail-on for a CI gate)
   faithfulness  grade retrieval runs with an opt-in llm judge (sends data out)
