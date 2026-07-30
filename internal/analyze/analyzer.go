@@ -121,6 +121,7 @@ func (a *Analyzer) checkRun(ctx context.Context, runID string,
 		return nil, nil, err
 	}
 	findings = append(findings, unfaithful...)
+	findings = append(findings, a.truncationRun(ctx, rc)...)
 	calls, err := a.st.ToolCalls(ctx, runID)
 	if err != nil {
 		return nil, nil, err

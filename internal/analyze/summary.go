@@ -59,6 +59,8 @@ func FindingSummary(f store.Finding) string {
 		return "figure not in retrieved documents: " + d.Evidence
 	case "unfaithful":
 		return "unfaithful (llm judge): " + d.Evidence
+	case "truncated":
+		return "final answer cut off at the token limit"
 	case "parse_error":
 		return fmt.Sprintf("parse error at line %d", d.Line)
 	case "loop":
