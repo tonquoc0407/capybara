@@ -237,6 +237,8 @@ func TestSpanKindAcrossConventions(t *testing.T) {
 		{"openinference llm", map[string]string{"openinference.span.kind": "LLM"}, store.KindLLM},
 		{"openinference tool", map[string]string{"openinference.span.kind": "TOOL"}, store.KindTool},
 		{"openinference retriever", map[string]string{"openinference.span.kind": "RETRIEVER"}, store.KindRetrieval},
+		{"openinference reranker", map[string]string{"openinference.span.kind": "RERANKER"}, store.KindRetrieval},
+		{"openinference guardrail stays other", map[string]string{"openinference.span.kind": "GUARDRAIL"}, store.KindOther},
 		{"traceloop workflow", map[string]string{"traceloop.span.kind": "workflow"}, store.KindAgent},
 		{"traceloop tool", map[string]string{"traceloop.span.kind": "tool"}, store.KindTool},
 		{"vercel legacy tool", map[string]string{"ai.toolCall.name": "get_price"}, store.KindTool},

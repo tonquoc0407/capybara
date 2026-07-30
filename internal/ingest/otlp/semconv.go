@@ -76,6 +76,10 @@ const (
 	attrAIResponse   = "ai.response.text"
 )
 
+// OpenInference names ten span kinds. A reranker reorders retrieved documents,
+// so it is part of retrieval and its output feeds the same checks. GUARDRAIL,
+// EVALUATOR and PROMPT have no equivalent in this taxonomy and stay other rather
+// than being forced into a kind they are not.
 var kindByOISpanKind = map[string]store.Kind{
 	"LLM":       store.KindLLM,
 	"EMBEDDING": store.KindLLM,
@@ -83,6 +87,7 @@ var kindByOISpanKind = map[string]store.Kind{
 	"AGENT":     store.KindAgent,
 	"CHAIN":     store.KindAgent,
 	"RETRIEVER": store.KindRetrieval,
+	"RERANKER":  store.KindRetrieval,
 }
 
 var kindByTLSpanKind = map[string]store.Kind{
