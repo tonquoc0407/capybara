@@ -23,21 +23,28 @@ import (
 
 // Receiver ingests OTLP traces over grpc and http into the store.
 type Receiver struct {
-	GRPCAddr string
-	HTTPAddr string
-	store    *store.Store
-	capture  bool
-	grpcLis  net.Listener
-	httpLis  net.Listener
+	GRPCAddr   string
+	HTTPAddr   string
+	store      *store.Store
+	capture    bool
+	mapping    *Mapping
+	mappingErr error
+	grpcLis    net.Listener
+	httpLis    net.Listener
 }
 
-// New returns a receiver bound to the default localhost OTLP ports.
+// New returns a receiver bound to the default localhost OTLP ports, loading the
+// optional user mapping. A broken mapping file is held until Run reports it, so
+// New stays signature-compatible with its callers.
 func New(st *store.Store, captureContent bool) *Receiver {
+	m, err := LoadMapping(DefaultMappingPath())
 	return &Receiver{
-		GRPCAddr: "127.0.0.1:4317",
-		HTTPAddr: "127.0.0.1:4318",
-		store:    st,
-		capture:  captureContent,
+		GRPCAddr:   "127.0.0.1:4317",
+		HTTPAddr:   "127.0.0.1:4318",
+		store:      st,
+		capture:    captureContent,
+		mapping:    m,
+		mappingErr: err,
 	}
 }
 
@@ -47,6 +54,9 @@ func New(st *store.Store, captureContent bool) *Receiver {
 // reason to refuse the other. The error names what could not be bound; whether
 // that is fatal is the caller's call.
 func (r *Receiver) Listen() error {
+	if r.mappingErr != nil {
+		return fmt.Errorf("mapping: %w", r.mappingErr)
+	}
 	if r.grpcLis != nil || r.httpLis != nil {
 		return nil
 	}
@@ -155,7 +165,7 @@ func (r *Receiver) serve(ctx context.Context) error {
 }
 
 func (r *Receiver) ingest(ctx context.Context, td ptrace.Traces) error {
-	return r.store.WriteBatch(ctx, ToBatch(td, r.capture))
+	return r.store.WriteBatch(ctx, toBatch(td, r.capture, r.mapping))
 }
 
 type exportServer struct {

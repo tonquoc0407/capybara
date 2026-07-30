@@ -128,19 +128,23 @@ type mappedSpan struct {
 	tokensOut int64
 }
 
-func mapSemconv(span ptrace.Span) mappedSpan {
+func mapSemconv(span ptrace.Span, cfg *Mapping) mappedSpan {
 	attrs := span.Attributes()
+	var fa FieldAliases
+	if cfg != nil {
+		fa = cfg.Fields
+	}
 	m := mappedSpan{
 		kind: store.KindOther,
 		attrs: store.Attrs{
-			Model:    strAttr(attrs, attrRequestModel, attrResponseModel, attrOIModel, attrAIModel),
-			Provider: strAttr(attrs, attrProviderName, attrSystem, attrOIProvider, attrOISystem, attrAIProvider),
-			ToolName: strAttr(attrs, attrToolName, attrMCPToolName, attrOIToolName, attrTLEntityName, attrAIToolName),
+			Model:    strAttr(attrs, withAliases([]string{attrRequestModel, attrResponseModel, attrOIModel, attrAIModel}, fa.Model)...),
+			Provider: strAttr(attrs, withAliases([]string{attrProviderName, attrSystem, attrOIProvider, attrOISystem, attrAIProvider}, fa.Provider)...),
+			ToolName: strAttr(attrs, withAliases([]string{attrToolName, attrMCPToolName, attrOIToolName, attrTLEntityName, attrAIToolName}, fa.Tool)...),
 		},
-		tokensIn:  intAttr(attrs, attrInputTokens, attrPromptTokens, attrOIPromptToks, attrAIInputToks),
-		tokensOut: intAttr(attrs, attrOutputTokens, attrCompletionTokens, attrOIOutputToks, attrAIOutputToks),
+		tokensIn:  intAttr(attrs, withAliases([]string{attrInputTokens, attrPromptTokens, attrOIPromptToks, attrAIInputToks}, fa.InputTokens)...),
+		tokensOut: intAttr(attrs, withAliases([]string{attrOutputTokens, attrCompletionTokens, attrOIOutputToks, attrAIOutputToks}, fa.OutputTokens)...),
 	}
-	m.kind = spanKind(attrs)
+	m.kind = spanKind(attrs, cfg)
 	attrs.Range(func(key string, _ pcommon.Value) bool {
 		if strings.HasPrefix(key, mcpAttrPrefix) {
 			m.attrs.MCP = true
@@ -157,7 +161,7 @@ func mapSemconv(span ptrace.Span) mappedSpan {
 // spanKind reads whichever convention the emitter speaks. OpenLLMetry marks
 // only its wrapper spans; its model calls are recognised by llm.request.type,
 // which is the one attribute it always sets on them.
-func spanKind(attrs pcommon.Map) store.Kind {
+func spanKind(attrs pcommon.Map, cfg *Mapping) store.Kind {
 	if k, ok := kindByOperation[strAttr(attrs, attrOperationName)]; ok {
 		return k
 	}
@@ -184,12 +188,16 @@ func spanKind(attrs pcommon.Map) store.Kind {
 	if strAttr(attrs, attrAIModel) != "" {
 		return store.KindLLM
 	}
+	// A user's mapping fills gaps the built-ins left, never overrides them.
+	if k, ok := cfg.kind(attrs); ok {
+		return k
+	}
 	return store.KindOther
 }
 
 // spanContents gathers conversation and tool io from legacy span events and
 // from the current message/tool-call attributes, in that order.
-func spanContents(span ptrace.Span) []store.Content {
+func spanContents(span ptrace.Span, cfg *Mapping) []store.Content {
 	var contents []store.Content
 	add := func(role, body string) {
 		if body == "" {
@@ -238,7 +246,7 @@ func spanContents(span ptrace.Span) []store.Content {
 	// OpenInference and OpenLLMetry both carry one blob each way. What they mean
 	// depends on the span: a tool's input is arguments, a model's is a prompt.
 	inRole, outRole := "input", "output"
-	if spanKind(attrs) == store.KindLLM {
+	if spanKind(attrs, cfg) == store.KindLLM {
 		inRole, outRole = "user", "assistant"
 	}
 	add("input", unwrapEnvelope(strAttr(attrs, attrAIToolArgs)))
@@ -259,6 +267,10 @@ func spanContents(span ptrace.Span) []store.Content {
 	}
 	add(inRole, unwrapEnvelope(strAttr(attrs, attrTLEntityIn)))
 	add(outRole, unwrapEnvelope(strAttr(attrs, attrTLEntityOut)))
+	if cfg != nil {
+		add(inRole, unwrapEnvelope(strAttr(attrs, cfg.Content.Input...)))
+		add(outRole, unwrapEnvelope(strAttr(attrs, cfg.Content.Output...)))
+	}
 	return contents
 }
 

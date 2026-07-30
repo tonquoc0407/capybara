@@ -12,6 +12,10 @@ import (
 // ToBatch maps OTLP traces onto a store batch, one run per trace id.
 // Unrecognized spans map to kind other; nothing is dropped.
 func ToBatch(td ptrace.Traces, captureContent bool) store.Batch {
+	return toBatch(td, captureContent, nil)
+}
+
+func toBatch(td ptrace.Traces, captureContent bool, cfg *Mapping) store.Batch {
 	b := store.Batch{Source: "otlp"}
 	resources := td.ResourceSpans()
 	for i := 0; i < resources.Len(); i++ {
@@ -20,9 +24,9 @@ func ToBatch(td ptrace.Traces, captureContent bool) store.Batch {
 			spans := scopes.At(j).Spans()
 			for k := 0; k < spans.Len(); k++ {
 				span := spans.At(k)
-				b.Spans = append(b.Spans, toSpan(span))
+				b.Spans = append(b.Spans, toSpan(span, cfg))
 				if captureContent {
-					b.Contents = append(b.Contents, spanContents(span)...)
+					b.Contents = append(b.Contents, spanContents(span, cfg)...)
 				}
 			}
 		}
@@ -30,8 +34,8 @@ func ToBatch(td ptrace.Traces, captureContent bool) store.Batch {
 	return b
 }
 
-func toSpan(span ptrace.Span) store.Span {
-	m := mapSemconv(span)
+func toSpan(span ptrace.Span, cfg *Mapping) store.Span {
+	m := mapSemconv(span, cfg)
 	m.attrs.Raw = span.Attributes().AsRaw()
 	parent := ""
 	if !span.ParentSpanID().IsEmpty() {

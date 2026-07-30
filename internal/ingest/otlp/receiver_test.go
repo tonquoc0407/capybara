@@ -250,7 +250,7 @@ func TestSpanKindAcrossConventions(t *testing.T) {
 			for k, v := range c.attrs {
 				m.PutStr(k, v)
 			}
-			if got := spanKind(m); got != c.want {
+			if got := spanKind(m, nil); got != c.want {
 				t.Errorf("spanKind = %q, want %q", got, c.want)
 			}
 		})
