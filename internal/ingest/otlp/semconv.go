@@ -51,6 +51,7 @@ const (
 	attrOIOutput      = "output.value"
 	oiInputMsgPrefix  = "llm.input_messages."
 	oiOutputMsgPrefix = "llm.output_messages."
+	oiRetrievalPrefix = "retrieval.documents."
 	attrTLSpanKind    = "traceloop.span.kind"
 	attrTLEntityName  = "traceloop.entity.name"
 	attrTLEntityIn    = "traceloop.entity.input"
@@ -261,9 +262,17 @@ func spanContents(span ptrace.Span, cfg *Mapping) []store.Content {
 	for _, m := range oiMsgs {
 		add(m.role, m.body)
 	}
+	// A retriever's output is its documents; captured per-document, they are the
+	// grounding a faithfulness check reads and an injection check scans.
+	docs := openInferenceDocuments(attrs)
+	for _, d := range docs {
+		add(outRole, d)
+	}
 	if len(oiMsgs) == 0 {
 		add(inRole, unwrapEnvelope(strAttr(attrs, attrOIInput)))
-		add(outRole, unwrapEnvelope(strAttr(attrs, attrOIOutput)))
+		if len(docs) == 0 {
+			add(outRole, unwrapEnvelope(strAttr(attrs, attrOIOutput)))
+		}
 	}
 	add(inRole, unwrapEnvelope(strAttr(attrs, attrTLEntityIn)))
 	add(outRole, unwrapEnvelope(strAttr(attrs, attrTLEntityOut)))
@@ -418,6 +427,38 @@ func openInferenceMessages(attrs pcommon.Map) []message {
 		msgs = append(msgs, message{role: role, body: t.body})
 	}
 	return msgs
+}
+
+// openInferenceDocuments reads a retriever's results, keyed as
+// retrieval.documents.0.document.content and so on, in index order.
+func openInferenceDocuments(attrs pcommon.Map) []string {
+	byIdx := make(map[int]string)
+	attrs.Range(func(key string, v pcommon.Value) bool {
+		rest, ok := strings.CutPrefix(key, oiRetrievalPrefix)
+		if !ok {
+			return true
+		}
+		idxStr, field, ok := strings.Cut(rest, ".")
+		if !ok || field != "document.content" {
+			return true
+		}
+		if idx, err := strconv.Atoi(idxStr); err == nil {
+			byIdx[idx] = v.AsString()
+		}
+		return true
+	})
+	idxs := make([]int, 0, len(byIdx))
+	for i := range byIdx {
+		idxs = append(idxs, i)
+	}
+	sort.Ints(idxs)
+	docs := make([]string, 0, len(idxs))
+	for _, i := range idxs {
+		if byIdx[i] != "" {
+			docs = append(docs, byIdx[i])
+		}
+	}
+	return docs
 }
 
 type message struct {

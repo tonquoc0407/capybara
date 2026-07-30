@@ -236,6 +236,36 @@ func TestOpenInferenceToolSpanKeepsRawBlob(t *testing.T) {
 	}
 }
 
+func TestOpenInferenceRetrievalDocumentsCaptured(t *testing.T) {
+	td, span := singleSpan()
+	span.Attributes().PutStr("openinference.span.kind", "RETRIEVER")
+	span.Attributes().PutStr("input.value", "what is the refund window?")
+	span.Attributes().PutStr("retrieval.documents.0.document.content", "Refunds are accepted within 30 days.")
+	span.Attributes().PutStr("retrieval.documents.1.document.content", "Shipping is free over $50.")
+	// The raw blob must be suppressed once the structured documents are present.
+	span.Attributes().PutStr("output.value", `[{"content":"Refunds are accepted within 30 days."}]`)
+	b := ToBatch(td, true)
+	if b.Spans[0].Kind != store.KindRetrieval {
+		t.Fatalf("kind = %q", b.Spans[0].Kind)
+	}
+	var docs []string
+	var query string
+	for _, c := range b.Contents {
+		switch c.Role {
+		case "output":
+			docs = append(docs, c.Body)
+		case "input":
+			query = c.Body
+		}
+	}
+	if query != "what is the refund window?" {
+		t.Errorf("query = %q", query)
+	}
+	if len(docs) != 2 || docs[0] != "Refunds are accepted within 30 days." || docs[1] != "Shipping is free over $50." {
+		t.Fatalf("docs = %+v", docs)
+	}
+}
+
 func TestNoContentDropsEvents(t *testing.T) {
 	td, span := singleSpan()
 	ev := span.Events().AppendEmpty()
