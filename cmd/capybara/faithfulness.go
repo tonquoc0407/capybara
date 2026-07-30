@@ -32,8 +32,9 @@ func faithfulnessCmd(ctx context.Context, dbPath string, args []string, out io.W
 	if fs.NArg() > 1 {
 		return errors.New("usage: capybara faithfulness [--url base --model name] [run]")
 	}
-	if *url == "" || *model == "" {
-		return errors.New("no judge configured: set --url and --model (or CAPYBARA_JUDGE_URL/MODEL)")
+	client, err := judgeClient(*url, *model)
+	if err != nil {
+		return err
 	}
 	st, err := store.Open(dbPath)
 	if err != nil {
@@ -44,7 +45,6 @@ func faithfulnessCmd(ctx context.Context, dbPath string, args []string, out io.W
 	if err != nil {
 		return err
 	}
-	client := &judge.Client{BaseURL: *url, Model: *model, Key: os.Getenv("CAPYBARA_JUDGE_KEY")}
 	findings, err := judgeRuns(ctx, st, runs, client)
 	if err != nil {
 		return err

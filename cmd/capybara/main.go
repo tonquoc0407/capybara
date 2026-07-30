@@ -79,6 +79,8 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return findingsCmd(ctx, *dbPath, args[1:], out)
 	case "faithfulness":
 		return faithfulnessCmd(ctx, *dbPath, args[1:], out)
+	case "toolcheck":
+		return toolcheckCmd(ctx, *dbPath, args[1:], out)
 	case "serve":
 		return serveCmd(ctx, *dbPath, args[1:], out)
 	case "help":
@@ -239,6 +241,7 @@ watcher when ~/.claude/projects exists.
   coverage report typed-span coverage and unmapped ingest namespaces
   findings list findings (--sarif, --fail-on for a CI gate)
   faithfulness  grade retrieval runs with an opt-in llm judge (sends data out)
+  toolcheck     grade tool selection with an opt-in llm judge (sends data out)
   help     print this message
 
 Flags, before the command:

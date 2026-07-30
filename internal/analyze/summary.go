@@ -61,6 +61,8 @@ func FindingSummary(f store.Finding) string {
 		return "unfaithful (llm judge): " + d.Evidence
 	case "truncated":
 		return "final answer cut off at the token limit"
+	case "wrong_tool":
+		return "wrong tool for the request (llm judge): " + d.Evidence
 	case "parse_error":
 		return fmt.Sprintf("parse error at line %d", d.Line)
 	case "loop":

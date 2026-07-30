@@ -104,16 +104,62 @@ type verdict struct {
 // parseVerdict pulls the JSON object out of a reply that may be fenced or padded
 // with prose, which local models in particular tend to add.
 func parseVerdict(reply string) (verdict, error) {
-	start := strings.IndexByte(reply, '{')
-	end := strings.LastIndexByte(reply, '}')
-	if start < 0 || end < start {
-		return verdict{}, fmt.Errorf("no json object in judge reply: %q", trunc(reply))
+	obj, err := extractJSON(reply)
+	if err != nil {
+		return verdict{}, err
 	}
 	var v verdict
-	if err := json.Unmarshal([]byte(reply[start:end+1]), &v); err != nil {
+	if err := json.Unmarshal([]byte(obj), &v); err != nil {
 		return verdict{}, fmt.Errorf("parse judge verdict: %w", err)
 	}
 	return v, nil
+}
+
+// ToolCall is one tool the agent invoked, as the judge should see it.
+type ToolCall struct {
+	Name string
+	Args string
+}
+
+const toolSystem = "You review an agent's tool use. Given the USER REQUEST and the " +
+	"numbered TOOL CALLS the agent made, decide which calls were the wrong tool for " +
+	"the request or irrelevant to it. A call is wrong only when it does not help " +
+	"answer the request. Reply with ONLY a JSON object: {\"wrong\": [<call number>, ...]}."
+
+// GradeTools returns the 1-based positions of the tool calls the judge found
+// wrong for the request; empty means every call was appropriate.
+func GradeTools(ctx context.Context, c Completer, request string, calls []ToolCall) ([]int, error) {
+	var b strings.Builder
+	b.WriteString("USER REQUEST:\n")
+	b.WriteString(request)
+	b.WriteString("\n\nTOOL CALLS:\n")
+	for i, tc := range calls {
+		fmt.Fprintf(&b, "%d. %s(%s)\n", i+1, tc.Name, tc.Args)
+	}
+	reply, err := c.Complete(ctx, toolSystem, b.String())
+	if err != nil {
+		return nil, err
+	}
+	obj, err := extractJSON(reply)
+	if err != nil {
+		return nil, err
+	}
+	var w struct {
+		Wrong []int `json:"wrong"`
+	}
+	if err := json.Unmarshal([]byte(obj), &w); err != nil {
+		return nil, fmt.Errorf("parse tool verdict: %w", err)
+	}
+	return w.Wrong, nil
+}
+
+func extractJSON(reply string) (string, error) {
+	start := strings.IndexByte(reply, '{')
+	end := strings.LastIndexByte(reply, '}')
+	if start < 0 || end < start {
+		return "", fmt.Errorf("no json object in judge reply: %q", trunc(reply))
+	}
+	return reply[start : end+1], nil
 }
 
 func trunc(s string) string {

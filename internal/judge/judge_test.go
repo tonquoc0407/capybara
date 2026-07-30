@@ -81,3 +81,23 @@ func TestParseVerdictNoJSON(t *testing.T) {
 		t.Fatal("expected error on reply with no json")
 	}
 }
+
+func TestGradeToolsReturnsWrongIndices(t *testing.T) {
+	s := &stub{reply: `{"wrong": [2]}`}
+	got, err := GradeTools(context.Background(), s, "what is the weather?",
+		[]ToolCall{{Name: "get_weather", Args: `{"city":"Oslo"}`}, {Name: "delete_account", Args: `{"id":7}`}})
+	if err != nil || len(got) != 1 || got[0] != 2 {
+		t.Fatalf("got=%v err=%v", got, err)
+	}
+	if !strings.Contains(s.got, "get_weather") || !strings.Contains(s.got, "2. delete_account") {
+		t.Errorf("prompt = %q", s.got)
+	}
+}
+
+func TestGradeToolsAllAppropriate(t *testing.T) {
+	s := &stub{reply: `{"wrong": []}`}
+	got, err := GradeTools(context.Background(), s, "q", []ToolCall{{Name: "search", Args: "{}"}})
+	if err != nil || len(got) != 0 {
+		t.Fatalf("got=%v err=%v", got, err)
+	}
+}
