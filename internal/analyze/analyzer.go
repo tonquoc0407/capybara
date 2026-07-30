@@ -116,6 +116,11 @@ func (a *Analyzer) checkRun(ctx context.Context, runID string,
 		return nil, nil, err
 	}
 	findings = append(findings, injections...)
+	unfaithful, err := a.faithfulnessRun(ctx, rc)
+	if err != nil {
+		return nil, nil, err
+	}
+	findings = append(findings, unfaithful...)
 	calls, err := a.st.ToolCalls(ctx, runID)
 	if err != nil {
 		return nil, nil, err

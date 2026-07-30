@@ -17,14 +17,15 @@ import (
 const infoURI = "https://github.com/tonquoc0407/capybara"
 
 var ruleDesc = map[string]string{
-	"improvised":       "model answered past a failed tool without acknowledging it",
-	"prompt_injection": "tool or retrieval output carried a prompt-injection directive into the model",
-	"tool_error":       "tool reported an error inside an otherwise successful span",
-	"malformed":        "tool output did not match its learned schema",
-	"empty_payload":    "tool returned an empty payload",
-	"drift":            "tool output shape changed from its established contract",
-	"loop":             "a tool was called repeatedly with identical input",
-	"cost_spike":       "token usage spiked above the run baseline",
+	"improvised":        "model answered past a failed tool without acknowledging it",
+	"prompt_injection":  "tool or retrieval output carried a prompt-injection directive into the model",
+	"unsupported_claim": "answer stated a figure absent from the retrieved documents",
+	"tool_error":        "tool reported an error inside an otherwise successful span",
+	"malformed":         "tool output did not match its learned schema",
+	"empty_payload":     "tool returned an empty payload",
+	"drift":             "tool output shape changed from its established contract",
+	"loop":              "a tool was called repeatedly with identical input",
+	"cost_spike":        "token usage spiked above the run baseline",
 }
 
 // SARIF renders findings as a SARIF 2.1.0 log, one rule per finding type and a
