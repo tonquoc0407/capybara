@@ -20,6 +20,7 @@ var ruleDesc = map[string]string{
 	"improvised":        "model answered past a failed tool without acknowledging it",
 	"prompt_injection":  "tool or retrieval output carried a prompt-injection directive into the model",
 	"unsupported_claim": "answer stated a figure absent from the retrieved documents",
+	"unfaithful":        "answer claim unsupported by the retrieved documents (llm judge)",
 	"tool_error":        "tool reported an error inside an otherwise successful span",
 	"malformed":         "tool output did not match its learned schema",
 	"empty_payload":     "tool returned an empty payload",

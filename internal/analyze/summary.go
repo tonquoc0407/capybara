@@ -57,6 +57,8 @@ func FindingSummary(f store.Finding) string {
 		return "prompt injection in " + d.Tool + " output: " + d.Evidence
 	case "unsupported_claim":
 		return "figure not in retrieved documents: " + d.Evidence
+	case "unfaithful":
+		return "unfaithful (llm judge): " + d.Evidence
 	case "parse_error":
 		return fmt.Sprintf("parse error at line %d", d.Line)
 	case "loop":
