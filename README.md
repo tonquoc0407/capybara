@@ -187,6 +187,10 @@ A second opt-in judge, over the tools a turn could call and the one it chose (`c
 
 If your tool has a declared schema, give it to the SDK with `capybara.schema("lookup_price", Price)`. The declared shape wins over the learned one, so the first violating call is a finding instead of a new version.
 
+### Scored
+
+The detectors are held to a labelled corpus under [`corpus/`](corpus): 24 runs, each a positive for one type or a near-miss that must stay clean — a hedged answer after a failed call, a document that discusses prompt injection without carrying one, a loop of one tool over distinct arguments. `capybara eval` re-analyses them and scores precision, recall and F1 per type; on this corpus every deterministic type sits at 1.0, and `sh corpus/run.sh` fails CI if one slips. The inputs are curated, so this is a regression gate on the detectors' spec, not a measurement of live traffic.
+
 ## Other commands
 
 | Command | Description |

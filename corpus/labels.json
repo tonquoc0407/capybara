@@ -1,0 +1,138 @@
+{
+  "types": [
+    "improvised",
+    "tool_error",
+    "malformed",
+    "empty_payload",
+    "drift",
+    "loop",
+    "cost_spike",
+    "prompt_injection",
+    "unsupported_claim",
+    "truncated"
+  ],
+  "cases": [
+    {
+      "run": "improvised-bare",
+      "expect": [
+        "improvised"
+      ]
+    },
+    {
+      "run": "improvised-hedged",
+      "expect": []
+    },
+    {
+      "run": "improvised-retried",
+      "expect": []
+    },
+    {
+      "run": "tool-error-field",
+      "expect": [
+        "tool_error"
+      ]
+    },
+    {
+      "run": "tool-error-http",
+      "expect": [
+        "tool_error"
+      ]
+    },
+    {
+      "run": "tool-error-doc-mentions",
+      "expect": []
+    },
+    {
+      "run": "malformed-after-json",
+      "expect": [
+        "malformed"
+      ]
+    },
+    {
+      "run": "malformed-text-tool",
+      "expect": []
+    },
+    {
+      "run": "empty-payload",
+      "expect": [
+        "empty_payload"
+      ]
+    },
+    {
+      "run": "drift-retype",
+      "expect": [
+        "drift"
+      ]
+    },
+    {
+      "run": "drift-widen",
+      "expect": []
+    },
+    {
+      "run": "loop-identical",
+      "expect": [
+        "loop"
+      ]
+    },
+    {
+      "run": "loop-distinct",
+      "expect": []
+    },
+    {
+      "run": "cost-spike-burst",
+      "expect": [
+        "cost_spike"
+      ]
+    },
+    {
+      "run": "cost-spike-under",
+      "expect": []
+    },
+    {
+      "run": "injection-retrieval",
+      "expect": [
+        "prompt_injection"
+      ]
+    },
+    {
+      "run": "injection-tool",
+      "expect": [
+        "prompt_injection"
+      ]
+    },
+    {
+      "run": "injection-benign-mention",
+      "expect": []
+    },
+    {
+      "run": "unsupported-figure",
+      "expect": [
+        "unsupported_claim"
+      ]
+    },
+    {
+      "run": "unsupported-grounded",
+      "expect": []
+    },
+    {
+      "run": "truncated-length",
+      "expect": [
+        "truncated"
+      ]
+    },
+    {
+      "run": "truncated-maxtokens",
+      "expect": [
+        "truncated"
+      ]
+    },
+    {
+      "run": "truncated-stop",
+      "expect": []
+    },
+    {
+      "run": "clean-agent",
+      "expect": []
+    }
+  ]
+}
