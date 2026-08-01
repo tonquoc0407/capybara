@@ -204,12 +204,14 @@ The detectors are held to a labelled corpus under [`corpus/`](corpus): 24 runs, 
 | `capybara export <run> --html` | write a self-contained page |
 | `capybara check <golden> <run>` | compare against a golden, non-zero on divergence |
 | `capybara runs` | list runs, filter by finding, model, status, source or cost |
-| `capybara findings` | list findings; `--sarif` and `--fail-on` gate a CI job |
+| `capybara findings` | list findings; `--sarif`, `--fail-on` and `--baseline` gate CI |
 | `capybara faithfulness` | grade retrieval answers with an opt-in llm judge |
 | `capybara toolcheck` | grade tool selection with an opt-in llm judge |
 | `capybara eval` | score detectors against a labelled corpus (precision, recall) |
 | `capybara coverage` | report typed-span coverage and unmapped namespaces |
 | `capybara serve` | read-only web view |
+
+`findings --write-baseline` records the findings a run already carries; `findings --baseline <file>` then reports and gates only the ones absent from it, so CI fails on what a change introduced rather than on the standing total. A finding's identity is its run, span and type, so editing a detail is not a regression.
 
 `replay` serves the recorded model responses and tool outputs back to the agent process, so nothing touches the network. Edit one tool result first and only the turns after it go live — that's how you ask what the agent would have done with the answer it should have got. A call that isn't in the recording stops the replay rather than running live.
 

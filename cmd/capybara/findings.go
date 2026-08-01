@@ -17,17 +17,20 @@ import (
 var errFindings = errors.New("findings")
 
 // findingsCmd lists a corpus's findings for CI: text by default, SARIF for
-// interchange, and a non-zero exit when a finding matches --fail-on.
+// interchange, a non-zero exit when a finding matches --fail-on, and a baseline
+// so the gate fires on regressions rather than the standing total.
 func findingsCmd(ctx context.Context, dbPath string, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("findings", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	asSarif := fs.Bool("sarif", false, "emit SARIF 2.1.0 instead of text")
 	failOn := fs.String("fail-on", "", "comma-separated types (or 'any') to exit non-zero on")
+	baselinePath := fs.String("baseline", "", "report and gate only findings absent from this baseline")
+	writeBaselinePath := fs.String("write-baseline", "", "write the current findings as a baseline and exit")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() > 1 {
-		return errors.New("usage: capybara findings [--sarif] [--fail-on types] [run]")
+		return errors.New("usage: capybara findings [--sarif] [--fail-on types] [--baseline file] [--write-baseline file] [run]")
 	}
 	st, err := store.Open(dbPath)
 	if err != nil {
@@ -44,6 +47,16 @@ func findingsCmd(ctx context.Context, dbPath string, args []string, out io.Write
 	findings, err := gatherFindings(ctx, st, fs.Args())
 	if err != nil {
 		return err
+	}
+	if *writeBaselinePath != "" {
+		return writeBaseline(*writeBaselinePath, findings)
+	}
+	if *baselinePath != "" {
+		accepted, err := readBaseline(*baselinePath)
+		if err != nil {
+			return err
+		}
+		findings = newFindings(findings, accepted)
 	}
 	if *asSarif {
 		doc, err := export.SARIF(findings, version)

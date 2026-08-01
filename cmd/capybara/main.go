@@ -242,7 +242,7 @@ watcher when ~/.claude/projects exists.
   eval     score detectors against a labelled corpus (--fail-under gates CI)
   runs     list runs, filtered by finding, model, status, source or cost
   coverage report typed-span coverage and unmapped ingest namespaces
-  findings list findings (--sarif, --fail-on for a CI gate)
+  findings list findings (--sarif, --fail-on, --baseline for a CI gate)
   faithfulness  grade retrieval runs with an opt-in llm judge (sends data out)
   toolcheck     grade tool selection with an opt-in llm judge (sends data out)
   help     print this message
