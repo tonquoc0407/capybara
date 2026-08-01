@@ -21,5 +21,31 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# Publishes a cask to github.com/tonquoc0407/homebrew-tap on each tag, so
+# `brew install tonquoc0407/tap/capybara` tracks releases. skip_upload is on
+# whenever HOMEBREW_TAP_TOKEN is unset, so a tag before the tap exists still
+# ships its binaries instead of failing here.
+homebrew_casks:
+  - name: capybara
+    binaries:
+      - capybara
+    repository:
+      owner: tonquoc0407
+      name: homebrew-tap
+      branch: main
+      token: '{{ index .Env "HOMEBREW_TAP_TOKEN" }}'
+    directory: Casks
+    homepage: "https://github.com/tonquoc0407/capybara"
+    description: "Terminal trace debugger for AI agents."
+    skip_upload: '{{ if index .Env "HOMEBREW_TAP_TOKEN" }}false{{ else }}true{{ end }}'
+    # The binaries are unsigned, so strip the quarantine flag or macOS refuses
+    # to run them with a "damaged" alert.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/capybara"]
+          end
+
 changelog:
   disable: true
