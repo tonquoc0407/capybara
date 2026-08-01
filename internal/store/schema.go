@@ -80,13 +80,17 @@ func (s *Store) UnanalyzedSpans(ctx context.Context) ([]Span, error) {
 	return scanSpans(rows)
 }
 
-// ResetAnalysis drops every derived finding and taint and marks all spans
-// unanalyzed, so the next sweep re-evaluates the whole store with the current
-// detectors. Spans and their content are left untouched.
+// ResetAnalysis drops every derived finding and taint, forgets the learned tool
+// schemas, and marks all spans unanalyzed, so the next sweep re-evaluates the
+// whole store from scratch. Dropping the schemas is what makes the re-sweep
+// replay the original learning order: keep them and drift would diff a call
+// against a shape a later call taught, flagging the wrong span. Spans, their
+// content, and declared schemas (which live on span attributes) are untouched.
 func (s *Store) ResetAnalysis(ctx context.Context) error {
 	for _, stmt := range []string{
 		"DELETE FROM findings",
 		"DELETE FROM taints",
+		"DELETE FROM tool_schemas",
 		"UPDATE spans SET analyzed = 0",
 	} {
 		if _, err := s.db.ExecContext(ctx, stmt); err != nil {

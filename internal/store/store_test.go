@@ -337,6 +337,36 @@ func TestToolSchemaVersions(t *testing.T) {
 	}
 }
 
+func TestResetAnalysisForgetsLearnedSchemas(t *testing.T) {
+	s := openTemp(t)
+	ctx := context.Background()
+	if err := s.WriteBatch(ctx, testBatch()); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	if err := s.InsertToolSchema(ctx, ToolSchema{
+		ToolName: "search", Version: 1, Schema: `{"type":["object"]}`,
+		LearnedFromRun: "r1", FirstSeen: t0, LastSeen: t0,
+	}); err != nil {
+		t.Fatalf("InsertToolSchema: %v", err)
+	}
+	if err := s.MarkAnalyzed(ctx, []string{"root", "llm1", "tool1"}); err != nil {
+		t.Fatalf("MarkAnalyzed: %v", err)
+	}
+	if err := s.ResetAnalysis(ctx); err != nil {
+		t.Fatalf("ResetAnalysis: %v", err)
+	}
+	if ts, err := s.LatestToolSchema(ctx, "search"); err != nil || ts != nil {
+		t.Fatalf("schema survived reset: %v, %v", ts, err)
+	}
+	spans, err := s.UnanalyzedSpans(ctx)
+	if err != nil {
+		t.Fatalf("UnanalyzedSpans: %v", err)
+	}
+	if len(spans) != 3 {
+		t.Fatalf("reset left %d spans analyzed, want all 3 unanalyzed", 3-len(spans))
+	}
+}
+
 func TestUnanalyzedSpansLifecycle(t *testing.T) {
 	s := openTemp(t)
 	ctx := context.Background()
