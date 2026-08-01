@@ -121,6 +121,16 @@ func (a *Analyzer) checkRun(ctx context.Context, runID string,
 		return nil, nil, err
 	}
 	findings = append(findings, unfaithful...)
+	secrets, err := a.secretRun(ctx, rc)
+	if err != nil {
+		return nil, nil, err
+	}
+	findings = append(findings, secrets...)
+	stuck, err := a.noProgressRun(ctx, rc)
+	if err != nil {
+		return nil, nil, err
+	}
+	findings = append(findings, stuck...)
 	findings = append(findings, a.truncationRun(ctx, rc)...)
 	calls, err := a.st.ToolCalls(ctx, runID)
 	if err != nil {

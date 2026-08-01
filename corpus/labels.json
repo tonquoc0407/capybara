@@ -9,7 +9,9 @@
     "cost_spike",
     "prompt_injection",
     "unsupported_claim",
-    "truncated"
+    "truncated",
+    "secret_leak",
+    "no_progress"
   ],
   "cases": [
     {
@@ -132,6 +134,26 @@
     },
     {
       "run": "clean-agent",
+      "expect": []
+    },
+    {
+      "run": "secret-leak-tool",
+      "expect": [
+        "secret_leak"
+      ]
+    },
+    {
+      "run": "secret-leak-benign",
+      "expect": []
+    },
+    {
+      "run": "no-progress-stuck",
+      "expect": [
+        "no_progress"
+      ]
+    },
+    {
+      "run": "no-progress-varied",
       "expect": []
     }
   ]

@@ -65,19 +65,12 @@ func (a *Analyzer) faithfulnessRun(ctx context.Context, rc *runContext) ([]store
 // finalAnswer is the run's last llm turn that produced assistant text.
 func (a *Analyzer) finalAnswer(ctx context.Context, rc *runContext) (string, store.Span, bool, error) {
 	for i := len(rc.llms) - 1; i >= 0; i-- {
-		cs, err := a.st.Contents(ctx, rc.llms[i].ID)
+		text, err := a.assistantText(ctx, rc.llms[i])
 		if err != nil {
 			return "", store.Span{}, false, err
 		}
-		var b strings.Builder
-		for _, c := range cs {
-			if c.Role == "assistant" {
-				b.WriteString(c.Body)
-				b.WriteByte('\n')
-			}
-		}
-		if strings.TrimSpace(b.String()) != "" {
-			return b.String(), rc.llms[i], true, nil
+		if strings.TrimSpace(text) != "" {
+			return text, rc.llms[i], true, nil
 		}
 	}
 	return "", store.Span{}, false, nil

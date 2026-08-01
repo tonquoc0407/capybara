@@ -22,6 +22,7 @@ type FindingDetail struct {
 	Line     int      `json:"line"`
 	Error    string   `json:"error"`
 	Cause    string   `json:"cause"`
+	Kind     string   `json:"kind"`
 	Evidence string   `json:"evidence"`
 	Pattern  []string `json:"pattern"`
 	Tokens   int64    `json:"tokens"`
@@ -59,6 +60,10 @@ func FindingSummary(f store.Finding) string {
 		return "figure not in retrieved documents: " + d.Evidence
 	case "unfaithful":
 		return "unfaithful (llm judge): " + d.Evidence
+	case "secret_leak":
+		return "leaked " + d.Kind + " (" + d.Evidence + ")"
+	case "no_progress":
+		return "model stuck: " + d.Evidence
 	case "truncated":
 		return "final answer cut off at the token limit"
 	case "wrong_tool":

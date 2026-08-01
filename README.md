@@ -132,7 +132,7 @@ The waterfall sorts spans by cost, so the turn that spent the money is the first
 
 ## What it looks for
 
-Findings are recorded, never enforced — analysis touches nothing outside the database, and only `findings --fail-on` turns a finding into a non-zero exit, when a CI job asks for it. Twelve kinds: ten deterministic and passive, two opt-in judges that send data to an endpoint you name.
+Findings are recorded, never enforced — analysis touches nothing outside the database, and only `findings --fail-on` turns a finding into a non-zero exit, when a CI job asks for it. Fourteen kinds: twelve deterministic and passive, two opt-in judges that send data to an endpoint you name.
 
 ### `improvised`
 
@@ -165,6 +165,10 @@ Only the top-level keys or the first line are read — searching the whole body 
 
 Marks the same call repeated back to back with the same arguments. A `Read` over ten files is a plan; the same `Read` ten times is a loop. Calls whose arguments were never recorded aren't compared against each other, because nothing is known about them.
 
+### `no_progress`
+
+The loop check's multi-turn cousin, reading the model's output instead of its tool calls: a run whose model gives the same substantial answer on three or more turns is stuck, not converging. A short line like "working on it" is allowed to repeat; only a real answer counts, so a run with no tools at all is still caught.
+
 ### `cost_spike`
 
 Marks a turn burning several times the run's own rolling baseline.
@@ -172,6 +176,10 @@ Marks a turn burning several times the run's own rolling baseline.
 ### `prompt_injection`
 
 Marks an instruction aimed at the model hiding in tool or retrieval output — "ignore previous instructions", "reveal your system prompt", "do not tell the user". It's flagged on the span that carried the text, beside the turn that read it. Only specific multi-word directives count, so a document that discusses prompt injection isn't one.
+
+### `secret_leak`
+
+Marks a credential or card number sitting in recorded content, where it has already reached a model or a log. The net is deliberately narrow: tokens a provider issues with a fixed prefix — AWS keys, GitHub tokens, Google keys, Stripe live keys, JWTs, private-key blocks — plus card numbers a Luhn check confirms. Bare emails and phone numbers are left out; they are common and benign in agent traffic, and flagging them would bury the one time a real key leaked. The matched value is never stored — only its kind and a masked head — so the finding does not leak what it caught.
 
 ### `unsupported_claim` and `unfaithful`
 
@@ -189,7 +197,7 @@ If your tool has a declared schema, give it to the SDK with `capybara.schema("lo
 
 ### Scored
 
-The detectors are held to a labelled corpus under [`corpus/`](corpus): 24 runs, each a positive for one type or a near-miss that must stay clean — a hedged answer after a failed call, a document that discusses prompt injection without carrying one, a loop of one tool over distinct arguments. `capybara eval` re-analyses them and scores precision, recall and F1 per type; on this corpus every deterministic type sits at 1.0, and `sh corpus/run.sh` fails CI if one slips. The inputs are curated, so this is a regression gate on the detectors' spec, not a measurement of live traffic.
+The detectors are held to a labelled corpus under [`corpus/`](corpus): 28 runs, each a positive for one type or a near-miss that must stay clean — a hedged answer after a failed call, a document that discusses prompt injection without carrying one, prose about API keys with no live credential in it. `capybara eval` re-analyses them and scores precision, recall and F1 per type; on this corpus every deterministic type sits at 1.0, and `sh corpus/run.sh` fails CI if one slips. The inputs are curated, so this is a regression gate on the detectors' spec, not a measurement of live traffic.
 
 ## Other commands
 
