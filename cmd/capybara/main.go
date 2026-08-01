@@ -27,7 +27,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx, os.Args[1:], os.Stdout); err != nil {
-		if !errors.Is(err, errDiverged) && !errors.Is(err, errFindings) {
+		if !errors.Is(err, errDiverged) && !errors.Is(err, errFindings) && !errors.Is(err, errBelowThreshold) {
 			fmt.Fprintf(os.Stderr, "capybara: %v\n", err)
 		}
 		os.Exit(1)
@@ -239,7 +239,7 @@ watcher when ~/.claude/projects exists.
   serve    serve the read-only web view
   export   export a run (--golden a CI fixture, --html a shareable page)
   check    compare a run against a golden snapshot, non-zero on divergence
-  eval     score detectors against a labelled corpus (precision, recall)
+  eval     score detectors against a labelled corpus (--fail-under gates CI)
   runs     list runs, filtered by finding, model, status, source or cost
   coverage report typed-span coverage and unmapped ingest namespaces
   findings list findings (--sarif, --fail-on for a CI gate)
