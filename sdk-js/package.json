@@ -1,0 +1,42 @@
+{
+  "name": "capybara-sdk",
+  "version": "0.1.0",
+  "description": "Emit OpenTelemetry traces to a local capybara trace debugger.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/tonquoc0407/capybara",
+  "keywords": [
+    "opentelemetry",
+    "tracing",
+    "llm",
+    "agents",
+    "observability"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
+    "@opentelemetry/resources": "^2.10.0",
+    "@opentelemetry/sdk-trace-base": "^2.10.0",
+    "@opentelemetry/sdk-trace-node": "^2.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "typescript": "^7.0.2"
+  }
+}

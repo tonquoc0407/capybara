@@ -113,6 +113,8 @@ def lookup_price(sku: str) -> dict:
 
 `init()` reuses a `TracerProvider` you already configured, so any instrumentor you already run keeps working — capybara only adds an exporter to it.
 
+The same three calls exist for Node in [`sdk-js/`](sdk-js) (`npm install capybara-sdk`): `init`, `trace`, `schema`.
+
 ## Reading a trace
 
 The tree marks `x` for a failed span and `!` for one carrying a finding. The run column shows when each run started, what it cost, and what was recorded against it.
@@ -262,7 +264,7 @@ Spans arrive over OTLP or from a file and are normalised into one shape: a run, 
 
 Analysis is a background pass over spans not yet analysed, woken whenever the store is written. It's incremental and restart-safe: a re-imported span is analysed again, and findings carry a unique key so the second pass records nothing new. Cost is computed per LLM span from the recorded token counts, cache reads included where the source reports them.
 
-The Python SDK is optional. It only produces OTLP spans, plus a declared schema per tool when you give it one, and the replay entry point the binary calls back into.
+The SDKs are optional. The Python one produces OTLP spans, a declared schema per tool when you give it one, and the replay entry point the binary calls back into; the Node one in `sdk-js/` mirrors the tracing and schema half. Neither is required — any OTLP source works.
 
 ## License
 
