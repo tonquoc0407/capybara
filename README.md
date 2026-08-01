@@ -132,7 +132,7 @@ The waterfall sorts spans by cost, so the turn that spent the money is the first
 
 ## What it looks for
 
-Findings are recorded, never enforced — capybara doesn't fail your build. Seven kinds, all passive.
+Findings are recorded, never enforced — analysis touches nothing outside the database, and only `findings --fail-on` turns a finding into a non-zero exit, when a CI job asks for it. Twelve kinds: ten deterministic and passive, two opt-in judges that send data to an endpoint you name.
 
 ### `improvised`
 
@@ -169,6 +169,22 @@ Marks the same call repeated back to back with the same arguments. A `Read` over
 
 Marks a turn burning several times the run's own rolling baseline.
 
+### `prompt_injection`
+
+Marks an instruction aimed at the model hiding in tool or retrieval output — "ignore previous instructions", "reveal your system prompt", "do not tell the user". It's flagged on the span that carried the text, beside the turn that read it. Only specific multi-word directives count, so a document that discusses prompt injection isn't one.
+
+### `unsupported_claim` and `unfaithful`
+
+Flag a figure in the final answer that no retrieved document backs. `unsupported_claim` is deterministic: a distinctive number in the answer that appears in none of the run's retrieved docs. `unfaithful` puts the same question to an LLM judge — opt-in, off by default, and it sends the answer and the documents out (`capybara faithfulness`).
+
+### `truncated`
+
+Marks a final answer the model stopped mid-sentence because it ran into the token limit — the recorded finish reason reads `length`, `max_tokens` or the provider's equivalent, and it was the run's last word.
+
+### `wrong_tool`
+
+A second opt-in judge, over the tools a turn could call and the one it chose (`capybara toolcheck`). Off by default, same caveat as `faithfulness`: the request and the tool list leave the box.
+
 If your tool has a declared schema, give it to the SDK with `capybara.schema("lookup_price", Price)`. The declared shape wins over the learned one, so the first violating call is a finding instead of a new version.
 
 ## Other commands
@@ -183,6 +199,12 @@ If your tool has a declared schema, give it to the SDK with `capybara.schema("lo
 | `capybara export <run> --golden` | write a CI fixture |
 | `capybara export <run> --html` | write a self-contained page |
 | `capybara check <golden> <run>` | compare against a golden, non-zero on divergence |
+| `capybara runs` | list runs, filter by finding, model, status, source or cost |
+| `capybara findings` | list findings; `--sarif` and `--fail-on` gate a CI job |
+| `capybara faithfulness` | grade retrieval answers with an opt-in llm judge |
+| `capybara toolcheck` | grade tool selection with an opt-in llm judge |
+| `capybara eval` | score detectors against a labelled corpus (precision, recall) |
+| `capybara coverage` | report typed-span coverage and unmapped namespaces |
 | `capybara serve` | read-only web view |
 
 `replay` serves the recorded model responses and tool outputs back to the agent process, so nothing touches the network. Edit one tool result first and only the turns after it go live — that's how you ask what the agent would have done with the answer it should have got. A call that isn't in the recording stops the replay rather than running live.
@@ -200,6 +222,23 @@ theme = "bara"
 `bara` is the default warm dark. `mono` drops the accent to grey; `paper` is for a light terminal. Red and amber mean the same thing in all three.
 
 Model rates live in a table built into the binary, covering the current Claude, OpenAI, and Gemini families. Extend or override it with `~/.config/capybara/pricing.json`, which is merged over the built-in one. A model with no entry stays unpriced rather than being guessed at, and a rate that varies by context length or by date is recorded at its standard tier — the table has no conditions in it.
+
+The built-in conventions (OpenTelemetry `gen_ai`, OpenInference, OpenLLMetry, the Vercel AI SDK) cover most instrumentors. For one they don't, `~/.config/capybara/mapping.toml` names the attributes that decide a span's kind and where its model, tokens and content live, with no rebuild:
+
+```toml
+[[kind]]
+attr = "my.span.type"
+equals = "generation"
+kind = "llm"
+
+[fields]
+model = ["my.model"]
+
+[content]
+output = ["my.completion"]
+```
+
+`capybara coverage` reports which attribute namespaces went unmapped, so you can see what a new source needs before writing the file.
 
 ## Architecture
 
