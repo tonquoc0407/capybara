@@ -33,7 +33,7 @@ homebrew_casks:
       owner: tonquoc0407
       name: homebrew-tap
       branch: main
-      token: '{{ index .Env "HOMEBREW_TAP_TOKEN" }}'
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Casks
     homepage: "https://github.com/tonquoc0407/capybara"
     description: "Terminal trace debugger for AI agents."
