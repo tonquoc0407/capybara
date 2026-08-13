@@ -33,10 +33,10 @@
 ## Install
 
 ```sh
-go install github.com/tonquoc0407/capybara/cmd/capybara@latest
+brew install tonquoc0407/tap/capybara
 ```
 
-Or grab a binary from the [releases page](https://github.com/tonquoc0407/capybara/releases). One file, no CGo, no runtime dependencies.
+Or `go install github.com/tonquoc0407/capybara/cmd/capybara@latest`, or grab a binary from the [releases page](https://github.com/tonquoc0407/capybara/releases). One file, no CGo, no runtime dependencies.
 
 ## Getting a trace in
 
@@ -90,7 +90,7 @@ Tails Claude Code's own logs. No instrumentation, no restart — it reads what's
 capybara import trace.jsonl
 ```
 
-Takes span-per-line JSONL, or agent-replay JSON when the name ends in `.json`.
+Takes span-per-line JSONL, or agent-replay JSON when the name ends in `.json`. [`scripts/langfuse_export.py`](scripts/langfuse_export.py) produces that JSONL from a Langfuse trace, for pulling one run out of production to debug locally.
 
 ### From your own agent
 
@@ -222,6 +222,8 @@ The detectors are held to a labelled corpus under [`corpus/`](corpus): 28 runs, 
 | `capybara serve` | read-only web view |
 
 `findings --write-baseline` records the findings a run already carries; `findings --baseline <file>` then reports and gates only the ones absent from it, so CI fails on what a change introduced rather than on the standing total. A finding's identity is its run, span and type, so editing a detail is not a regression.
+
+[`demo/ci/agent-findings.yml`](demo/ci/agent-findings.yml) is a copyable workflow: gate a PR on `findings --fail-on` and post the reason as a comment, via [`scripts/post-findings-comment.sh`](scripts/post-findings-comment.sh).
 
 `replay` serves the recorded model responses and tool outputs back to the agent process, so nothing touches the network. Edit one tool result first and only the turns after it go live — that's how you ask what the agent would have done with the answer it should have got. A call that isn't in the recording stops the replay rather than running live.
 
