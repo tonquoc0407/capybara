@@ -1,0 +1,36 @@
+# Template: gate a PR on agent-trace findings and post the reason as a
+# comment. Copy this into your own repo's .github/workflows/ and point the
+# "run your agent's tests" step at whatever produces the trace — capybara's
+# own CI has no agent to trace, so this workflow does not run in this repo.
+name: agent findings
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - run: go install github.com/tonquoc0407/capybara/cmd/capybara@latest
+
+      # Replace with whatever runs your agent against its test scenarios and
+      # exports OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318, or points
+      # capybara at a recorded trace with `capybara import`.
+      - run: ./run-agent-tests.sh
+
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          scripts/post-findings-comment.sh capybara.db \
+            "improvised,secret_leak,prompt_injection" \
+            "${{ github.event.pull_request.number }}"
