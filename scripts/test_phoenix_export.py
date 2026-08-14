@@ -115,11 +115,22 @@ def test_present_timestamps_pass_through() -> None:
     assert line["end"] == "2026-08-13T10:00:01+00:00"
 
 
-def test_input_output_value_become_contents() -> None:
-    span = _span(attributes={"input.value": "hi", "output.value": {"a": 1}})
+def test_llm_input_output_value_become_user_assistant_contents() -> None:
+    span = _span(
+        span_kind="LLM", attributes={"input.value": "hi", "output.value": {"a": 1}}
+    )
+    bodies = {c["role"]: c["body"] for c in pe._span_line("t1", span)["contents"]}
+    assert bodies["user"] == "hi"
+    assert json.loads(bodies["assistant"]) == {"a": 1}
+
+
+def test_tool_input_output_value_become_input_output_contents() -> None:
+    span = _span(
+        span_kind="TOOL", attributes={"input.value": "hi", "output.value": "bye"}
+    )
     bodies = {c["role"]: c["body"] for c in pe._span_line("t1", span)["contents"]}
     assert bodies["input"] == "hi"
-    assert json.loads(bodies["output"]) == {"a": 1}
+    assert bodies["output"] == "bye"
 
 
 def test_no_input_output_value_omits_contents_key() -> None:

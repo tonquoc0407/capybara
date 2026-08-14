@@ -90,7 +90,7 @@ Tails Claude Code's own logs. No instrumentation, no restart — it reads what's
 capybara import trace.jsonl
 ```
 
-Takes span-per-line JSONL, or agent-replay JSON when the name ends in `.json`. [`scripts/langfuse_export.py`](scripts/langfuse_export.py) produces that JSONL from a Langfuse trace, for pulling one run out of production to debug locally.
+Takes span-per-line JSONL, or agent-replay JSON when the name ends in `.json`. [`scripts/langfuse_export.py`](scripts/langfuse_export.py), [`scripts/phoenix_export.py`](scripts/phoenix_export.py) and [`scripts/langsmith_export.py`](scripts/langsmith_export.py) each produce that JSONL from a trace already sitting in Langfuse, Arize Phoenix or LangSmith, for pulling one run out of production to debug locally.
 
 ### From your own agent
 

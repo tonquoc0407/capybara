@@ -116,7 +116,7 @@ def _span_line(trace_id: str, span: dict[str, Any]) -> dict[str, Any]:
         line["start"] = span["start_time"]
     if span.get("end_time"):
         line["end"] = span["end_time"]
-    contents = _contents(attrs)
+    contents = _contents(kind, attrs)
     if contents:
         line["contents"] = contents
     return line
@@ -129,9 +129,13 @@ def _int(value: Any) -> int:
         return 0
 
 
-def _contents(attrs: dict[str, Any]) -> list[dict[str, str]]:
+def _contents(kind: str, attrs: dict[str, Any]) -> list[dict[str, str]]:
+    # semconv.go reads input.value/output.value the same way: as a prompt and
+    # reply on an llm span, so the analyzer's improvise/faithfulness checks
+    # (which look for role "assistant") see it - and as tool io everywhere else.
+    in_role, out_role = ("user", "assistant") if kind == "llm" else ("input", "output")
     contents = []
-    for role, key in (("input", "input.value"), ("output", "output.value")):
+    for role, key in ((in_role, "input.value"), (out_role, "output.value")):
         body = attrs.get(key)
         if body in (None, ""):
             continue
