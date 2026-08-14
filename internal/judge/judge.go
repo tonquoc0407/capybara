@@ -153,6 +153,37 @@ func GradeTools(ctx context.Context, c Completer, request string, calls []ToolCa
 	return w.Wrong, nil
 }
 
+const relevanceSystem = "You judge whether an agent's final answer addresses the user's " +
+	"request. Given the REQUEST and the ANSWER, decide if the ANSWER is on-topic and " +
+	"responsive to what was asked - it need not be complete or correct, only relevant. " +
+	"Reply with ONLY a JSON object: " +
+	`{"relevant": true|false, "reason": "<why, only when not relevant>"}.`
+
+// GradeRelevance returns the judge's reason the answer did not address the
+// request; empty means relevant.
+func GradeRelevance(ctx context.Context, c Completer, request, answer string) (string, error) {
+	user := "REQUEST:\n" + request + "\n\nANSWER:\n" + answer
+	reply, err := c.Complete(ctx, relevanceSystem, user)
+	if err != nil {
+		return "", err
+	}
+	obj, err := extractJSON(reply)
+	if err != nil {
+		return "", err
+	}
+	var v struct {
+		Relevant bool   `json:"relevant"`
+		Reason   string `json:"reason"`
+	}
+	if err := json.Unmarshal([]byte(obj), &v); err != nil {
+		return "", fmt.Errorf("parse relevance verdict: %w", err)
+	}
+	if v.Relevant {
+		return "", nil
+	}
+	return v.Reason, nil
+}
+
 func extractJSON(reply string) (string, error) {
 	start := strings.IndexByte(reply, '{')
 	end := strings.LastIndexByte(reply, '}')

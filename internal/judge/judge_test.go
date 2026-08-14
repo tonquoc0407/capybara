@@ -101,3 +101,29 @@ func TestGradeToolsAllAppropriate(t *testing.T) {
 		t.Fatalf("got=%v err=%v", got, err)
 	}
 }
+
+func TestGradeRelevanceRelevant(t *testing.T) {
+	s := &stub{reply: `{"relevant": true, "reason": ""}`}
+	got, err := GradeRelevance(context.Background(), s, "what is the capital of France?", "Paris.")
+	if err != nil || got != "" {
+		t.Fatalf("got=%q err=%v", got, err)
+	}
+	if !strings.Contains(s.got, "REQUEST:") || !strings.Contains(s.got, "ANSWER:") {
+		t.Errorf("prompt missing sections: %q", s.got)
+	}
+}
+
+func TestGradeRelevanceOffTopic(t *testing.T) {
+	s := &stub{reply: `{"relevant": false, "reason": "answers a different question"}`}
+	got, err := GradeRelevance(context.Background(), s, "what is the capital of France?", "The weather is sunny today.")
+	if err != nil || got != "answers a different question" {
+		t.Fatalf("got=%q err=%v", got, err)
+	}
+}
+
+func TestGradeRelevanceNoJSON(t *testing.T) {
+	s := &stub{reply: "I cannot answer that."}
+	if _, err := GradeRelevance(context.Background(), s, "q", "a"); err == nil {
+		t.Fatal("expected error on reply with no json")
+	}
+}

@@ -1,0 +1,34 @@
+name: capybara agent findings
+description: Gate a pull request on capybara findings and post the reason as a PR comment.
+author: tonquoc0407
+
+inputs:
+  db:
+    description: path to the capybara database, already populated with a traced run
+    required: false
+    default: capybara.db
+  fail-on:
+    description: comma-separated finding types (or "any") to fail the job on
+    required: false
+    default: improvised,secret_leak,prompt_injection
+  version:
+    description: capybara version to install (a git tag, or "latest")
+    required: false
+    default: latest
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v6
+      with:
+        go-version: "1.25"
+
+    - shell: bash
+      run: go install github.com/tonquoc0407/capybara/cmd/capybara@${{ inputs.version }}
+
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        "${{ github.action_path }}/../scripts/post-findings-comment.sh" \
+          "${{ inputs.db }}" "${{ inputs.fail-on }}" "${{ github.event.pull_request.number }}"

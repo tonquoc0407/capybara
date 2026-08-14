@@ -134,7 +134,7 @@ The waterfall sorts spans by cost, so the turn that spent the money is the first
 
 ## What it looks for
 
-Findings are recorded, never enforced — analysis touches nothing outside the database, and only `findings --fail-on` turns a finding into a non-zero exit, when a CI job asks for it. Fourteen kinds: twelve deterministic and passive, two opt-in judges that send data to an endpoint you name.
+Findings are recorded, never enforced — analysis touches nothing outside the database, and only `findings --fail-on` turns a finding into a non-zero exit, when a CI job asks for it. Fifteen kinds: twelve deterministic and passive, three opt-in judges that send data to an endpoint you name.
 
 ### `improvised`
 
@@ -197,6 +197,10 @@ A second opt-in judge, over the tools a turn could call and the one it chose (`c
 
 If your tool has a declared schema, give it to the SDK with `capybara.schema("lookup_price", Price)`. The declared shape wins over the learned one, so the first violating call is a finding instead of a new version.
 
+### `off_topic`
+
+A third opt-in judge, over whether the run's final answer actually addresses its initial request (`capybara relevance`). Off by default, same caveat as `faithfulness` and `toolcheck`: the request and the answer leave the box.
+
 ### Scored
 
 The detectors are held to a labelled corpus under [`corpus/`](corpus): 28 runs, each a positive for one type or a near-miss that must stay clean — a hedged answer after a failed call, a document that discusses prompt injection without carrying one, prose about API keys with no live credential in it. `capybara eval` re-analyses them and scores precision, recall and F1 per type; on this corpus every deterministic type sits at 1.0, and `sh corpus/run.sh` fails CI if one slips. The inputs are curated, so this is a regression gate on the detectors' spec, not a measurement of live traffic.
@@ -217,13 +221,14 @@ The detectors are held to a labelled corpus under [`corpus/`](corpus): 28 runs, 
 | `capybara findings` | list findings; `--sarif`, `--fail-on` and `--baseline` gate CI |
 | `capybara faithfulness` | grade retrieval answers with an opt-in llm judge |
 | `capybara toolcheck` | grade tool selection with an opt-in llm judge |
+| `capybara relevance` | grade answer relevance with an opt-in llm judge |
 | `capybara eval` | score detectors against a labelled corpus (precision, recall) |
 | `capybara coverage` | report typed-span coverage and unmapped namespaces |
 | `capybara serve` | read-only web view |
 
 `findings --write-baseline` records the findings a run already carries; `findings --baseline <file>` then reports and gates only the ones absent from it, so CI fails on what a change introduced rather than on the standing total. A finding's identity is its run, span and type, so editing a detail is not a regression.
 
-[`demo/ci/agent-findings.yml`](demo/ci/agent-findings.yml) is a copyable workflow: gate a PR on `findings --fail-on` and post the reason as a comment, via [`scripts/post-findings-comment.sh`](scripts/post-findings-comment.sh).
+[`tonquoc0407/capybara/action`](action/action.yml) is a composite action that gates a PR on `findings --fail-on` and posts the reason as a comment; [`demo/ci/agent-findings.yml`](demo/ci/agent-findings.yml) shows it wired into a workflow around your own agent-test step.
 
 `replay` serves the recorded model responses and tool outputs back to the agent process, so nothing touches the network. Edit one tool result first and only the turns after it go live — that's how you ask what the agent would have done with the answer it should have got. A call that isn't in the recording stops the replay rather than running live.
 

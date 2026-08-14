@@ -17,20 +17,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-
-      - run: go install github.com/tonquoc0407/capybara/cmd/capybara@latest
-
       # Replace with whatever runs your agent against its test scenarios and
       # exports OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318, or points
       # capybara at a recorded trace with `capybara import`.
       - run: ./run-agent-tests.sh
 
-      - env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          scripts/post-findings-comment.sh capybara.db \
-            "improvised,secret_leak,prompt_injection" \
-            "${{ github.event.pull_request.number }}"
+      - uses: tonquoc0407/capybara/action@v0.4.1
+        with:
+          fail-on: improvised,secret_leak,prompt_injection
