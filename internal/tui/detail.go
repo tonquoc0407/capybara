@@ -191,7 +191,7 @@ func (m *detailModel) writeContents(b *strings.Builder) {
 func (m *detailModel) writeContentList(b *strings.Builder, contents []store.Content) {
 	for _, c := range contents {
 		b.WriteString(m.th.PaneTitle.Render(c.Role) + "\n")
-		body := c.Body
+		body := stripControl(c.Body)
 		truncated := false
 		if len(body) > maxRenderedBody {
 			body, truncated = body[:maxRenderedBody], true
@@ -286,6 +286,23 @@ func (m *detailModel) renderMarkdown(body string) string {
 		return body + "\n"
 	}
 	return strings.TrimLeft(out, "\n")
+}
+
+// stripControl removes C0/C1 control bytes other than newline and tab. Content
+// bodies come from whatever the traced agent recorded, so an ESC-sequence
+// payload (cursor moves, OSC 52 clipboard writes, OSC 8 hyperlink spoofing)
+// must not reach the terminal verbatim just because a user inspected a span.
+func stripControl(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '\n' || r == '\t':
+			return r
+		case r < 0x20 || r == 0x7f || (r >= 0x80 && r <= 0x9f):
+			return -1
+		default:
+			return r
+		}
+	}, s)
 }
 
 func prettyJSON(body string) string {

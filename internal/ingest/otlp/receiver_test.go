@@ -184,6 +184,39 @@ func TestHTTPExportGzippedProto(t *testing.T) {
 	wantOneChatSpan(t, st)
 }
 
+// A gzip bomb inflates to far more than it sent, so the cap has to apply to
+// the decompressed stream, not just the wire size.
+func TestHTTPCapsDecompressedBodySize(t *testing.T) {
+	st := openTemp(t)
+	srv := httptest.NewServer(New(st, true).handler())
+	defer srv.Close()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	filler := bytes.Repeat([]byte{'a'}, 1<<20)
+	for range 70 { // 70 MiB decompressed, over the 64 MiB cap
+		if _, err := gz.Write(filler); err != nil {
+			t.Fatalf("gzip: %v", err)
+		}
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatalf("gzip close: %v", err)
+	}
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/v1/traces", &buf)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	req.Header.Set("Content-Encoding", "gzip")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("post: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("decompressed body exceeded the cap but the request still succeeded")
+	}
+}
+
 func TestHTTPRejectsUnknownContentType(t *testing.T) {
 	st := openTemp(t)
 	srv := httptest.NewServer(New(st, true).handler())

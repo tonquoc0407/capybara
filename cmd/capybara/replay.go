@@ -48,6 +48,10 @@ func replayCmd(ctx context.Context, dbPath string, capture bool, args []string, 
 	if err != nil {
 		return err
 	}
+	// The entrypoint comes from whatever process recorded the run - an
+	// imported db from someone else names a binary this box did not choose,
+	// so name it before running it rather than executing it silently.
+	fmt.Fprintf(os.Stderr, "capybara: replaying %v in %s\n", m.Entrypoint, m.Cwd)
 	if err := replay.Run(ctx, st, m, capture); err != nil {
 		return err
 	}

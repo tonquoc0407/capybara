@@ -38,6 +38,33 @@ func TestDetailRendersContents(t *testing.T) {
 	}
 }
 
+func TestStripControlKeepsNewlinesAndTabsDropsEscapes(t *testing.T) {
+	in := "line one\n\tindented\x1b[31mred\x1b]52;c;AAAA\x07\x7fend"
+	got := stripControl(in)
+	if strings.ContainsAny(got, "\x1b\x07\x7f") {
+		t.Errorf("stripControl left a control byte: %q", got)
+	}
+	if !strings.Contains(got, "line one\n\tindented") {
+		t.Errorf("stripControl dropped newline/tab: %q", got)
+	}
+}
+
+// A tool response is agent-controlled; an embedded OSC/CSI sequence must be
+// stripped before it reaches the terminal via the detail view, not just via
+// the stripControl unit above.
+func TestDetailStripsControlBytesFromContent(t *testing.T) {
+	m := newDetail(theme.Bara())
+	m.setSize(60, 20)
+	sp := span("tool1", "root", store.KindTool, "lookup", 1, 2)
+	m.setSpan(sp, []store.Content{
+		{SpanID: "tool1", Role: "output", Seq: 0, Body: "safe\x1b]8;;http://evil\x07spoofed\x1b\\", MediaType: "text/plain"},
+	}, nil)
+	out := m.view()
+	if strings.Contains(out, "\x1b]8") {
+		t.Errorf("view leaked a raw OSC 8 sequence:\n%q", out)
+	}
+}
+
 func TestDetailRawAttrsToggle(t *testing.T) {
 	m := testDetail()
 	m.update(press("a"))

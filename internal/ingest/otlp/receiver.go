@@ -186,7 +186,13 @@ func (r *Receiver) handler() http.Handler {
 	return mux
 }
 
+// maxHTTPBody matches the grpc receiver's MaxRecvMsgSize: an unbounded read
+// here, compressed or not, lets an untrusted sender exhaust memory with one
+// request.
+const maxHTTPBody = 64 << 20
+
 func (r *Receiver) handleTraces(w http.ResponseWriter, req *http.Request) {
+	req.Body = http.MaxBytesReader(w, req.Body, maxHTTPBody)
 	var body io.Reader = req.Body
 	if req.Header.Get("Content-Encoding") == "gzip" {
 		gz, err := gzip.NewReader(req.Body)
@@ -195,7 +201,7 @@ func (r *Receiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		defer gz.Close()
-		body = gz
+		body = io.LimitReader(gz, maxHTTPBody)
 	}
 	raw, err := io.ReadAll(body)
 	if err != nil {
