@@ -9,7 +9,9 @@ Notes on capybara's own attack surface:
 
 - `capybara import`, `serve`, and the OTLP receiver parse untrusted trace data by
   design (traces come from whatever agent you point at capybara). Malformed input
-  should produce a finding or an error, never a crash.
+  should produce a finding or an error, never a crash. The two file-based parsers
+  (generic jsonl import, the Claude Code session tailer) are fuzz-tested weekly
+  in CI against that guarantee.
 - The judge commands (`faithfulness`, `toolcheck`, `relevance`) send run content to
   an external LLM endpoint. They are off by default and only activate when
   `--url`/`--model` or `CAPYBARA_JUDGE_*` env vars are set.

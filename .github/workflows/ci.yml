@@ -33,6 +33,24 @@ jobs:
           version: "0.15.22"
       - run: ruff format --check .
 
+  govulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: golang/govulncheck-action@v1
+        with:
+          go-version-file: go.mod
+
+  test-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: pip install pytest
+      - run: pytest scripts/
+
   test:
     strategy:
       fail-fast: false

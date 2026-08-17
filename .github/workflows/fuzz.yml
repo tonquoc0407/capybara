@@ -1,0 +1,35 @@
+name: fuzz
+
+# Fuzz targets exercise the two untrusted-input parsers directly: capybara
+# import's generic jsonl and the Claude Code session tailer. `go test ./...`
+# already runs their seed corpus as ordinary test cases on every push; this
+# workflow does the actual mutation, on a schedule rather than per-PR since
+# fuzzing time is unbounded and shouldn't gate merges.
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { pkg: "./internal/ingest/intake/...", name: FuzzImportJSONL }
+          - { pkg: "./internal/ingest/claude/...", name: FuzzProcess }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: go test ${{ matrix.target.pkg }} -run '^$' -fuzz '^${{ matrix.target.name }}$' -fuzztime 5m
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: crashers-${{ matrix.target.name }}
+          path: "**/testdata/fuzz/${{ matrix.target.name }}/*"
