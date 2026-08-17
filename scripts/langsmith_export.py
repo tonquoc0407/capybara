@@ -12,6 +12,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
+_PAGE_LIMIT = 100
+
 _KIND_BY_RUN_TYPE = {
     "LLM": "llm",
     "EMBEDDING": "llm",
@@ -19,6 +21,26 @@ _KIND_BY_RUN_TYPE = {
     "CHAIN": "agent",
     "RETRIEVER": "retrieval",
 }
+
+# v1 is deprecated in LangSmith's own OpenAPI spec; v2 requires project
+# scoping on every run query (there is no still-supported way to resolve a
+# trace's project from the trace id alone), so --project-id is required
+# rather than guessed. Only the fields _span_line reads are selected; v2
+# returns just `id` for anything left off this list.
+_SELECTS = [
+    "TRACE_ID",
+    "PARENT_RUN_IDS",
+    "RUN_TYPE",
+    "NAME",
+    "STATUS",
+    "START_TIME",
+    "END_TIME",
+    "PROMPT_TOKENS",
+    "COMPLETION_TOKENS",
+    "INPUTS",
+    "OUTPUTS",
+    "METADATA",
+]
 
 
 @dataclass
@@ -34,7 +56,7 @@ def main() -> None:
     try:
         for trace_id in args.trace_id:
             n = 0
-            for run in _runs(cfg, trace_id):
+            for run in _runs(cfg, args.project_id, trace_id):
                 out.write(json.dumps(_span_line(run), ensure_ascii=False) + "\n")
                 n += 1
             if n == 0:
@@ -48,6 +70,11 @@ def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("trace_id", nargs="+", help="trace id(s) to export")
     p.add_argument(
+        "--project-id",
+        default=os.environ.get("LANGSMITH_PROJECT_ID"),
+        help="tracing project UUID that owns the trace (LangSmith UI project settings)",
+    )
+    p.add_argument(
         "--host",
         default=os.environ.get("LANGSMITH_ENDPOINT", "https://api.smith.langchain.com"),
     )
@@ -56,14 +83,30 @@ def _parse_args() -> argparse.Namespace:
     args = p.parse_args()
     if not args.api_key:
         p.error("no api key: pass --api-key or set LANGSMITH_API_KEY")
+    if not args.project_id:
+        p.error("no project id: pass --project-id or set LANGSMITH_PROJECT_ID")
     return args
 
 
-def _runs(cfg: Config, trace_id: str) -> list[dict[str, Any]]:
-    # Filtering by trace disables the query's cursor pagination entirely
-    # (LangSmith's own /runs/query docs), so one call returns the whole trace.
-    body = _post(cfg, "/api/v1/runs/query", {"trace": trace_id})
-    return body.get("runs", [])
+def _runs(cfg: Config, project_id: str, trace_id: str):
+    cursor = None
+    while True:
+        payload = {
+            "project_ids": [project_id],
+            "trace_id": trace_id,
+            "page_size": _PAGE_LIMIT,
+            "selects": _SELECTS,
+        }
+        if cursor:
+            payload["cursor"] = cursor
+        body = _post(cfg, "/api/v2/runs/query", payload)
+        items = body.get("items", [])
+        if not items:
+            return
+        yield from items
+        cursor = body.get("next_cursor")
+        if not cursor:
+            return
 
 
 def _post(cfg: Config, path: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -82,18 +125,23 @@ def _post(cfg: Config, path: str, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _span_line(run: dict[str, Any]) -> dict[str, Any]:
-    metadata = ((run.get("extra") or {}).get("metadata")) or {}
+    # v2 moved metadata out of a nested `extra.metadata`; the `ls_model_name`/
+    # `ls_provider` keys themselves are a LangChain tracer convention, not
+    # part of LangSmith's documented schema, so this location is inferred
+    # from the field's new top-level position, not spec-confirmed.
+    metadata = run.get("metadata") or {}
     kind = _KIND_BY_RUN_TYPE.get(str(run.get("run_type", "")).upper(), "other")
     name = run.get("name") or ""
+    parents = run.get("parent_run_ids") or []
     line: dict[str, Any] = {
         "run": run.get("trace_id", ""),
         "span": run.get("id", ""),
-        "parent": run.get("parent_run_id") or "",
+        "parent": parents[-1] if parents else "",
         "kind": kind,
         "name": name,
         "tokens_in": _int(run.get("prompt_tokens")),
         "tokens_out": _int(run.get("completion_tokens")),
-        "status": "error" if run.get("status") == "error" else "ok",
+        "status": "error" if run.get("status") == "ERROR" else "ok",
         "model": metadata.get("ls_model_name") or "",
         "provider": metadata.get("ls_provider") or "",
         "attrs": {},

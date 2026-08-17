@@ -10,11 +10,11 @@ def _run(**over: object) -> dict:
     base = {
         "id": "run-1",
         "trace_id": "t1",
-        "parent_run_id": None,
+        "parent_run_ids": [],
         "name": "chat",
         "run_type": "llm",
-        "status": "success",
-        "extra": {},
+        "status": "SUCCESS",
+        "metadata": {},
     }
     base.update(over)
     return base
@@ -47,8 +47,13 @@ def test_ids_use_trace_id_and_run_id() -> None:
 
 
 def test_missing_parent_becomes_empty_string() -> None:
-    assert le._span_line(_run(parent_run_id=None))["parent"] == ""
-    assert le._span_line(_run(parent_run_id="p1"))["parent"] == "p1"
+    assert le._span_line(_run(parent_run_ids=[]))["parent"] == ""
+
+
+def test_parent_is_the_last_of_parent_run_ids() -> None:
+    # v2 returns the full ancestor chain root..direct-parent, not a single id.
+    line = le._span_line(_run(parent_run_ids=["root", "mid", "p1"]))
+    assert line["parent"] == "p1"
 
 
 def test_tool_kind_uses_run_name() -> None:
@@ -59,15 +64,15 @@ def test_non_tool_kind_has_no_tool_field() -> None:
     assert "tool" not in le._span_line(_run(run_type="llm"))
 
 
-def test_reads_model_and_provider_from_extra_metadata() -> None:
-    run = _run(extra={"metadata": {"ls_model_name": "gpt-4o", "ls_provider": "openai"}})
+def test_reads_model_and_provider_from_metadata() -> None:
+    run = _run(metadata={"ls_model_name": "gpt-4o", "ls_provider": "openai"})
     line = le._span_line(run)
     assert line["model"] == "gpt-4o"
     assert line["provider"] == "openai"
 
 
-def test_missing_extra_metadata_defaults_to_empty_strings() -> None:
-    line = le._span_line(_run(extra=None))
+def test_missing_metadata_defaults_to_empty_strings() -> None:
+    line = le._span_line(_run(metadata=None))
     assert line["model"] == ""
     assert line["provider"] == ""
 
@@ -89,9 +94,10 @@ def test_non_numeric_token_count_defaults_to_zero() -> None:
 
 
 def test_error_status_maps_to_error_others_stay_ok() -> None:
-    assert le._span_line(_run(status="error"))["status"] == "error"
-    assert le._span_line(_run(status="success"))["status"] == "ok"
-    assert le._span_line(_run(status="pending"))["status"] == "ok"
+    # v2's RunStatus enum is uppercase: SUCCESS, ERROR, PENDING.
+    assert le._span_line(_run(status="ERROR"))["status"] == "error"
+    assert le._span_line(_run(status="SUCCESS"))["status"] == "ok"
+    assert le._span_line(_run(status="PENDING"))["status"] == "ok"
 
 
 def test_missing_timestamps_are_omitted() -> None:
@@ -132,19 +138,21 @@ def _mock_response(body: dict) -> MagicMock:
     return cm
 
 
-def test_post_sends_api_key_header_and_trace_filter() -> None:
+def test_runs_sends_api_key_header_project_and_trace_filter() -> None:
     cfg = le.Config(host="https://x.test", api_key="k")
     captured = {}
 
     def fake_urlopen(req):
         captured["auth"] = req.get_header("X-api-key")
         captured["body"] = json.loads(req.data)
-        return _mock_response({"runs": []})
+        return _mock_response({"items": [], "next_cursor": None})
 
     with patch("urllib.request.urlopen", side_effect=fake_urlopen):
-        le._runs(cfg, "t1")
+        list(le._runs(cfg, "proj-1", "t1"))
     assert captured["auth"] == "k"
-    assert captured["body"] == {"trace": "t1"}
+    assert captured["body"]["project_ids"] == ["proj-1"]
+    assert captured["body"]["trace_id"] == "t1"
+    assert captured["body"]["selects"] == le._SELECTS
 
 
 def test_post_wraps_http_error_as_system_exit() -> None:
@@ -152,16 +160,35 @@ def test_post_wraps_http_error_as_system_exit() -> None:
     err = urllib.error.HTTPError("https://x.test", 401, "Unauthorized", None, None)
     with patch("urllib.request.urlopen", side_effect=err):
         try:
-            le._post(cfg, "/api/v1/runs/query", {})
+            le._post(cfg, "/api/v2/runs/query", {})
             raise AssertionError("expected SystemExit")
         except SystemExit:
             pass
 
 
-def test_runs_returns_query_response_runs() -> None:
+def test_runs_returns_query_response_items() -> None:
     cfg = le.Config(host="https://x.test", api_key="k")
     with patch(
         "urllib.request.urlopen",
-        return_value=_mock_response({"runs": [{"id": "a"}, {"id": "b"}]}),
+        return_value=_mock_response(
+            {"items": [{"id": "a"}, {"id": "b"}], "next_cursor": None}
+        ),
     ):
-        assert [r["id"] for r in le._runs(cfg, "t1")] == ["a", "b"]
+        assert [r["id"] for r in le._runs(cfg, "proj-1", "t1")] == ["a", "b"]
+
+
+def test_runs_follows_next_cursor_until_absent() -> None:
+    cfg = le.Config(host="https://x.test", api_key="k")
+    page1 = {"items": [{"id": "a"}], "next_cursor": "c2"}
+    page2 = {"items": [{"id": "b"}], "next_cursor": None}
+    with patch.object(le, "_post", side_effect=[page1, page2]) as post:
+        assert [r["id"] for r in le._runs(cfg, "proj-1", "t1")] == ["a", "b"]
+    assert post.call_args_list[1].args[2]["cursor"] == "c2"
+
+
+def test_runs_stops_on_empty_page() -> None:
+    cfg = le.Config(host="https://x.test", api_key="k")
+    with patch.object(
+        le, "_post", return_value={"items": [], "next_cursor": "should-be-ignored"}
+    ):
+        assert list(le._runs(cfg, "proj-1", "t1")) == []

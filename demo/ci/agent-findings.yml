@@ -22,6 +22,6 @@ jobs:
       # capybara at a recorded trace with `capybara import`.
       - run: ./run-agent-tests.sh
 
-      - uses: tonquoc0407/capybara/action@v0.4.1
+      - uses: tonquoc0407/capybara/action@main # repin to a tag once one includes action/action.yml
         with:
           fail-on: improvised,secret_leak,prompt_injection
