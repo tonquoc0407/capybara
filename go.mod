@@ -10,7 +10,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834
 	github.com/charmbracelet/x/exp/teatest v0.0.0-20260720091843-3eef36eaaa28
 	github.com/fsnotify/fsnotify v1.10.1
-	go.opentelemetry.io/collector/pdata v1.63.0
+	go.opentelemetry.io/collector/pdata v1.64.0
 	google.golang.org/grpc v1.82.1
 	modernc.org/sqlite v1.54.0
 )
@@ -55,12 +55,12 @@ require (
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yuin/goldmark v1.7.17 // indirect
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
-	go.opentelemetry.io/collector/featuregate v1.63.0 // indirect
+	go.opentelemetry.io/collector/featuregate v1.64.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
-	golang.org/x/text v0.39.0 // indirect
+	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260414002931-afd174a4e478 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	modernc.org/libc v1.74.1 // indirect
