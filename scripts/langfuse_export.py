@@ -16,6 +16,11 @@ from urllib.parse import urlencode
 
 _PAGE_LIMIT = 100
 
+# v1 stops serving 2026-11-16 in favor of v2's cursor pagination and
+# field-group selection; request every group this script reads (v2 only
+# returns core+basic unless asked).
+_FIELD_GROUPS = "core,basic,io,usage,model,metrics"
+
 _KIND_BY_TYPE = {
     "AGENT": "agent",
     "TOOL": "tool",
@@ -75,24 +80,19 @@ def _require_env(name: str) -> str:
 
 
 def _observations(cfg: Config, trace_id: str):
-    page = 1
+    cursor = None
     while True:
-        body = _get(
-            cfg,
-            "/api/public/observations",
-            {
-                "traceId": trace_id,
-                "page": page,
-                "limit": _PAGE_LIMIT,
-            },
-        )
+        params = {"traceId": trace_id, "limit": _PAGE_LIMIT, "fields": _FIELD_GROUPS}
+        if cursor:
+            params["cursor"] = cursor
+        body = _get(cfg, "/api/public/v2/observations", params)
         items = body.get("data", [])
         if not items:
             return
         yield from items
-        if len(items) < _PAGE_LIMIT:
+        cursor = (body.get("meta") or {}).get("cursor")
+        if not cursor:
             return
-        page += 1
 
 
 def _get(cfg: Config, path: str, params: dict[str, Any]) -> dict[str, Any]:
@@ -132,7 +132,7 @@ def _span_line(trace_id: str, obs: dict[str, Any]) -> dict[str, Any]:
         line["start"] = obs["startTime"]
     if obs.get("endTime"):
         line["end"] = obs["endTime"]
-    contents = _contents(obs)
+    contents = _contents(kind, obs)
     if contents:
         line["contents"] = contents
     return line
@@ -149,10 +149,13 @@ def _attrs(obs: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in attrs.items() if v not in (None, "")}
 
 
-def _contents(obs: dict[str, Any]) -> list[dict[str, str]]:
+def _contents(kind: str, obs: dict[str, Any]) -> list[dict[str, str]]:
+    # capybara's analyzers (improvise, faithfulness) read an llm span's answer
+    # off role "assistant"; everything else is tool-shaped "input"/"output".
+    in_role, out_role = ("user", "assistant") if kind == "llm" else ("input", "output")
     contents = []
-    for role in ("input", "output"):
-        body = obs.get(role)
+    for role, key in ((in_role, "input"), (out_role, "output")):
+        body = obs.get(key)
         if body in (None, ""):
             continue
         text = body if isinstance(body, str) else json.dumps(body, ensure_ascii=False)

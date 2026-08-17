@@ -59,17 +59,38 @@ def test_missing_timestamps_are_omitted_not_sent_blank() -> None:
     assert "end" not in line
 
 
-def test_object_input_output_serialize_to_json_text() -> None:
-    line = le._span_line("run", {"id": "s", "input": {"sku": "AAPL"}, "output": [1, 2]})
+def test_tool_object_input_output_serialize_to_json_text() -> None:
+    line = le._span_line(
+        "run", {"id": "s", "type": "TOOL", "input": {"sku": "AAPL"}, "output": [1, 2]}
+    )
     bodies = {c["role"]: c["body"] for c in line["contents"]}
     assert json.loads(bodies["input"]) == {"sku": "AAPL"}
     assert json.loads(bodies["output"]) == [1, 2]
 
 
-def test_string_input_output_pass_through_unquoted() -> None:
-    line = le._span_line("run", {"id": "s", "input": "hi", "output": "there"})
+def test_tool_string_input_output_pass_through_unquoted() -> None:
+    line = le._span_line(
+        "run", {"id": "s", "type": "TOOL", "input": "hi", "output": "there"}
+    )
     bodies = {c["role"]: c["body"] for c in line["contents"]}
     assert bodies == {"input": "hi", "output": "there"}
+
+
+def test_generation_input_output_become_user_assistant_contents() -> None:
+    line = le._span_line(
+        "run", {"id": "s", "type": "GENERATION", "input": "hi", "output": "hello"}
+    )
+    bodies = {c["role"]: c["body"] for c in line["contents"]}
+    assert bodies == {"user": "hi", "assistant": "hello"}
+
+
+def test_embedding_input_output_become_user_assistant_contents() -> None:
+    line = le._span_line(
+        "run", {"id": "s", "type": "EMBEDDING", "input": "hi", "output": [0.1, 0.2]}
+    )
+    bodies = {c["role"]: c["body"] for c in line["contents"]}
+    assert bodies["user"] == "hi"
+    assert json.loads(bodies["assistant"]) == [0.1, 0.2]
 
 
 def test_no_input_output_omits_contents_key() -> None:
@@ -98,7 +119,7 @@ def test_get_sends_basic_auth_and_query_params() -> None:
         return _mock_response({"data": []})
 
     with patch("urllib.request.urlopen", side_effect=fake_urlopen):
-        le._get(cfg, "/api/public/observations", {"traceId": "t1", "page": 1})
+        le._get(cfg, "/api/public/v2/observations", {"traceId": "t1", "limit": 100})
 
     assert "traceId=t1" in captured["url"]
     assert captured["auth"].startswith("Basic ")
@@ -109,25 +130,36 @@ def test_get_wraps_http_error_as_system_exit() -> None:
     err = urllib.error.HTTPError("https://x.test", 401, "Unauthorized", None, None)
     with patch("urllib.request.urlopen", side_effect=err):
         try:
-            le._get(cfg, "/api/public/observations", {})
+            le._get(cfg, "/api/public/v2/observations", {})
             raise AssertionError("expected SystemExit")
         except SystemExit:
             pass
 
 
-def test_pagination_stops_at_a_short_page() -> None:
+def test_pagination_follows_meta_cursor_until_absent() -> None:
     cfg = le.Config(host="https://x.test", public_key="pk", secret_key="sk")
-    full_page = {"data": [{"id": f"o{i}"} for i in range(le._PAGE_LIMIT)]}
-    last_page = {"data": [{"id": "last"}]}
-    with patch.object(le, "_get", side_effect=[full_page, last_page]):
+    page1 = {"data": [{"id": "a"}], "meta": {"cursor": "c2"}}
+    page2 = {"data": [{"id": "b"}], "meta": {"cursor": None}}
+    with patch.object(le, "_get", side_effect=[page1, page2]) as get:
         obs = list(le._observations(cfg, "t1"))
-    assert [o["id"] for o in obs] == [f"o{i}" for i in range(le._PAGE_LIMIT)] + ["last"]
+    assert [o["id"] for o in obs] == ["a", "b"]
+    # the second call must carry the cursor the first response returned
+    assert get.call_args_list[1].args[2]["cursor"] == "c2"
 
 
 def test_pagination_stops_on_empty_page() -> None:
     cfg = le.Config(host="https://x.test", public_key="pk", secret_key="sk")
     with patch.object(le, "_get", return_value={"data": []}):
         assert list(le._observations(cfg, "t1")) == []
+
+
+def test_observations_requests_the_field_groups_it_reads() -> None:
+    cfg = le.Config(host="https://x.test", public_key="pk", secret_key="sk")
+    with patch.object(le, "_get", return_value={"data": []}) as get:
+        list(le._observations(cfg, "t1"))
+    params = get.call_args.args[2]
+    assert params["fields"] == le._FIELD_GROUPS
+    assert params["traceId"] == "t1"
 
 
 def test_require_env_raises_clearly_when_missing(monkeypatch) -> None:
