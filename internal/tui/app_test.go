@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -180,6 +181,32 @@ func TestAppEditRejectsSpansWithoutToolOutput(t *testing.T) {
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")}) // agent span
 	waitFor(t, tm, "e edits a tool span")
 	quitApp(t, tm)
+}
+
+func TestStatusViewShowsHintUntilFirstTabOrEnter(t *testing.T) {
+	m := newApp(seededStore(t), theme.Bara(), nil, true)
+	m.width, m.height = 110, 32
+	m.layout()
+	if !strings.Contains(m.statusView(), "tab: switch panes") {
+		t.Error("hint missing before any tab/enter")
+	}
+	model, _ := m.handleKey(tea.KeyMsg{Type: tea.KeyTab})
+	m = model.(appModel)
+	if strings.Contains(m.statusView(), "tab: switch panes") {
+		t.Error("hint still shown after the first tab press")
+	}
+}
+
+func TestPaneMarksOnlyTheFocusedOne(t *testing.T) {
+	m := newApp(seededStore(t), theme.Bara(), nil, true)
+	focused := m.pane("runs", "body", 30, 10, true)
+	unfocused := m.pane("runs", "body", 30, 10, false)
+	if !strings.Contains(focused, "> runs") {
+		t.Errorf("focused pane has no > marker:\n%s", focused)
+	}
+	if strings.Contains(unfocused, "> runs") {
+		t.Errorf("unfocused pane carries the > marker:\n%s", unfocused)
+	}
 }
 
 func TestAppHelpOverlay(t *testing.T) {

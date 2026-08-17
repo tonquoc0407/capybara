@@ -426,14 +426,24 @@ func spanDuration(sp store.Span) string {
 	if sp.StartedAt.IsZero() || sp.EndedAt.IsZero() {
 		return ""
 	}
-	d := sp.EndedAt.Sub(sp.StartedAt)
+	return humanDur(sp.EndedAt.Sub(sp.StartedAt))
+}
+
+// humanDur renders a duration ms..s..m..h..d, so a span or run that ran for
+// days (a resumed Claude Code session, say) reads as one rather than as an
+// unbounded minute count.
+func humanDur(d time.Duration) string {
 	switch {
 	case d < time.Second:
 		return fmt.Sprintf("%dms", d.Milliseconds())
 	case d < time.Minute:
 		return fmt.Sprintf("%.1fs", d.Seconds())
-	default:
+	case d < time.Hour:
 		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+	default:
+		return fmt.Sprintf("%dd%02dh", int(d.Hours())/24, int(d.Hours())%24)
 	}
 }
 

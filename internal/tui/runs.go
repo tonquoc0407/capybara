@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -109,14 +110,7 @@ func shortModel(model string) string {
 }
 
 func humanDuration(seconds float64) string {
-	switch {
-	case seconds < 1:
-		return fmt.Sprintf("%dms", int(seconds*1000))
-	case seconds < 60:
-		return fmt.Sprintf("%.1fs", seconds)
-	default:
-		return fmt.Sprintf("%dm%02ds", int(seconds)/60, int(seconds)%60)
-	}
+	return humanDur(time.Duration(seconds * float64(time.Second)))
 }
 
 type runsModel struct {

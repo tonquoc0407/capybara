@@ -143,6 +143,7 @@ type appModel struct {
 	findings    map[string][]store.Finding
 	notice      string
 	lastErr     error
+	hintSeen    bool
 }
 
 func newApp(st *store.Store, th theme.Theme, events <-chan struct{}, captureContent bool) appModel {
@@ -341,6 +342,9 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		(m.focus == focusRuns && m.runs.typing())
 	if !typing {
 		m.notice = ""
+		if s := msg.String(); s == "tab" || s == "shift+tab" || s == "enter" {
+			m.hintSeen = true
+		}
 		switch {
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
@@ -549,10 +553,15 @@ func (m appModel) middleSelected() (store.Span, bool) {
 
 // paneWidths splits the row: a narrow run column, then the middle and detail
 // panes sharing what is left.
+// paneGap is the blank column, or row, left between two panes: bordered boxes
+// flush against each other read as one smudged block, not three panes.
+const paneGap = 1
+
 func (m appModel) paneWidths() (runs, middle, detail int) {
-	runs = min(max(m.width/5, 18), 34)
-	middle = (m.width - runs) * 52 / 100
-	return runs, middle, m.width - runs - middle
+	avail := m.width - 2*paneGap
+	runs = min(max(avail/5, 18), 34)
+	middle = (avail - runs) * 52 / 100
+	return runs, middle, avail - runs - middle
 }
 
 // paneChrome is what a pane spends on itself: two border columns and a column
@@ -575,7 +584,10 @@ func (m appModel) paneHeights(total int) (list, summary int) {
 	if list > total-3 {
 		list = total
 	}
-	return list, total - list
+	// The row reserved here for paneGap is wasted when the summary does not
+	// render (list == total), which costs one blank row - cheaper than
+	// threading a "will it render" answer back through this split.
+	return list, total - list - paneGap
 }
 
 func (m *appModel) layout() {
@@ -629,26 +641,33 @@ func (m appModel) View() string {
 	}
 	left := m.pane("runs", m.runs.view(), runsW, listH, m.focus == focusRuns)
 	if summaryH >= 3 {
-		left = lipgloss.JoinVertical(lipgloss.Left, left,
+		left = lipgloss.JoinVertical(lipgloss.Left, left, "",
 			m.pane("run", m.summaryView(runsW-paneChrome), runsW, summaryH, false))
 	}
+	gapCol := lipgloss.NewStyle().Width(paneGap).Height(paneH).Render("")
 	panes := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		left,
+		gapCol,
 		m.pane(middleTitle, middleView, middleW, paneH, m.focus == focusTree),
+		gapCol,
 		m.pane("detail", m.detail.view(), detailW, paneH, m.focus == focusDetail),
 	)
 	return m.headerView() + "\n" + panes + "\n" + statusView
 }
 
 func (m appModel) pane(title, content string, w, h int, focused bool) string {
-	border := m.th.Border
+	border, frame := m.th.Border, lipgloss.NormalBorder()
+	// A color change alone is easy to miss on a low-contrast terminal; the
+	// focused pane also gets a heavier frame and a leading marker, so which
+	// pane j/k will move is never a guess.
 	if focused {
-		border = m.th.BorderFocus
+		border, frame = m.th.BorderFocus, lipgloss.ThickBorder()
+		title = "> " + title
 	}
 	inner := m.th.PaneTitle.Render(truncate(title, max(1, w-paneChrome))) + "\n" + content
 	return border.
-		Border(lipgloss.NormalBorder()).
+		Border(frame).
 		Padding(0, 1).
 		Width(w - 2).
 		Height(h - 2).
@@ -677,6 +696,10 @@ func (m appModel) headerView() string {
 
 func (m appModel) statusView() string {
 	line := m.help.View(m.keys)
+	if !m.hintSeen {
+		hint := truncate("tab: switch panes  enter: expand  ?: help", m.width/2)
+		line = m.th.Dim.Render(hint) + m.th.StatusBar.Render(" | ") + line
+	}
 	if m.diffMark != "" && m.mode != viewDiff {
 		line = m.th.Accent.Render("diff "+shortID(m.diffMark)+": select second run, press d") +
 			m.th.StatusBar.Render(" | ") + line
