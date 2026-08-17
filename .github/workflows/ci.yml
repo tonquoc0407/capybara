@@ -83,7 +83,7 @@ jobs:
         working-directory: sdk
     steps:
       - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           version: "0.11.25"
       - run: uv sync --extra dev --locked --python ${{ matrix.python }}
