@@ -7,12 +7,17 @@ import os
 import sys
 from typing import TYPE_CHECKING
 
+from opentelemetry import metrics as metrics_api
 from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+from ._metrics import INTERVAL_MS, ActiveSpans, add_gauges
 from ._schema import SchemaSpanProcessor
 
 if TYPE_CHECKING:
@@ -54,8 +59,14 @@ def init(
     *,
     service_name: str = "capybara",
     endpoint: str | None = None,
+    metrics: bool | None = None,
 ) -> TracerProvider:
-    """Export spans to a local capybara, reusing any provider already installed."""
+    """Export spans to a local capybara, reusing any provider already installed.
+
+    metrics defaults to on for a local capybara and off for any other
+    collector: the readings carry a span id, and that is a cardinality a real
+    metrics backend should not be handed without being asked.
+    """
     global _configured
     provider = trace.get_tracer_provider()
     if not isinstance(provider, TracerProvider):
@@ -64,10 +75,39 @@ def init(
         )
         trace.set_tracer_provider(provider)
     if not _configured:
+        resolved = _resolved_endpoint(endpoint)
         provider.add_span_processor(EntrypointSpanProcessor())
         provider.add_span_processor(SchemaSpanProcessor())
         provider.add_span_processor(
-            BatchSpanProcessor(OTLPSpanExporter(endpoint=_resolved_endpoint(endpoint)))
+            BatchSpanProcessor(OTLPSpanExporter(endpoint=resolved))
         )
+        if metrics is None:
+            metrics = resolved == DEFAULT_ENDPOINT
+        if metrics:
+            _start_metrics(service_name, resolved)
         _configured = True
     return provider
+
+
+def _start_metrics(service_name: str, traces_endpoint: str | None) -> None:
+    active = ActiveSpans()
+    provider = trace.get_tracer_provider()
+    if isinstance(provider, TracerProvider):
+        provider.add_span_processor(active)
+    reader = PeriodicExportingMetricReader(
+        OTLPMetricExporter(endpoint=_metrics_endpoint(traces_endpoint)),
+        export_interval_millis=INTERVAL_MS,
+    )
+    meters = MeterProvider(
+        resource=Resource.create({"service.name": service_name}),
+        metric_readers=[reader],
+    )
+    metrics_api.set_meter_provider(meters)
+    add_gauges(meters, active)
+
+
+def _metrics_endpoint(traces_endpoint: str | None) -> str | None:
+    """None again lets the exporter read OTEL_EXPORTER_OTLP_* for itself."""
+    if traces_endpoint is None:
+        return None
+    return traces_endpoint.removesuffix("/v1/traces") + "/v1/metrics"

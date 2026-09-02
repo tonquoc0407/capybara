@@ -39,8 +39,8 @@ def test_init_is_idempotent(monkeypatch) -> None:
     monkeypatch.setattr(existing, "add_span_processor", lambda p: added.append(p))
     otel._configured = False
 
-    otel.init()
-    otel.init()
+    otel.init(metrics=False)
+    otel.init(metrics=False)
     assert len(added) == 3  # entrypoint + schema processors and exporter, added once
 
 
