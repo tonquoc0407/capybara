@@ -134,7 +134,7 @@ The waterfall sorts spans by cost, so the turn that spent the money is the first
 
 ## What it looks for
 
-Findings are recorded, never enforced — analysis touches nothing outside the database, and only `findings --fail-on` turns a finding into a non-zero exit, when a CI job asks for it. Fifteen kinds: twelve deterministic and passive, three opt-in judges that send data to an endpoint you name.
+Findings are recorded, never enforced — analysis touches nothing outside the database, and only `findings --fail-on` turns a finding into a non-zero exit, when a CI job asks for it. Sixteen kinds: thirteen deterministic and passive, three opt-in judges that send data to an endpoint you name.
 
 ### `improvised`
 
@@ -174,6 +174,12 @@ The loop check's multi-turn cousin, reading the model's output instead of its to
 ### `cost_spike`
 
 Marks a turn burning several times the run's own rolling baseline.
+
+### `orphaned_span`
+
+Marks where a run stopped responding. A span reaches capybara only when it ends, so a process killed inside one — an out-of-memory kill, a `SIGKILL` — exports nothing for it, and the run sits at "running" forever with no clue which step it died in. The SDK samples process CPU and memory on its own timer and tags each reading with the span that was executing, so the readings keep arriving whether or not anything finishes. Where they stop is the death. The finding names the last reading and, when the span never arrived at all, says so.
+
+Sampling is on for a local capybara and off when `OTEL_EXPORTER_OTLP_ENDPOINT` points somewhere else — a reading carries a span id, which is not a cardinality to hand a production metrics backend uninvited. `capybara.init(metrics=False)` turns it off, `metrics=True` forces it on.
 
 ### `prompt_injection`
 
