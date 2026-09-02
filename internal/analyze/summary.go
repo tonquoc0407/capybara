@@ -18,15 +18,26 @@ type FindingDetail struct {
 		Want  string `json:"want"`
 		Got   string `json:"got"`
 	} `json:"retyped"`
-	Want     string   `json:"want"`
-	Line     int      `json:"line"`
-	Error    string   `json:"error"`
-	Cause    string   `json:"cause"`
-	Kind     string   `json:"kind"`
-	Evidence string   `json:"evidence"`
-	Pattern  []string `json:"pattern"`
-	Tokens   int64    `json:"tokens"`
-	Baseline int64    `json:"baseline"`
+	Want           string   `json:"want"`
+	Line           int      `json:"line"`
+	Error          string   `json:"error"`
+	Cause          string   `json:"cause"`
+	Kind           string   `json:"kind"`
+	Evidence       string   `json:"evidence"`
+	Pattern        []string `json:"pattern"`
+	Tokens         int64    `json:"tokens"`
+	Baseline       int64    `json:"baseline"`
+	SpanName       string   `json:"span_name"`
+	UnreportedSpan string   `json:"unreported_span"`
+}
+
+// The span a crash interrupted is never exported, so an orphan finding often
+// has only the id the samples carried.
+func orphanWhere(d FindingDetail) string {
+	if d.SpanName != "" {
+		return d.SpanName
+	}
+	return "an unreported span"
 }
 
 // ParseDetail decodes a finding's detail; a malformed one still renders by type.
@@ -64,6 +75,8 @@ func FindingSummary(f store.Finding) string {
 		return "leaked " + d.Kind + " (" + d.Evidence + ")"
 	case "no_progress":
 		return "model stuck: " + d.Evidence
+	case "orphaned_span":
+		return "died inside " + orphanWhere(d) + ": " + d.Evidence
 	case "truncated":
 		return "final answer cut off at the token limit"
 	case "wrong_tool":

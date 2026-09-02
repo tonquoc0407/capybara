@@ -24,6 +24,7 @@ var ruleDesc = map[string]string{
 	"truncated":         "final answer stopped at the token limit, not at completion",
 	"secret_leak":       "span content carried a credential or card number",
 	"no_progress":       "model repeated the same answer across turns without converging",
+	"orphaned_span":     "span stopped reporting while still open, so the process died inside it",
 	"wrong_tool":        "agent called the wrong tool for the request (llm judge)",
 	"tool_error":        "tool reported an error inside an otherwise successful span",
 	"malformed":         "tool output did not match its learned schema",

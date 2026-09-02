@@ -378,14 +378,43 @@ func (s *Store) LatestResourceSamples(ctx context.Context, runID string) (map[st
 	return latest, nil
 }
 
+// RunsWithOpenSamples returns runs that resource sampling saw executing a span
+// the spans table never closed. Cheap enough to poll: the sample tables are
+// empty unless a run opted into metrics.
+func (s *Store) RunsWithOpenSamples(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT DISTINCT rs.run_id
+		 FROM resource_samples rs
+		 LEFT JOIN spans sp ON sp.id = rs.span_id
+		 WHERE sp.ended_at IS NULL
+		 ORDER BY rs.run_id`)
+	if err != nil {
+		return nil, fmt.Errorf("runs with open samples: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan run id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("runs with open samples: %w", err)
+	}
+	return ids, nil
+}
+
 // SampledSpan pairs a span that resource sampling saw with the last reading
-// taken under it. Ended reports whether the spans table has it closed; a span
-// that was sampled and never arrived at all is Ended false with an empty Name.
+// taken under it. Known says the spans table has the row at all - false is the
+// ordinary case for a crash, since a span is only exported once it ends.
 type SampledSpan struct {
 	SpanID     string
 	Name       string
 	ParentID   string
 	LastSample time.Time
+	Known      bool
 	Ended      bool
 }
 
@@ -394,7 +423,7 @@ type SampledSpan struct {
 // interrupted is exactly the one with no row in spans.
 func (s *Store) SampledSpans(ctx context.Context, runID string) ([]SampledSpan, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT rs.span_id, MAX(rs.ts), sp.name, sp.parent_id, sp.ended_at
+		`SELECT rs.span_id, MAX(rs.ts), sp.id, sp.name, sp.parent_id, sp.ended_at
 		 FROM resource_samples rs
 		 LEFT JOIN spans sp ON sp.id = rs.span_id
 		 WHERE rs.run_id = ?
@@ -408,11 +437,12 @@ func (s *Store) SampledSpans(ctx context.Context, runID string) ([]SampledSpan, 
 	for rows.Next() {
 		var sp SampledSpan
 		var ts, ended sql.NullInt64
-		var name, parent sql.NullString
-		if err := rows.Scan(&sp.SpanID, &ts, &name, &parent, &ended); err != nil {
+		var known, name, parent sql.NullString
+		if err := rows.Scan(&sp.SpanID, &ts, &known, &name, &parent, &ended); err != nil {
 			return nil, fmt.Errorf("scan sampled span: %w", err)
 		}
-		sp.LastSample, sp.Name, sp.ParentID, sp.Ended = fromNanos(ts), name.String, parent.String, ended.Valid
+		sp.LastSample, sp.Name, sp.ParentID = fromNanos(ts), name.String, parent.String
+		sp.Known, sp.Ended = known.Valid, ended.Valid
 		out = append(out, sp)
 	}
 	if err := rows.Err(); err != nil {

@@ -3,6 +3,7 @@ package analyze
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/tonquoc0407/capybara/internal/store"
 )
@@ -27,6 +28,17 @@ func New(st *store.Store) (*Analyzer, error) {
 
 // Sweep analyzes all completed spans not yet processed.
 func (a *Analyzer) Sweep(ctx context.Context) error {
+	// Runs first: a process that died stops writing, so waiting for a fresh
+	// span would mean the crash it left behind is never looked at.
+	orphans, err := a.orphanPass(ctx, time.Now())
+	if err != nil {
+		return fmt.Errorf("analyze: %w", err)
+	}
+	if len(orphans) > 0 {
+		if err := a.st.WriteBatch(ctx, store.Batch{Source: "analyze", Findings: orphans}); err != nil {
+			return fmt.Errorf("analyze: %w", err)
+		}
+	}
 	spans, err := a.st.UnanalyzedSpans(ctx)
 	if err != nil {
 		return fmt.Errorf("analyze: %w", err)
@@ -150,10 +162,23 @@ func (a *Analyzer) Watch(ctx context.Context) error {
 	if err := a.sweepUnlessCancelled(ctx); err != nil {
 		return err
 	}
+	// A crashed run writes nothing more, so the write signal alone would never
+	// bring the orphan check back around. The tick only leads to a sweep while
+	// some run is actually sampling, which costs one indexed lookup otherwise.
+	tick := time.NewTicker(orphanGap)
+	defer tick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
+		case <-tick.C:
+			open, err := a.st.RunsWithOpenSamples(ctx)
+			if err != nil || len(open) == 0 {
+				continue
+			}
+			if err := a.sweepUnlessCancelled(ctx); err != nil {
+				return err
+			}
 		case _, ok := <-ch:
 			if !ok {
 				return nil
