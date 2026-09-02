@@ -348,6 +348,79 @@ func (s *Store) ContentStats(ctx context.Context, runID string) (map[string]map[
 	return stats, nil
 }
 
+// LatestResourceSamples returns the most recent reading per span of a run.
+func (s *Store) LatestResourceSamples(ctx context.Context, runID string) (map[string]ResourceSample, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT span_id, MAX(ts), cpu_util, rss_bytes
+		 FROM resource_samples WHERE run_id = ? GROUP BY span_id`, runID)
+	if err != nil {
+		return nil, fmt.Errorf("samples of %s: %w", runID, err)
+	}
+	defer rows.Close()
+	latest := make(map[string]ResourceSample)
+	for rows.Next() {
+		var sm ResourceSample
+		var ts sql.NullInt64
+		var cpu sql.NullFloat64
+		var rss sql.NullInt64
+		if err := rows.Scan(&sm.SpanID, &ts, &cpu, &rss); err != nil {
+			return nil, fmt.Errorf("scan sample: %w", err)
+		}
+		sm.RunID, sm.At, sm.CPUUtil = runID, fromNanos(ts), fromFloat(cpu)
+		if rss.Valid {
+			sm.RSSBytes = &rss.Int64
+		}
+		latest[sm.SpanID] = sm
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("samples of %s: %w", runID, err)
+	}
+	return latest, nil
+}
+
+// SampledSpan pairs a span that resource sampling saw with the last reading
+// taken under it. Ended reports whether the spans table has it closed; a span
+// that was sampled and never arrived at all is Ended false with an empty Name.
+type SampledSpan struct {
+	SpanID     string
+	Name       string
+	ParentID   string
+	LastSample time.Time
+	Ended      bool
+}
+
+// SampledSpans returns every span of a run that resource sampling observed,
+// oldest reading first. The left join is deliberate: the span a crash
+// interrupted is exactly the one with no row in spans.
+func (s *Store) SampledSpans(ctx context.Context, runID string) ([]SampledSpan, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT rs.span_id, MAX(rs.ts), sp.name, sp.parent_id, sp.ended_at
+		 FROM resource_samples rs
+		 LEFT JOIN spans sp ON sp.id = rs.span_id
+		 WHERE rs.run_id = ?
+		 GROUP BY rs.span_id
+		 ORDER BY MAX(rs.ts), rs.span_id`, runID)
+	if err != nil {
+		return nil, fmt.Errorf("sampled spans of %s: %w", runID, err)
+	}
+	defer rows.Close()
+	var out []SampledSpan
+	for rows.Next() {
+		var sp SampledSpan
+		var ts, ended sql.NullInt64
+		var name, parent sql.NullString
+		if err := rows.Scan(&sp.SpanID, &ts, &name, &parent, &ended); err != nil {
+			return nil, fmt.Errorf("scan sampled span: %w", err)
+		}
+		sp.LastSample, sp.Name, sp.ParentID, sp.Ended = fromNanos(ts), name.String, parent.String, ended.Valid
+		out = append(out, sp)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("sampled spans of %s: %w", runID, err)
+	}
+	return out, nil
+}
+
 func fromNanos(v sql.NullInt64) time.Time {
 	if !v.Valid {
 		return time.Time{}

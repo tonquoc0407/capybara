@@ -225,6 +225,42 @@ func (s *Store) SetRunParent(ctx context.Context, runID, source, parentRunID str
 	return nil
 }
 
+// PutResourceSamples records process readings, creating the run row first: a
+// sample can arrive before the first span of its trace has ended, and for a run
+// that dies mid-call it may be the only row that ever lands.
+func (s *Store) PutResourceSamples(ctx context.Context, source string, samples []ResourceSample) error {
+	if len(samples) == 0 {
+		return nil
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	seen := make(map[string]bool)
+	for _, sm := range samples {
+		if !seen[sm.RunID] {
+			seen[sm.RunID] = true
+			if _, err := tx.ExecContext(ctx,
+				`INSERT INTO runs (id, source) VALUES (?, ?) ON CONFLICT (id) DO NOTHING`,
+				sm.RunID, source); err != nil {
+				return fmt.Errorf("insert run %s: %w", sm.RunID, err)
+			}
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR REPLACE INTO resource_samples (run_id, span_id, ts, cpu_util, rss_bytes)
+			 VALUES (?, ?, ?, ?, ?)`,
+			sm.RunID, sm.SpanID, sm.At.UnixNano(), sm.CPUUtil, sm.RSSBytes); err != nil {
+			return fmt.Errorf("insert sample %s@%d: %w", sm.SpanID, sm.At.UnixNano(), err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	s.notify()
+	return nil
+}
+
 func nullString(s string) any {
 	if s == "" {
 		return nil

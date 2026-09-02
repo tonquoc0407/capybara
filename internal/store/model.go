@@ -100,3 +100,14 @@ type Taint struct {
 	SpanID       string
 	SourceSpanID string
 }
+
+// ResourceSample is one process reading taken while SpanID was executing.
+// CPUUtil is OTel's fraction, not a percentage, and exceeds 1 on more than one
+// core. The span it names may never reach the spans table: that is the point.
+type ResourceSample struct {
+	RunID    string
+	SpanID   string
+	At       time.Time
+	CPUUtil  *float64
+	RSSBytes *int64
+}
