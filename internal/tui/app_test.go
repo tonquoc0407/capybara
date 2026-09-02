@@ -165,6 +165,9 @@ func TestAppEditStagesReplacementOutput(t *testing.T) {
 	if err := os.WriteFile(editor, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	// editorCommand() checks $VISUAL before $EDITOR; clear it so a host
+	// shell's own VISUAL can't shadow the stand-in editor here.
+	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", editor)
 	tm := startApp(t, st)
 	waitFor(t, tm, "lookup_price")
