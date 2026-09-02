@@ -26,6 +26,7 @@ type detailModel struct {
 	span     *store.Span
 	contents []store.Content
 	findings []store.Finding
+	sample   *store.ResourceSample
 	diff     *diffDetail
 	showRaw  bool
 	markdown *glamour.TermRenderer
@@ -50,13 +51,14 @@ func (m *detailModel) setSize(w, h int) {
 	m.render()
 }
 
-func (m *detailModel) setSpan(sp store.Span, contents []store.Content, findings []store.Finding) {
+func (m *detailModel) setSpan(sp store.Span, contents []store.Content, findings []store.Finding, sample *store.ResourceSample) {
 	if m.span == nil || m.span.ID != sp.ID {
 		m.vp.GotoTop()
 	}
 	m.span = &sp
 	m.contents = contents
 	m.findings = findings
+	m.sample = sample
 	m.diff = nil
 	m.render()
 }
@@ -131,6 +133,35 @@ func (m *detailModel) writeFindings(b *strings.Builder) {
 	}
 }
 
+// resourceLine renders the last process reading taken while the span ran.
+// CPU comes in as OTel's fraction of one core, which is a percentage here.
+func resourceLine(sm *store.ResourceSample) string {
+	if sm == nil {
+		return ""
+	}
+	parts := []string{}
+	if sm.CPUUtil != nil {
+		parts = append(parts, fmt.Sprintf("cpu %.0f%%", *sm.CPUUtil*100))
+	}
+	if sm.RSSBytes != nil {
+		parts = append(parts, "rss "+humanBytes(*sm.RSSBytes))
+	}
+	return strings.Join(parts, " ")
+}
+
+func humanBytes(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%dB", n)
+	}
+	div, exp := int64(unit), 0
+	for v := n / unit; v >= unit && exp < 3; v /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f%cB", float64(n)/float64(div), "KMGT"[exp])
+}
+
 func (m *detailModel) writeHeader(b *strings.Builder) {
 	sp := m.span
 	b.WriteString(m.th.Accent.Render(sp.Name) + "\n")
@@ -146,6 +177,9 @@ func (m *detailModel) writeHeader(b *strings.Builder) {
 	}
 	if sp.CostUSD != nil {
 		info += fmt.Sprintf(" - $%.4f", *sp.CostUSD)
+	}
+	if r := resourceLine(m.sample); r != "" {
+		info += " - " + r
 	}
 	b.WriteString(m.th.Dim.Render(info) + "\n")
 	meta := []string{}

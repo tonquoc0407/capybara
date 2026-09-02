@@ -395,6 +395,10 @@ func (m *treeModel) renderRow(i int) string {
 	}
 	mark, markStyle := " ", m.th.StatusOK
 	switch {
+	// x is the tool's own error; a span nothing ever came back from is a
+	// different failure and reads as one.
+	case hasOrphan(m.findings[r.span.ID]):
+		mark, markStyle = "?", m.th.StatusErr
 	case r.span.Status == "error":
 		mark, markStyle = "x", m.th.StatusErr
 	case len(m.findings[r.span.ID]) > 0:
@@ -403,6 +407,9 @@ func (m *treeModel) renderRow(i int) string {
 		mark, markStyle = ".", m.th.StatusRun
 	}
 	dur := spanDuration(r.span)
+	if r.span.EndedAt.IsZero() && mark == "?" {
+		dur = "no end"
+	}
 	left := strings.Repeat("  ", r.depth) + expander + " " + name + " " + mark
 	pad := m.width - len([]rune(left)) - len([]rune(dur)) - 1
 	if pad < 1 {
@@ -459,4 +466,13 @@ func truncate(s string, w int) string {
 		return "…"
 	}
 	return string(r[:w-1]) + "…"
+}
+
+func hasOrphan(fs []store.Finding) bool {
+	for _, f := range fs {
+		if f.Type == "orphaned_span" {
+			return true
+		}
+	}
+	return false
 }

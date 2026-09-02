@@ -24,7 +24,7 @@ func testDetail() detailModel {
 	m.setSpan(sp, []store.Content{
 		{SpanID: "llm1", Role: "user", Seq: 0, Body: "plain question", MediaType: "text/plain"},
 		{SpanID: "llm1", Role: "output", Seq: 1, Body: `{"price":42}`, MediaType: "application/json"},
-	}, nil)
+	}, nil, nil)
 	return m
 }
 
@@ -58,7 +58,7 @@ func TestDetailStripsControlBytesFromContent(t *testing.T) {
 	sp := span("tool1", "root", store.KindTool, "lookup", 1, 2)
 	m.setSpan(sp, []store.Content{
 		{SpanID: "tool1", Role: "output", Seq: 0, Body: "safe\x1b]8;;http://evil\x07spoofed\x1b\\", MediaType: "text/plain"},
-	}, nil)
+	}, nil, nil)
 	out := m.view()
 	if strings.Contains(out, "\x1b]8") {
 		t.Errorf("view leaked a raw OSC 8 sequence:\n%q", out)
@@ -127,7 +127,7 @@ func TestDetailDiffStacksWhenNarrow(t *testing.T) {
 func TestDetailWithoutContent(t *testing.T) {
 	m := newDetail(theme.Bara())
 	m.setSize(60, 20)
-	m.setSpan(span("t1", "", store.KindTool, "probe", 0, 1), nil, nil)
+	m.setSpan(span("t1", "", store.KindTool, "probe", 0, 1), nil, nil, nil)
 	if !strings.Contains(plainView(m), "no content recorded") {
 		t.Error("missing no-content notice")
 	}

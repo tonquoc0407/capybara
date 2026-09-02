@@ -44,11 +44,13 @@ type (
 		runID    string
 		spans    []store.Span
 		findings map[string][]store.Finding
+		samples  map[string]store.ResourceSample
 	}
 	contentsMsg struct {
 		span     store.Span
 		contents []store.Content
 		findings []store.Finding
+		sample   *store.ResourceSample
 	}
 	statsMsg struct {
 		runID string
@@ -141,6 +143,7 @@ type appModel struct {
 	about       About
 	spans       []store.Span
 	findings    map[string][]store.Finding
+	samples     map[string]store.ResourceSample
 	notice      string
 	lastErr     error
 	hintSeen    bool
@@ -216,7 +219,11 @@ func (m appModel) loadSpans(runID string) tea.Cmd {
 				bySpan[f.SpanID] = append(bySpan[f.SpanID], f)
 			}
 		}
-		return spansMsg{runID: runID, spans: spans, findings: bySpan}
+		samples, err := st.LatestResourceSamples(context.Background(), runID)
+		if err != nil {
+			return errMsg{err}
+		}
+		return spansMsg{runID: runID, spans: spans, findings: bySpan, samples: samples}
 	}
 }
 
@@ -234,12 +241,16 @@ func (m appModel) loadStats(runID string) tea.Cmd {
 func (m appModel) loadContents(sp store.Span) tea.Cmd {
 	st := m.st
 	findings := m.findings[sp.ID]
+	var sample *store.ResourceSample
+	if s, ok := m.samples[sp.ID]; ok {
+		sample = &s
+	}
 	return func() tea.Msg {
 		contents, err := st.Contents(context.Background(), sp.ID)
 		if err != nil {
 			return errMsg{err}
 		}
-		return contentsMsg{span: sp, contents: contents, findings: findings}
+		return contentsMsg{span: sp, contents: contents, findings: findings, sample: sample}
 	}
 }
 
@@ -272,6 +283,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.spans = msg.spans
 		m.findings = msg.findings
+		m.samples = msg.samples
 		m.tree.setSpans(msg.spans, msg.findings)
 		m.waterfall.setSpans(msg.spans)
 		cmds := []tea.Cmd{}
@@ -281,7 +293,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if sp, ok := m.middleSelected(); ok {
 			cmds = append(cmds, m.loadContents(sp))
 		} else {
-			m.detail.setSpan(store.Span{}, nil, nil)
+			m.detail.setSpan(store.Span{}, nil, nil, nil)
 		}
 		return m, tea.Batch(cmds...)
 	case statsMsg:
@@ -321,7 +333,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.finishReplay(msg)
 	case contentsMsg:
 		if sel, ok := m.tree.selected(); ok && sel.ID == msg.span.ID {
-			m.detail.setSpan(msg.span, msg.contents, msg.findings)
+			m.detail.setSpan(msg.span, msg.contents, msg.findings, msg.sample)
 		}
 		return m, nil
 	case errMsg:

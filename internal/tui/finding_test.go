@@ -70,7 +70,7 @@ func TestDetailShowsFindingDiff(t *testing.T) {
 	sp := span("tool1", "root", store.KindTool, "fetch_api", 1, 1)
 	m.setSpan(sp, []store.Content{
 		{SpanID: "tool1", Role: "output", Seq: 0, Body: `{"qty":"3"}`, MediaType: "application/json"},
-	}, []store.Finding{driftFinding("tool1")})
+	}, []store.Finding{driftFinding("tool1")}, nil)
 	out := plainView(m)
 	for _, want := range []string{"drift: missing field: price", "missing: price", "qty: want number, got string"} {
 		if !strings.Contains(out, want) {
@@ -82,12 +82,12 @@ func TestDetailShowsFindingDiff(t *testing.T) {
 func TestDetailNoticesSkippedAnalysis(t *testing.T) {
 	m := newDetail(theme.Bara())
 	m.setSize(60, 24)
-	m.setSpan(span("tool1", "root", store.KindTool, "fetch_api", 1, 1), nil, nil)
+	m.setSpan(span("tool1", "root", store.KindTool, "fetch_api", 1, 1), nil, nil, nil)
 	if !strings.Contains(plainView(m), "contract analysis skipped") {
 		t.Error("missing analysis-skipped notice")
 	}
 	// An llm span without content gets no such notice.
-	m.setSpan(span("llm1", "root", store.KindLLM, "chat", 1, 1), nil, nil)
+	m.setSpan(span("llm1", "root", store.KindLLM, "chat", 1, 1), nil, nil, nil)
 	if strings.Contains(plainView(m), "contract analysis skipped") {
 		t.Error("notice shown for non-tool span")
 	}
