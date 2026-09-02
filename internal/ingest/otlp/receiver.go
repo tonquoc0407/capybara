@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/pdata/pmetric/pmetricotlp"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
 	"google.golang.org/grpc"
@@ -123,6 +125,7 @@ func (r *Receiver) serve(ctx context.Context) error {
 	// Content-heavy batches blow past grpc's 4 MiB default; never drop data.
 	grpcSrv := grpc.NewServer(grpc.MaxRecvMsgSize(64 << 20))
 	ptraceotlp.RegisterGRPCServer(grpcSrv, &exportServer{recv: r})
+	pmetricotlp.RegisterGRPCServer(grpcSrv, &metricServer{recv: r})
 	httpSrv := &http.Server{Handler: r.handler(), ReadHeaderTimeout: 10 * time.Second}
 	errc := make(chan error, 2)
 	running := 0
@@ -168,6 +171,10 @@ func (r *Receiver) ingest(ctx context.Context, td ptrace.Traces) error {
 	return r.store.WriteBatch(ctx, toBatch(td, r.capture, r.mapping))
 }
 
+func (r *Receiver) ingestMetrics(ctx context.Context, md pmetric.Metrics) error {
+	return r.store.PutResourceSamples(ctx, "otlp", ToSamples(md))
+}
+
 type exportServer struct {
 	ptraceotlp.UnimplementedGRPCServer
 	recv *Receiver
@@ -180,9 +187,22 @@ func (s *exportServer) Export(ctx context.Context, req ptraceotlp.ExportRequest)
 	return ptraceotlp.NewExportResponse(), nil
 }
 
+type metricServer struct {
+	pmetricotlp.UnimplementedGRPCServer
+	recv *Receiver
+}
+
+func (s *metricServer) Export(ctx context.Context, req pmetricotlp.ExportRequest) (pmetricotlp.ExportResponse, error) {
+	if err := s.recv.ingestMetrics(ctx, req.Metrics()); err != nil {
+		return pmetricotlp.NewExportResponse(), status.Error(codes.Internal, err.Error())
+	}
+	return pmetricotlp.NewExportResponse(), nil
+}
+
 func (r *Receiver) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/traces", r.handleTraces)
+	mux.HandleFunc("POST /v1/metrics", r.handleMetrics)
 	return mux
 }
 
@@ -192,35 +212,12 @@ func (r *Receiver) handler() http.Handler {
 const maxHTTPBody = 64 << 20
 
 func (r *Receiver) handleTraces(w http.ResponseWriter, req *http.Request) {
-	req.Body = http.MaxBytesReader(w, req.Body, maxHTTPBody)
-	var body io.Reader = req.Body
-	if req.Header.Get("Content-Encoding") == "gzip" {
-		gz, err := gzip.NewReader(req.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		defer gz.Close()
-		body = io.LimitReader(gz, maxHTTPBody)
-	}
-	raw, err := io.ReadAll(body)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	raw, contentType, ok := readExport(w, req)
+	if !ok {
 		return
 	}
-	contentType, _, _ := strings.Cut(req.Header.Get("Content-Type"), ";")
 	exportReq := ptraceotlp.NewExportRequest()
-	switch contentType {
-	case "application/x-protobuf":
-		err = exportReq.UnmarshalProto(raw)
-	case "application/json":
-		err = exportReq.UnmarshalJSON(raw)
-	default:
-		http.Error(w, "unsupported content type", http.StatusUnsupportedMediaType)
-		return
-	}
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if !unmarshalExport(w, contentType, raw, exportReq.UnmarshalProto, exportReq.UnmarshalJSON) {
 		return
 	}
 	if err := r.ingest(req.Context(), exportReq.Traces()); err != nil {
@@ -228,12 +225,71 @@ func (r *Receiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	resp := ptraceotlp.NewExportResponse()
-	var respBytes []byte
-	if contentType == "application/json" {
-		respBytes, err = resp.MarshalJSON()
-	} else {
-		respBytes, err = resp.MarshalProto()
+	writeExport(w, contentType, resp.MarshalProto, resp.MarshalJSON)
+}
+
+func (r *Receiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
+	raw, contentType, ok := readExport(w, req)
+	if !ok {
+		return
 	}
+	exportReq := pmetricotlp.NewExportRequest()
+	if !unmarshalExport(w, contentType, raw, exportReq.UnmarshalProto, exportReq.UnmarshalJSON) {
+		return
+	}
+	if err := r.ingestMetrics(req.Context(), exportReq.Metrics()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	resp := pmetricotlp.NewExportResponse()
+	writeExport(w, contentType, resp.MarshalProto, resp.MarshalJSON)
+}
+
+func readExport(w http.ResponseWriter, req *http.Request) (raw []byte, contentType string, ok bool) {
+	req.Body = http.MaxBytesReader(w, req.Body, maxHTTPBody)
+	var body io.Reader = req.Body
+	if req.Header.Get("Content-Encoding") == "gzip" {
+		gz, err := gzip.NewReader(req.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return nil, "", false
+		}
+		defer gz.Close()
+		body = io.LimitReader(gz, maxHTTPBody)
+	}
+	raw, err := io.ReadAll(body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return nil, "", false
+	}
+	contentType, _, _ = strings.Cut(req.Header.Get("Content-Type"), ";")
+	return raw, contentType, true
+}
+
+func unmarshalExport(w http.ResponseWriter, contentType string, raw []byte, proto, jsonUn func([]byte) error) bool {
+	var err error
+	switch contentType {
+	case "application/x-protobuf":
+		err = proto(raw)
+	case "application/json":
+		err = jsonUn(raw)
+	default:
+		http.Error(w, "unsupported content type", http.StatusUnsupportedMediaType)
+		return false
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return false
+	}
+	return true
+}
+
+func writeExport(w http.ResponseWriter, contentType string, proto, jsonMar func() ([]byte, error)) {
+	marshal := proto
+	if contentType == "application/json" {
+		marshal = jsonMar
+	}
+	respBytes, err := marshal()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
