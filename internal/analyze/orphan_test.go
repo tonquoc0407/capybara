@@ -168,3 +168,23 @@ func TestSweepDoesNotDuplicateAnOrphan(t *testing.T) {
 		t.Fatalf("got %d findings after three sweeps, want 1", len(found))
 	}
 }
+
+// The detail is part of a finding's identity, so anything in it that moves
+// with the clock files the same death again on every tick.
+func TestOrphanDetailDoesNotMoveWithTheClock(t *testing.T) {
+	st := openTemp(t)
+	now := time.Now()
+	sampled(st, t, "ghost", now.Add(-time.Minute))
+	a := analyzerOn(t, st)
+	first, err := a.orphanRun(context.Background(), "r1", now)
+	if err != nil {
+		t.Fatalf("orphanRun: %v", err)
+	}
+	later, err := a.orphanRun(context.Background(), "r1", now.Add(5*time.Minute))
+	if err != nil {
+		t.Fatalf("orphanRun: %v", err)
+	}
+	if first.Detail != later.Detail {
+		t.Errorf("detail changed with the check time:\n%s\n%s", first.Detail, later.Detail)
+	}
+}

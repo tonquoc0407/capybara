@@ -15,6 +15,9 @@ import (
 
 type runItem struct {
 	run store.Run
+	// A run whose process died reads as "running" forever otherwise, which is
+	// the confusion the resource sampling exists to clear up.
+	orphaned bool
 }
 
 // FilterValue feeds the list bubble's built-in `/` filter.
@@ -53,24 +56,26 @@ func (d runDelegate) Render(w io.Writer, m list.Model, index int, item list.Item
 	switch {
 	case index == m.Index():
 		style = d.th.Selected
-	case it.run.Status == "error":
+	case it.orphaned || it.run.Status == "error":
 		style = d.th.StatusErr
 	case it.run.Findings > 0:
 		style = d.th.StatusWarn
 	case it.run.Status == "running":
 		style = d.th.StatusRun
 	}
-	head := style.Render(truncate(runMark(it.run)+" "+label, width))
+	head := style.Render(truncate(runMark(it)+" "+label, width))
 	fmt.Fprint(w, head+"\n"+d.th.Dim.Render(truncate("  "+runMeta(it.run), width)))
 }
 
-func runMark(r store.Run) string {
+func runMark(it runItem) string {
 	switch {
-	case r.Status == "error":
+	case it.orphaned:
+		return "?"
+	case it.run.Status == "error":
 		return "x"
-	case r.Findings > 0:
+	case it.run.Findings > 0:
 		return "!"
-	case r.Status == "running":
+	case it.run.Status == "running":
 		return "."
 	}
 	return " "
@@ -137,12 +142,12 @@ func (m *runsModel) setSize(w, h int) {
 	m.list.SetSize(w, h)
 }
 
-func (m *runsModel) setRuns(runs []store.Run) {
+func (m *runsModel) setRuns(runs []store.Run, orphaned map[string]bool) {
 	sel := m.selectedID()
 	items := make([]list.Item, len(runs))
 	idx := -1
 	for i, r := range runs {
-		items[i] = runItem{run: r}
+		items[i] = runItem{run: r, orphaned: orphaned[r.ID]}
 		if r.ID == sel {
 			idx = i
 		}

@@ -3,7 +3,6 @@ package analyze
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/tonquoc0407/capybara/internal/store"
@@ -39,10 +38,13 @@ func (a *Analyzer) orphanRun(ctx context.Context, runID string, now time.Time) (
 	if last == nil || now.Sub(last.LastSample) < orphanGap {
 		return nil, nil
 	}
+	// Only what was observed, never how long ago it was: the elapsed time grows
+	// with every tick, and the detail is part of the finding's identity, so a
+	// moving one would file the same death again on every sweep.
+	stamp := last.LastSample.UTC().Format(time.RFC3339)
 	detail := map[string]any{
-		"evidence": fmt.Sprintf("no resource sample for %s while the span was still open",
-			now.Sub(last.LastSample).Round(time.Second)),
-		"last_sample": last.LastSample.UTC().Format(time.RFC3339),
+		"evidence":    "no resource sample since " + stamp + ", span never closed",
+		"last_sample": stamp,
 	}
 	if last.Name != "" {
 		detail["span_name"] = last.Name

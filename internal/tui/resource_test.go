@@ -80,3 +80,15 @@ func TestHumanBytesTiers(t *testing.T) {
 		}
 	}
 }
+
+// A run whose process died reads as "running" forever without this.
+func TestRunMarkSeparatesADeadRunFromALiveOne(t *testing.T) {
+	live := runItem{run: store.Run{Status: "running"}}
+	dead := runItem{run: store.Run{Status: "running", Findings: 1}, orphaned: true}
+	if got := runMark(live); got != "." {
+		t.Errorf("live run mark = %q, want .", got)
+	}
+	if got := runMark(dead); got != "?" {
+		t.Errorf("dead run mark = %q, want ? rather than the running dot", got)
+	}
+}

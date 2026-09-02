@@ -378,6 +378,28 @@ func (s *Store) LatestResourceSamples(ctx context.Context, runID string) (map[st
 	return latest, nil
 }
 
+// RunsWithFinding returns the ids of runs carrying a finding of the given type.
+func (s *Store) RunsWithFinding(ctx context.Context, typ string) (map[string]bool, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT DISTINCT run_id FROM findings WHERE type = ?`, typ)
+	if err != nil {
+		return nil, fmt.Errorf("runs with %s: %w", typ, err)
+	}
+	defer rows.Close()
+	ids := make(map[string]bool)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan run id: %w", err)
+		}
+		ids[id] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("runs with %s: %w", typ, err)
+	}
+	return ids, nil
+}
+
 // RunsWithOpenSamples returns runs that resource sampling saw executing a span
 // the spans table never closed. Cheap enough to poll: the sample tables are
 // empty unless a run opted into metrics.

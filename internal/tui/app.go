@@ -39,8 +39,11 @@ const (
 
 type (
 	refreshMsg struct{}
-	runsMsg    []store.Run
-	spansMsg   struct {
+	runsMsg    struct {
+		runs     []store.Run
+		orphaned map[string]bool
+	}
+	spansMsg struct {
 		runID    string
 		spans    []store.Span
 		findings map[string][]store.Finding
@@ -198,7 +201,11 @@ func (m appModel) loadRuns() tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
-		return runsMsg(runs)
+		orphaned, err := st.RunsWithFinding(context.Background(), "orphaned_span")
+		if err != nil {
+			return errMsg{err}
+		}
+		return runsMsg{runs: runs, orphaned: orphaned}
 	}
 }
 
@@ -270,7 +277,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 	case runsMsg:
-		m.runs.setRuns(msg)
+		m.runs.setRuns(msg.runs, msg.orphaned)
 		m.layout() // the run column is sized from the item count, which just changed
 		if sel := m.runs.selectedID(); sel != m.selectedRun {
 			m.selectedRun = sel

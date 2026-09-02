@@ -44,7 +44,7 @@ func modelWithRuns(t *testing.T, n int) appModel {
 	if len(runs) != n {
 		t.Fatalf("seeded %d runs, want %d", len(runs), n)
 	}
-	next, _ = m.Update(runsMsg(runs))
+	next, _ = m.Update(runsMsg{runs: runs})
 	return next.(appModel)
 }
 
