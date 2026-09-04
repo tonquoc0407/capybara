@@ -55,8 +55,9 @@ def test_metrics_endpoint_swaps_the_signal_path() -> None:
 
 
 class FakeSpan:
-    def __init__(self, trace_id: int, span_id: int) -> None:
+    def __init__(self, trace_id: int, span_id: int, name: str = "node") -> None:
         self._ctx = type("Ctx", (), {"trace_id": trace_id, "span_id": span_id})()
+        self.name = name
 
     def get_span_context(self):
         return self._ctx
@@ -66,21 +67,22 @@ class FakeSpan:
 # empty, so the active span has to be tracked rather than read from context.
 def test_active_spans_names_the_innermost_open_span() -> None:
     active = metrics.ActiveSpans()
-    outer, inner = FakeSpan(1, 10), FakeSpan(1, 20)
+    outer, inner = FakeSpan(1, 10, "outer"), FakeSpan(1, 20, "inner")
     active.on_start(outer)
     active.on_start(inner)
-    trace_id, span_id = active.newest()
+    trace_id, span_id, name = active.newest()
     assert trace_id == format(1, "032x")
     assert span_id == format(20, "016x")
+    assert name == "inner"
 
 
 def test_active_spans_falls_back_to_the_parent_when_the_child_ends() -> None:
     active = metrics.ActiveSpans()
-    outer, inner = FakeSpan(1, 10), FakeSpan(1, 20)
+    outer, inner = FakeSpan(1, 10, "outer"), FakeSpan(1, 20, "inner")
     active.on_start(outer)
     active.on_start(inner)
     active.on_end(inner)
-    assert active.newest() == (format(1, "032x"), format(10, "016x"))
+    assert active.newest() == (format(1, "032x"), format(10, "016x"), "outer")
 
 
 def test_active_spans_reports_nothing_when_idle() -> None:
@@ -98,15 +100,58 @@ def test_sampler_drops_readings_taken_outside_any_span() -> None:
 
 def test_sampler_attributes_a_reading_to_the_open_span() -> None:
     active = metrics.ActiveSpans()
-    active.on_start(FakeSpan(7, 9))
+    active.on_start(FakeSpan(7, 9, "embed_corpus"))
     sampler = metrics._Sampler(active)
     observations = list(sampler.rss(None))
     assert len(observations) == 1
     attrs = observations[0].attributes
     assert attrs[metrics.TRACE_ID_ATTR] == format(7, "032x")
     assert attrs[metrics.SPAN_ID_ATTR] == format(9, "016x")
+    # The span a crash interrupts never arrives, so the reading carries its name.
+    assert attrs[metrics.SPAN_NAME_ATTR] == "embed_corpus"
     assert observations[0].value > 0
 
 
 def test_rss_reads_the_live_process() -> None:
     assert metrics._rss_bytes() > 0
+
+
+class FakeGPU:
+    def __init__(self, reading):
+        self._reading = reading
+
+    def reading(self):
+        return self._reading
+
+
+def test_gpu_gauges_report_when_a_card_is_present() -> None:
+    active = metrics.ActiveSpans()
+    active.on_start(FakeSpan(1, 2, "train"))
+    sampler = metrics._Sampler(active, FakeGPU((0.42, 1024)))
+    assert list(sampler.gpu_util(None))[0].value == 0.42
+    assert list(sampler.gpu_memory(None))[0].value == 1024
+
+
+def test_gpu_gauges_stay_quiet_without_a_card() -> None:
+    active = metrics.ActiveSpans()
+    active.on_start(FakeSpan(1, 2))
+    sampler = metrics._Sampler(active, None)
+    assert list(sampler.gpu_util(None)) == []
+    assert list(sampler.gpu_memory(None)) == []
+
+
+def test_gpu_gauges_are_not_registered_without_a_card(monkeypatch) -> None:
+    registered: list[str] = []
+
+    class FakeMeter:
+        def create_observable_gauge(self, name, **kwargs):
+            registered.append(name)
+
+    class FakeProvider:
+        def get_meter(self, _name):
+            return FakeMeter()
+
+    metrics.add_gauges(FakeProvider(), metrics.ActiveSpans(), None)
+    assert metrics.GPU_UTIL_METRIC not in registered
+    metrics.add_gauges(FakeProvider(), metrics.ActiveSpans(), FakeGPU((0.1, 2)))
+    assert metrics.GPU_UTIL_METRIC in registered

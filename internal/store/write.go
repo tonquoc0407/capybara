@@ -248,9 +248,11 @@ func (s *Store) PutResourceSamples(ctx context.Context, source string, samples [
 			}
 		}
 		if _, err := tx.ExecContext(ctx,
-			`INSERT OR REPLACE INTO resource_samples (run_id, span_id, ts, cpu_util, rss_bytes)
-			 VALUES (?, ?, ?, ?, ?)`,
-			sm.RunID, sm.SpanID, sm.At.UnixNano(), sm.CPUUtil, sm.RSSBytes); err != nil {
+			`INSERT OR REPLACE INTO resource_samples
+			 (run_id, span_id, ts, cpu_util, rss_bytes, gpu_util, gpu_mem_bytes, span_name)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			sm.RunID, sm.SpanID, sm.At.UnixNano(), sm.CPUUtil, sm.RSSBytes,
+			sm.GPUUtil, sm.GPUMemBytes, nullString(sm.SpanName)); err != nil {
 			return fmt.Errorf("insert sample %s@%d: %w", sm.SpanID, sm.At.UnixNano(), err)
 		}
 	}

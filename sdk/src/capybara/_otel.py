@@ -17,6 +17,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+from ._gpu import GPUReader
 from ._metrics import INTERVAL_MS, ActiveSpans, add_gauges
 from ._schema import SchemaSpanProcessor
 
@@ -103,7 +104,8 @@ def _start_metrics(service_name: str, traces_endpoint: str | None) -> None:
         metric_readers=[reader],
     )
     metrics_api.set_meter_provider(meters)
-    add_gauges(meters, active)
+    gpu = GPUReader()
+    add_gauges(meters, active, gpu if gpu.start() else None)
 
 
 def _metrics_endpoint(traces_endpoint: str | None) -> str | None:

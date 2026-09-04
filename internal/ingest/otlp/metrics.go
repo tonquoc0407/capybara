@@ -11,8 +11,9 @@ import (
 // was running. capybara's SDK puts the ids on the data point instead, in the
 // same capybara.* namespace the tracer already uses for schema and entrypoint.
 const (
-	attrTraceID = "capybara.trace_id"
-	attrSpanID  = "capybara.span_id"
+	attrTraceID  = "capybara.trace_id"
+	attrSpanID   = "capybara.span_id"
+	attrSpanName = "capybara.span_name"
 )
 
 // The two process gauges capybara reads. Both are OTel names; anything else in
@@ -20,7 +21,19 @@ const (
 const (
 	metricCPU = "process.cpu.utilization"
 	metricRSS = "process.memory.usage"
+	// No stable OTel convention exists for these, so they carry capybara's own
+	// names and mean the whole device, not this process.
+	metricGPUUtil = "capybara.gpu.utilization"
+	metricGPUMem  = "capybara.gpu.memory.usage"
 )
+
+func sampledMetric(name string) bool {
+	switch name {
+	case metricCPU, metricRSS, metricGPUUtil, metricGPUMem:
+		return true
+	}
+	return false
+}
 
 // ToSamples maps OTLP metrics onto resource samples, one per (span, timestamp).
 // A data point without both ids is dropped: an unattributable reading says
@@ -36,7 +49,7 @@ func ToSamples(md pmetric.Metrics) []store.ResourceSample {
 			for k := 0; k < metrics.Len(); k++ {
 				metric := metrics.At(k)
 				name := metric.Name()
-				if name != metricCPU && name != metricRSS {
+				if !sampledMetric(name) {
 					continue
 				}
 				if metric.Type() != pmetric.MetricTypeGauge {
@@ -82,6 +95,11 @@ func collect(byKey map[sampleKey]*store.ResourceSample, order *[]sampleKey, name
 		byKey[key] = sm
 		*order = append(*order, key)
 	}
+	if sm.SpanName == "" {
+		if n, ok := attrs.Get(attrSpanName); ok {
+			sm.SpanName = n.Str()
+		}
+	}
 	value := numberValue(dp)
 	switch name {
 	case metricCPU:
@@ -89,6 +107,11 @@ func collect(byKey map[sampleKey]*store.ResourceSample, order *[]sampleKey, name
 	case metricRSS:
 		rss := int64(value)
 		sm.RSSBytes = &rss
+	case metricGPUUtil:
+		sm.GPUUtil = &value
+	case metricGPUMem:
+		mem := int64(value)
+		sm.GPUMemBytes = &mem
 	}
 }
 

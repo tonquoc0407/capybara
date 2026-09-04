@@ -33,6 +33,7 @@ const (
 	viewTree viewMode = iota
 	viewWaterfall
 	viewContext
+	viewMonitor
 	viewDiff
 	viewBlame
 )
@@ -48,6 +49,7 @@ type (
 		spans    []store.Span
 		findings map[string][]store.Finding
 		samples  map[string]store.ResourceSample
+		history  []store.ResourceSample
 	}
 	contentsMsg struct {
 		span     store.Span
@@ -92,7 +94,7 @@ func defaultKeys() keyMap {
 		Panes:  key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "panes")),
 		Search: key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
 		Filter: key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "filter")),
-		Views:  key.NewBinding(key.WithKeys("w", "c"), key.WithHelp("w/c", "waterfall/context")),
+		Views:  key.NewBinding(key.WithKeys("w", "c", "m"), key.WithHelp("w/c/m", "waterfall/context/monitor")),
 		Diff:   key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "diff")),
 		Blame:  key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "blame")),
 		Test:   key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "export test")),
@@ -129,6 +131,7 @@ type appModel struct {
 	waterfall   waterfallModel
 	contextv    contextModel
 	diffv       diffModel
+	monitorv    monitorModel
 	blamev      blameModel
 	detail      detailModel
 	mode        viewMode
@@ -171,6 +174,7 @@ func newApp(st *store.Store, th theme.Theme, events <-chan struct{}, captureCont
 		waterfall: newWaterfall(th),
 		contextv:  newContext(th),
 		diffv:     newDiff(th),
+		monitorv:  newMonitor(th),
 		blamev:    newBlame(th),
 		detail:    newDetail(th),
 		focus:     focusTree,
@@ -230,7 +234,14 @@ func (m appModel) loadSpans(runID string) tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
-		return spansMsg{runID: runID, spans: spans, findings: bySpan, samples: samples}
+		history, err := st.ResourceHistory(context.Background(), runID)
+		if err != nil {
+			return errMsg{err}
+		}
+		return spansMsg{
+			runID: runID, spans: spans, findings: bySpan,
+			samples: samples, history: history,
+		}
 	}
 }
 
@@ -291,6 +302,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spans = msg.spans
 		m.findings = msg.findings
 		m.samples = msg.samples
+		m.monitorv.setSamples(msg.history)
 		m.tree.setSpans(msg.spans, msg.findings)
 		m.waterfall.setSpans(msg.spans)
 		cmds := []tea.Cmd{}
@@ -381,6 +393,8 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.switchMode(viewWaterfall)
 		case msg.String() == "c" && m.focus != focusDetail:
 			return m.switchMode(viewContext)
+		case msg.String() == "m" && m.focus != focusDetail:
+			return m.switchMode(viewMonitor)
 		case msg.String() == "d" && m.focus != focusDetail:
 			return m.handleDiffKey()
 		case msg.String() == "b" && m.focus != focusDetail:
@@ -623,6 +637,7 @@ func (m *appModel) layout() {
 	m.tree.setSize(middleW-paneChrome, paneH-3)
 	m.waterfall.setSize(middleW-paneChrome, paneH-3)
 	m.contextv.setSize(middleW-paneChrome, paneH-3)
+	m.monitorv.setSize(middleW-paneChrome, paneH-3)
 	m.diffv.setSize(middleW-paneChrome, paneH-3)
 	m.blamev.setSize(middleW-paneChrome, paneH-3)
 	m.detail.setSize(detailW-paneChrome, paneH-3)
@@ -648,6 +663,8 @@ func (m appModel) View() string {
 		middleTitle, middleView = "cost waterfall", m.waterfall.view()
 	case viewContext:
 		middleTitle, middleView = "context", m.contextv.view()
+	case viewMonitor:
+		middleTitle, middleView = "monitor", m.monitorv.view()
 	case viewDiff:
 		if m.diffv.diff != nil {
 			middleTitle = fmt.Sprintf("diff %s vs %s",

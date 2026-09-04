@@ -103,11 +103,17 @@ type Taint struct {
 
 // ResourceSample is one process reading taken while SpanID was executing.
 // CPUUtil is OTel's fraction, not a percentage, and exceeds 1 on more than one
-// core. The span it names may never reach the spans table: that is the point.
+// core. The span it names may never reach the spans table: that is the point,
+// which is also why SpanName rides along rather than being looked up.
+// The GPU pair is the whole device's, not this process's - nvidia reports no
+// per-process utilization - and is nil where there is no card.
 type ResourceSample struct {
-	RunID    string
-	SpanID   string
-	At       time.Time
-	CPUUtil  *float64
-	RSSBytes *int64
+	RunID       string
+	SpanID      string
+	SpanName    string
+	At          time.Time
+	CPUUtil     *float64
+	RSSBytes    *int64
+	GPUUtil     *float64
+	GPUMemBytes *int64
 }

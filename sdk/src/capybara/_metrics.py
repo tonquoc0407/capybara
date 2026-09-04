@@ -19,6 +19,8 @@ from opentelemetry.metrics import CallbackOptions, Observation
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.trace import SpanProcessor
 
+from ._gpu import GPUReader
+
 try:
     import resource
 except ImportError:  # windows
@@ -30,9 +32,16 @@ if TYPE_CHECKING:
 
 TRACE_ID_ATTR = "capybara.trace_id"
 SPAN_ID_ATTR = "capybara.span_id"
+# The span a crash interrupts is never exported, so its name would be lost with
+# it. Carrying it on the reading is the only way the live view can label a node
+# that has not finished.
+SPAN_NAME_ATTR = "capybara.span_name"
 
 CPU_METRIC = "process.cpu.utilization"
 RSS_METRIC = "process.memory.usage"
+# Not semconv: OTel has no stable gpu convention, so these are capybara's own.
+GPU_UTIL_METRIC = "capybara.gpu.utilization"
+GPU_MEM_METRIC = "capybara.gpu.memory.usage"
 
 # One second: long enough that the readings cost nothing on a local socket,
 # short enough to leave several samples inside a step that runs for a few
@@ -52,7 +61,7 @@ class ActiveSpans(SpanProcessor):
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._open: dict[int, tuple[int, str, str]] = {}
+        self._open: dict[int, tuple[int, str, str, str]] = {}
         self._seq = itertools.count()
 
     def on_start(self, span: Span, parent_context: Context | None = None) -> None:
@@ -62,18 +71,19 @@ class ActiveSpans(SpanProcessor):
                 next(self._seq),
                 format(ctx.trace_id, "032x"),
                 format(ctx.span_id, "016x"),
+                span.name,
             )
 
     def on_end(self, span: ReadableSpan) -> None:
         with self._lock:
             self._open.pop(id(span), None)
 
-    def newest(self) -> tuple[str, str] | None:
+    def newest(self) -> tuple[str, str, str] | None:
         with self._lock:
             if not self._open:
                 return None
-            _, trace_id, span_id = max(self._open.values())
-        return trace_id, span_id
+            _, trace_id, span_id, name = max(self._open.values())
+        return trace_id, span_id, name
 
 
 def _rss_bytes() -> int | None:
@@ -94,8 +104,9 @@ def _rss_bytes() -> int | None:
 
 
 class _Sampler:
-    def __init__(self, active: ActiveSpans) -> None:
+    def __init__(self, active: ActiveSpans, gpu: GPUReader | None = None) -> None:
         self._active = active
+        self._gpu = gpu
         self._cpu_at = time.process_time()
         self._wall_at = time.monotonic()
 
@@ -113,18 +124,39 @@ class _Sampler:
         rss = _rss_bytes()
         return [] if rss is None else self._observe(rss)
 
+    def gpu_util(self, options: CallbackOptions) -> Iterable[Observation]:
+        del options
+        reading = self._gpu.reading() if self._gpu else None
+        return [] if reading is None else self._observe(reading[0])
+
+    def gpu_memory(self, options: CallbackOptions) -> Iterable[Observation]:
+        del options
+        reading = self._gpu.reading() if self._gpu else None
+        return [] if reading is None else self._observe(reading[1])
+
     def _observe(self, value: float) -> list[Observation]:
         ids = self._active.newest()
         if ids is None:
             return []
-        trace_id, span_id = ids
-        return [Observation(value, {TRACE_ID_ATTR: trace_id, SPAN_ID_ATTR: span_id})]
+        trace_id, span_id, name = ids
+        return [
+            Observation(
+                value,
+                {
+                    TRACE_ID_ATTR: trace_id,
+                    SPAN_ID_ATTR: span_id,
+                    SPAN_NAME_ATTR: name,
+                },
+            )
+        ]
 
 
-def add_gauges(provider: MeterProvider, active: ActiveSpans) -> None:
-    """Register the two process gauges on provider."""
+def add_gauges(
+    provider: MeterProvider, active: ActiveSpans, gpu: GPUReader | None = None
+) -> None:
+    """Register the process gauges, plus the gpu pair when a card was found."""
     meter = provider.get_meter("capybara")
-    sampler = _Sampler(active)
+    sampler = _Sampler(active, gpu)
     meter.create_observable_gauge(
         CPU_METRIC,
         callbacks=[sampler.cpu],
@@ -136,4 +168,18 @@ def add_gauges(provider: MeterProvider, active: ActiveSpans) -> None:
         callbacks=[sampler.rss],
         unit="By",
         description="process resident set size",
+    )
+    if gpu is None:
+        return
+    meter.create_observable_gauge(
+        GPU_UTIL_METRIC,
+        callbacks=[sampler.gpu_util],
+        unit="1",
+        description="gpu utilization, whole device rather than this process",
+    )
+    meter.create_observable_gauge(
+        GPU_MEM_METRIC,
+        callbacks=[sampler.gpu_memory],
+        unit="By",
+        description="gpu memory in use, whole device",
     )

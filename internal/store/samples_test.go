@@ -114,3 +114,29 @@ func TestPutResourceSamplesEmptyIsANoop(t *testing.T) {
 		t.Fatalf("PutResourceSamples(nil): %v", err)
 	}
 }
+
+// A span ending between the two gauge callbacks leaves the last row holding
+// only one of them; reading that row wholesale hid the other's whole history.
+func TestLatestResourceSamplesFillsFromAHalfEmptyLastRow(t *testing.T) {
+	s := openTemp(t)
+	ctx := context.Background()
+	cpu, rss := 0.8, int64(288*1024*1024)
+	lateCPU := 0.02
+	if err := s.PutResourceSamples(ctx, "test", []ResourceSample{
+		{RunID: "r1", SpanID: "sp1", At: t0, CPUUtil: &cpu, RSSBytes: &rss},
+		{RunID: "r1", SpanID: "sp1", At: t0.Add(time.Second), CPUUtil: &lateCPU},
+	}); err != nil {
+		t.Fatalf("PutResourceSamples: %v", err)
+	}
+	latest, err := s.LatestResourceSamples(ctx, "r1")
+	if err != nil {
+		t.Fatalf("LatestResourceSamples: %v", err)
+	}
+	got := latest["sp1"]
+	if got.CPUUtil == nil || *got.CPUUtil != lateCPU {
+		t.Errorf("cpu = %v, want the newest reading %v", got.CPUUtil, lateCPU)
+	}
+	if got.RSSBytes == nil || *got.RSSBytes != rss {
+		t.Errorf("rss = %v, want the last one actually recorded, not nil", got.RSSBytes)
+	}
+}

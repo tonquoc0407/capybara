@@ -348,27 +348,79 @@ func (s *Store) ContentStats(ctx context.Context, runID string) (map[string]map[
 	return stats, nil
 }
 
+// lastNonNull picks a column's newest recorded value rather than whatever sat
+// in the newest row, which may be half empty.
+func lastNonNull(col string) string {
+	return `(SELECT x.` + col + ` FROM resource_samples x
+	          WHERE x.span_id = rs.span_id AND x.` + col + ` IS NOT NULL
+	          ORDER BY x.ts DESC LIMIT 1)`
+}
+
+func scanSample(rows *sql.Rows, runID string) (ResourceSample, error) {
+	var sm ResourceSample
+	var ts, rss, gpuMem sql.NullInt64
+	var cpu, gpu sql.NullFloat64
+	var name sql.NullString
+	if err := rows.Scan(&sm.SpanID, &ts, &cpu, &rss, &gpu, &gpuMem, &name); err != nil {
+		return sm, fmt.Errorf("scan sample: %w", err)
+	}
+	sm.RunID, sm.At, sm.SpanName = runID, fromNanos(ts), name.String
+	sm.CPUUtil, sm.GPUUtil = fromFloat(cpu), fromFloat(gpu)
+	if rss.Valid {
+		sm.RSSBytes = &rss.Int64
+	}
+	if gpuMem.Valid {
+		sm.GPUMemBytes = &gpuMem.Int64
+	}
+	return sm, nil
+}
+
+// ResourceHistory returns every reading of a run, oldest first: the series the
+// live graphs are drawn from.
+func (s *Store) ResourceHistory(ctx context.Context, runID string) ([]ResourceSample, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT span_id, ts, cpu_util, rss_bytes, gpu_util, gpu_mem_bytes, span_name
+		 FROM resource_samples WHERE run_id = ? ORDER BY ts`, runID)
+	if err != nil {
+		return nil, fmt.Errorf("history of %s: %w", runID, err)
+	}
+	defer rows.Close()
+	var out []ResourceSample
+	for rows.Next() {
+		sm, err := scanSample(rows, runID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sm)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("history of %s: %w", runID, err)
+	}
+	return out, nil
+}
+
 // LatestResourceSamples returns the most recent reading per span of a run.
 func (s *Store) LatestResourceSamples(ctx context.Context, runID string) (map[string]ResourceSample, error) {
+	// Each gauge is read on its own, so a span that ends between the two
+	// callbacks leaves a half-filled last row. Taking the newest row wholesale
+	// would then report one number and hide the other's whole history.
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT span_id, MAX(ts), cpu_util, rss_bytes
-		 FROM resource_samples WHERE run_id = ? GROUP BY span_id`, runID)
+		`SELECT span_id, MAX(ts),
+		        `+lastNonNull("cpu_util")+`,
+		        `+lastNonNull("rss_bytes")+`,
+		        `+lastNonNull("gpu_util")+`,
+		        `+lastNonNull("gpu_mem_bytes")+`,
+		        `+lastNonNull("span_name")+`
+		 FROM resource_samples rs WHERE rs.run_id = ? GROUP BY rs.span_id`, runID)
 	if err != nil {
 		return nil, fmt.Errorf("samples of %s: %w", runID, err)
 	}
 	defer rows.Close()
 	latest := make(map[string]ResourceSample)
 	for rows.Next() {
-		var sm ResourceSample
-		var ts sql.NullInt64
-		var cpu sql.NullFloat64
-		var rss sql.NullInt64
-		if err := rows.Scan(&sm.SpanID, &ts, &cpu, &rss); err != nil {
-			return nil, fmt.Errorf("scan sample: %w", err)
-		}
-		sm.RunID, sm.At, sm.CPUUtil = runID, fromNanos(ts), fromFloat(cpu)
-		if rss.Valid {
-			sm.RSSBytes = &rss.Int64
+		sm, err := scanSample(rows, runID)
+		if err != nil {
+			return nil, err
 		}
 		latest[sm.SpanID] = sm
 	}
