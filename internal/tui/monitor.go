@@ -123,7 +123,7 @@ func (s series) peak() float64 {
 }
 
 // A gauge missing from one reading holds its last value rather than dropping to
-// zero: the metric was not zero, it simply was not read that tick.
+// zero: the metric was not zero, it was not read that tick.
 func addFloat(s *series, v *float64) {
 	if v == nil {
 		s.values = append(s.values, s.last)

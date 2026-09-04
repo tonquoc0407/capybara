@@ -48,13 +48,20 @@ func (m appModel) summaryView(width int) string {
 func (m appModel) findingLines(width int) []string {
 	byType := map[string]int{}
 	worst := map[string]string{}
+	count := func(f store.Finding) {
+		byType[f.Type]++
+		if f.Severity == "error" {
+			worst[f.Type] = "error"
+		}
+	}
 	for _, fs := range m.findings {
 		for _, f := range fs {
-			byType[f.Type]++
-			if f.Severity == "error" {
-				worst[f.Type] = "error"
-			}
+			count(f)
 		}
+	}
+	// Run-level findings hang off no span, so the per-span map never sees them.
+	for _, f := range m.runFindings {
+		count(f)
 	}
 	if len(byType) == 0 {
 		return []string{"", m.th.StatusOK.Render("no findings")}

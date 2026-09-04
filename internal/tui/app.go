@@ -48,6 +48,7 @@ type (
 		runID    string
 		spans    []store.Span
 		findings map[string][]store.Finding
+		runLevel []store.Finding
 		samples  map[string]store.ResourceSample
 		history  []store.ResourceSample
 	}
@@ -149,6 +150,7 @@ type appModel struct {
 	about       About
 	spans       []store.Span
 	findings    map[string][]store.Finding
+	runFindings []store.Finding
 	samples     map[string]store.ResourceSample
 	notice      string
 	lastErr     error
@@ -225,10 +227,15 @@ func (m appModel) loadSpans(runID string) tea.Cmd {
 			return errMsg{err}
 		}
 		bySpan := make(map[string][]store.Finding)
+		var runLevel []store.Finding
 		for _, f := range findings {
-			if f.SpanID != "" {
-				bySpan[f.SpanID] = append(bySpan[f.SpanID], f)
+			// A finding with no span is not span-less by accident: parse errors
+			// and orphaned spans have no row in spans to hang off.
+			if f.SpanID == "" {
+				runLevel = append(runLevel, f)
+				continue
 			}
+			bySpan[f.SpanID] = append(bySpan[f.SpanID], f)
 		}
 		samples, err := st.LatestResourceSamples(context.Background(), runID)
 		if err != nil {
@@ -239,7 +246,7 @@ func (m appModel) loadSpans(runID string) tea.Cmd {
 			return errMsg{err}
 		}
 		return spansMsg{
-			runID: runID, spans: spans, findings: bySpan,
+			runID: runID, spans: spans, findings: bySpan, runLevel: runLevel,
 			samples: samples, history: history,
 		}
 	}
@@ -301,6 +308,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.spans = msg.spans
 		m.findings = msg.findings
+		m.runFindings = msg.runLevel
 		m.samples = msg.samples
 		m.monitorv.setSamples(msg.history)
 		m.tree.setSpans(msg.spans, msg.findings)

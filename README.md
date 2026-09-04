@@ -117,7 +117,7 @@ The same three calls exist for Node in [`sdk-js/`](sdk-js) (`npm install capybar
 
 ## Reading a trace
 
-The tree marks `x` for a failed span and `!` for one carrying a finding. The run column shows when each run started, what it cost, and what was recorded against it.
+The tree marks `x` for a failed span, `!` for one carrying a finding, and `?` for one nothing ever came back from. The run column shows when each run started, what it cost, and what was recorded against it.
 
 | Key | Action | Key | Action |
 | --- | --- | --- | --- |
@@ -128,9 +128,17 @@ The tree marks `x` for a failed span and `!` for one carrying a finding. The run
 | `f` | filter by kind | `r` | re-run from a span |
 | `a` | raw attributes | `t` | export a pytest case |
 | `e` | edit a tool output | `?` | full help |
-| `q` | quit | | |
+| `q` | quit | `m` | resource monitor |
 
 The waterfall sorts spans by cost, so the turn that spent the money is the first line rather than something to scroll for. The context view shows what filled each turn's window — system text, tool output, history — and marks the turns where it dropped, which is where a compaction ate something.
+
+The monitor graphs process CPU and memory, plus GPU where `nvidia-smi` finds a card, against the node that was running. It reads the sampler rather than the span tree, so it draws while a step is still going — a span only arrives once it ends, which is too late to watch. The strip under the graphs names the nodes in order, so a spike points at a step instead of a moment.
+
+<p align="center">
+  <img src="demo/monitor.gif" alt="the monitor drawing a pipeline that is killed mid-step" width="720">
+</p>
+
+The recording above ends on a kill: the graphs keep the readings, the tree never receives a span for the node that died, and the run picks up an `orphaned_span` finding naming where it stopped responding.
 
 ## What it looks for
 

@@ -77,3 +77,21 @@ func TestCompactCountKeepsNarrowPanesReadable(t *testing.T) {
 		}
 	}
 }
+
+// parse_error and orphaned_span hang off no span, so counting only the
+// per-span map reported "no findings" on a run that had them.
+func TestRunSummaryCountsRunLevelFindings(t *testing.T) {
+	m := newApp(seededStore(t), theme.Bara(), nil, true)
+	m.width, m.height = 110, 32
+	m.layout()
+	m.runFindings = []store.Finding{
+		{RunID: "r1", Type: "orphaned_span", Severity: "error"},
+	}
+	lines := strings.Join(m.findingLines(30), "\n")
+	if strings.Contains(lines, "no findings") {
+		t.Errorf("summary said there were none:\n%s", lines)
+	}
+	if !strings.Contains(lines, "1 orphaned_span") {
+		t.Errorf("summary missing the run-level finding:\n%s", lines)
+	}
+}
