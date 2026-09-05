@@ -1,0 +1,66 @@
+name: dependabot-merge
+
+# Merges a dependabot pull request once ci has passed on it. GitHub's own
+# auto-merge waits on required status checks, and main is unprotected so there
+# are none to wait on - it would merge before ci had said anything. Driving the
+# merge from ci's completion is the same policy without protecting the branch.
+#
+# Only one pull request merges per ci run. Dependabot rebases the rest onto the
+# new main, which runs ci again, which lands the next one.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      startsWith(github.event.workflow_run.head_branch, 'dependabot/')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      BRANCH: ${{ github.event.workflow_run.head_branch }}
+    steps:
+      # The branch name is the only thing workflow_run reports; anyone can push
+      # a branch called dependabot/something, so the author decides.
+      - name: find the pull request
+        id: pr
+        run: |
+          set -euo pipefail
+          owner=${REPO%%/*}
+          pr=$(gh api "repos/$REPO/pulls?state=open&head=$owner:$BRANCH" \
+            --jq '.[0] | select(.user.login == "dependabot[bot]") | .number')
+          echo "number=${pr:-}" >> "$GITHUB_OUTPUT"
+
+      # Dependabot states the semver step in a trailer on its own commit. A
+      # grouped update carries one line per dependency, so any major stops it.
+      - name: read the update type
+        if: steps.pr.outputs.number
+        id: bump
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          set -euo pipefail
+          message=$(gh api "repos/$REPO/pulls/$PR/commits" --jq '.[0].commit.message')
+          types=$(printf '%s\n' "$message" |
+            sed -n 's/^ *update-type: version-update:semver-//p')
+          # No trailer means the message is not the shape this reads, and an
+          # unread update type is not a safe one.
+          minor=$(printf '%s\n' "$types" | grep -cxE 'patch|minor' || true)
+          total=$(printf '%s\n' "$types" | grep -c . || true)
+          safe=no
+          if [ "$total" -gt 0 ] && [ "$minor" = "$total" ]; then safe=yes; fi
+          echo "safe=$safe" >> "$GITHUB_OUTPUT"
+
+      - name: merge
+        if: steps.bump.outputs.safe == 'yes'
+        env:
+          PR: ${{ steps.pr.outputs.number }}
+        run: gh pr merge --squash "$PR" --repo "$REPO"
