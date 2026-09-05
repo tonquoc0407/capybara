@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: write
+  # cosign signs with the token this grants; there is no key to store.
+  id-token: write
 
 jobs:
   release:
@@ -20,6 +22,7 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - uses: sigstore/cosign-installer@v4
       - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"

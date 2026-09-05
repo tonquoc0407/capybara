@@ -47,5 +47,53 @@ homebrew_casks:
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/capybara"]
           end
 
+# Keyless signing: cosign takes its identity from the workflow's OIDC token, so
+# there is no private key to keep. The checksums file is the only artifact
+# signed, since every archive is named in it.
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    output: true
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+
 changelog:
-  disable: true
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^feat(\(.+\))?!?:'
+      order: 0
+    - title: Fixes
+      regexp: '^fix(\(.+\))?!?:'
+      order: 1
+    - title: Dependencies
+      regexp: '^build\(deps\)'
+      order: 2
+    # Anything that does not announce its own kind still belongs in the notes.
+    - title: Other
+      order: 99
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+
+release:
+  footer: |
+    ---
+    Verify a download against the signed checksums:
+
+    ```
+    cosign verify-blob checksums.txt \
+      --certificate checksums.txt.pem \
+      --signature checksums.txt.sig \
+      --certificate-identity-regexp 'https://github.com/tonquoc0407/capybara/.*' \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com
+    sha256sum --check --ignore-missing checksums.txt
+    ```
