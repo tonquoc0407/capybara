@@ -65,6 +65,8 @@ signs:
 
 changelog:
   sort: asc
+  # The subject is the information; a 40-character sha in front of it is not.
+  abbrev: 0
   groups:
     - title: Features
       regexp: '^feat(\(.+\))?!?:'
