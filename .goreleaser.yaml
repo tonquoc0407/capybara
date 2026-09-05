@@ -54,11 +54,12 @@ signs:
   - cmd: cosign
     artifacts: checksum
     output: true
-    certificate: "${artifact}.pem"
+    # cosign writes one sigstore bundle now; the separate --output-signature
+    # and --output-certificate it replaced are deprecated and ignored.
+    signature: "${artifact}.sigstore.json"
     args:
       - sign-blob
-      - "--output-certificate=${certificate}"
-      - "--output-signature=${signature}"
+      - "--bundle=${signature}"
       - "${artifact}"
       - "--yes"
 
@@ -91,8 +92,7 @@ release:
 
     ```
     cosign verify-blob checksums.txt \
-      --certificate checksums.txt.pem \
-      --signature checksums.txt.sig \
+      --bundle checksums.txt.sigstore.json \
       --certificate-identity-regexp 'https://github.com/tonquoc0407/capybara/.*' \
       --certificate-oidc-issuer https://token.actions.githubusercontent.com
     sha256sum --check --ignore-missing checksums.txt
