@@ -73,7 +73,7 @@ covered. Cross-compilation is not a substitute for native runtime tests.
 - [ ] Add `capybara doctor`: OS/arch/build, config/db paths, writable locations,
   terminal capabilities, listener conflicts, and optional Python/editor/GPU
   availability. Do not print recorded content or credentials.
-- [ ] Add headless collection with graceful shutdown and clear listener status.
+- [x] Add headless collection with graceful shutdown and clear listener status.
 - [ ] Provide explicit controls for automatic Claude-session watching and custom
   session roots; preserve the current default until a documented change is agreed.
 - [ ] Add distro smoke tests for import/analyze/export/check and headless OTLP

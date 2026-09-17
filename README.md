@@ -91,6 +91,28 @@ capybara watch claude
 
 Tails Claude Code's own logs. No instrumentation, no restart — it reads what's already on disk.
 
+### Headless collection
+
+For a server, background job, or CI process that has no terminal, run the OTLP
+receiver and analyzer without the TUI:
+
+```sh
+capybara -db traces.db collect
+```
+
+It prints the database and the HTTP/gRPC addresses that actually bound, then
+runs until interrupted. The default listeners remain localhost-only. Move HTTP
+with the global `-otlp` flag before the command and gRPC with `-grpc` after it:
+
+```sh
+capybara -otlp 127.0.0.1:4319 collect -grpc 127.0.0.1:4320
+```
+
+Headless mode does not read Claude Code logs unless explicitly requested with
+`-watch-claude`; `-claude-root path` selects a non-default directory and implies
+the watcher. `-no-content` remains a global flag and reports `content dropped`
+at startup.
+
 ### A file you have
 
 ```sh
@@ -237,6 +259,7 @@ The detectors are held to a labelled corpus under [`corpus/`](corpus): 28 runs, 
 | Command | Description |
 | --- | --- |
 | `capybara watch claude` | tail a session source without the TUI |
+| `capybara collect` | receive and analyze traces without the TUI |
 | `capybara diff <run_a> <run_b>` | align spans, mark the first divergence |
 | `capybara blame <run>` | walk the final output back to its tainted source |
 | `capybara replay <run>` | re-run a recording, optionally with an edited tool result |

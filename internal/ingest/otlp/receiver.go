@@ -23,6 +23,14 @@ import (
 	"github.com/tonquoc0407/capybara/internal/store"
 )
 
+const (
+	// DefaultGRPCAddr and DefaultHTTPAddr are localhost-only so an unconfigured
+	// debugger never exposes recorded prompts or tool output to the network.
+	DefaultGRPCAddr = "127.0.0.1:4317"
+	// DefaultHTTPAddr is the localhost OTLP HTTP listener used by default.
+	DefaultHTTPAddr = "127.0.0.1:4318"
+)
+
 // Receiver ingests OTLP traces over grpc and http into the store.
 type Receiver struct {
 	GRPCAddr   string
@@ -41,13 +49,21 @@ type Receiver struct {
 func New(st *store.Store, captureContent bool) *Receiver {
 	m, err := LoadMapping(DefaultMappingPath())
 	return &Receiver{
-		GRPCAddr:   "127.0.0.1:4317",
-		HTTPAddr:   "127.0.0.1:4318",
+		GRPCAddr:   DefaultGRPCAddr,
+		HTTPAddr:   DefaultHTTPAddr,
 		store:      st,
 		capture:    captureContent,
 		mapping:    m,
 		mappingErr: err,
 	}
+}
+
+// GRPCAddress is the bound gRPC address, or empty when gRPC did not bind.
+func (r *Receiver) GRPCAddress() string {
+	if r.grpcLis == nil {
+		return ""
+	}
+	return r.grpcLis.Addr().String()
 }
 
 // Listen binds the ports without serving, so callers can report the address
@@ -110,6 +126,12 @@ func (r *Receiver) Run(ctx context.Context) error {
 		return nil
 	}
 	return r.serve(ctx)
+}
+
+// Close releases listeners that were bound by Listen but not yet served. It is
+// safe to call again after Run has shut its servers down.
+func (r *Receiver) Close() {
+	r.close()
 }
 
 func (r *Receiver) close() {
