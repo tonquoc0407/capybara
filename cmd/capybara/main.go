@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/tonquoc0407/capybara/internal/analyze"
+	"github.com/tonquoc0407/capybara/internal/configpath"
 	"github.com/tonquoc0407/capybara/internal/ingest/claude"
 	"github.com/tonquoc0407/capybara/internal/ingest/intake"
 	"github.com/tonquoc0407/capybara/internal/ingest/otlp"
@@ -151,7 +152,7 @@ func receive(ctx context.Context, dbPath, otlpAddr string, capture bool) error {
 // claudeNoticeOnce announces the auto-enabled claude watcher on first
 // detection ever, tracked by a marker file in the config dir.
 func claudeNoticeOnce(root string) {
-	marker := filepath.Join(configDir(), "capybara", "claude-notice")
+	marker := configpath.File("claude-notice")
 	if _, err := os.Stat(marker); err == nil {
 		return
 	}

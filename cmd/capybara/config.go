@@ -4,11 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
-	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 
+	"github.com/tonquoc0407/capybara/internal/configpath"
 	"github.com/tonquoc0407/capybara/internal/theme"
 )
 
@@ -17,7 +16,7 @@ type config struct {
 }
 
 func loadTheme() (theme.Theme, error) {
-	path := filepath.Join(configDir(), "capybara", "config.toml")
+	path := configpath.File("config.toml")
 	var cfg config
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -37,15 +36,4 @@ func loadTheme() (theme.Theme, error) {
 		return theme.Theme{}, fmt.Errorf("unknown theme %q in %s (have: %v)", cfg.Theme, path, names)
 	}
 	return th, nil
-}
-
-func configDir() string {
-	if x := os.Getenv("XDG_CONFIG_HOME"); x != "" {
-		return x
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "."
-	}
-	return filepath.Join(home, ".config")
 }

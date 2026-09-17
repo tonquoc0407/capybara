@@ -31,6 +31,11 @@ def lookup_price(sku: str) -> dict:
 OpenLLMetry instrumentors covering OpenAI, Anthropic, or LangChain keep working;
 capybara only adds an OTLP exporter and the schema processor.
 
+When local metrics are enabled, the SDK reports current process CPU and resident
+memory through `psutil`, which supports Linux, macOS, and Windows. GPU readings
+remain optional and currently require `nvidia-smi`; GPU values describe the first
+device as a whole, not this process alone.
+
 `@capybara.trace` wraps un-instrumented functions. A bare `@capybara.trace`
 records a tool span named after the function; `kind="agent"` or `kind="llm"`
 records other span kinds. `capybara.schema(tool, model)` attaches a Pydantic

@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 
+	"github.com/tonquoc0407/capybara/internal/configpath"
 	"github.com/tonquoc0407/capybara/internal/store"
 )
 
@@ -85,17 +85,9 @@ func LoadMapping(path string) (*Mapping, error) {
 	return &m, nil
 }
 
-// DefaultMappingPath returns ~/.config/capybara/mapping.toml.
+// DefaultMappingPath returns the native or legacy user configuration path.
 func DefaultMappingPath() string {
-	dir := os.Getenv("XDG_CONFIG_HOME")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-		dir = filepath.Join(home, ".config")
-	}
-	return filepath.Join(dir, "capybara", "mapping.toml")
+	return configpath.File("mapping.toml")
 }
 
 // kind returns the configured kind for a span, or ("", false) when no rule fits.

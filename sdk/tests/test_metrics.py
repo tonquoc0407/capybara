@@ -1,5 +1,8 @@
+from types import SimpleNamespace
+
 import capybara._metrics as metrics
 import capybara._otel as otel
+import pytest
 from opentelemetry.sdk.trace import TracerProvider
 
 
@@ -113,7 +116,76 @@ def test_sampler_attributes_a_reading_to_the_open_span() -> None:
 
 
 def test_rss_reads_the_live_process() -> None:
-    assert metrics._rss_bytes() > 0
+    rss = metrics._rss_bytes()
+    assert rss is not None and rss > 0
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        metrics.psutil.AccessDenied(),
+        metrics.psutil.NoSuchProcess(1),
+        metrics.psutil.ZombieProcess(1),
+        OSError("memory unavailable"),
+    ],
+)
+def test_rss_returns_none_when_memory_is_unavailable(monkeypatch, error) -> None:
+    class Denied:
+        pid = metrics.os.getpid()
+
+        def memory_info(self):
+            raise error
+
+    monkeypatch.setattr(metrics, "_PROCESS", Denied())
+    assert metrics._rss_bytes() is None
+
+
+def test_rss_reuses_the_handle_but_reads_current_memory(monkeypatch) -> None:
+    values = iter([4096, 2048])
+    created = []
+
+    class Process:
+        def __init__(self, pid):
+            self.pid = pid
+            created.append(pid)
+
+        def memory_info(self):
+            return SimpleNamespace(rss=next(values))
+
+    monkeypatch.setattr(metrics, "_PROCESS", None)
+    monkeypatch.setattr(metrics.psutil, "Process", Process)
+    assert metrics._rss_bytes() == 4096
+    assert metrics._rss_bytes() == 2048
+    assert created == [metrics.os.getpid()]
+
+
+def test_rss_refreshes_an_inherited_process_handle(monkeypatch) -> None:
+    created = []
+
+    def process(pid):
+        created.append(pid)
+        return SimpleNamespace(pid=pid, memory_info=lambda: SimpleNamespace(rss=2048))
+
+    monkeypatch.setattr(metrics, "_PROCESS", SimpleNamespace(pid=-1))
+    monkeypatch.setattr(metrics.psutil, "Process", process)
+    assert metrics._rss_bytes() == 2048
+    assert created == [metrics.os.getpid()]
+
+
+def test_rss_handle_creation_failure_is_graceful(monkeypatch) -> None:
+    def denied(pid):
+        raise metrics.psutil.AccessDenied(pid)
+
+    monkeypatch.setattr(metrics, "_PROCESS", None)
+    monkeypatch.setattr(metrics.psutil, "Process", denied)
+    assert metrics._rss_bytes() is None
+
+
+def test_sampler_omits_unavailable_memory(monkeypatch) -> None:
+    active = metrics.ActiveSpans()
+    active.on_start(FakeSpan(7, 9))
+    monkeypatch.setattr(metrics, "_rss_bytes", lambda: None)
+    assert list(metrics._Sampler(active).rss(None)) == []
 
 
 class FakeGPU:
