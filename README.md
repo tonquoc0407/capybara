@@ -260,6 +260,7 @@ The detectors are held to a labelled corpus under [`corpus/`](corpus): 28 runs, 
 | --- | --- |
 | `capybara watch claude` | tail a session source without the TUI |
 | `capybara collect` | receive and analyze traces without the TUI |
+| `capybara doctor` | report local configuration and runtime diagnostics |
 | `capybara diff <run_a> <run_b>` | align spans, mark the first divergence |
 | `capybara blame <run>` | walk the final output back to its tainted source |
 | `capybara replay <run>` | re-run a recording, optionally with an edited tool result |
@@ -328,6 +329,21 @@ output = ["my.completion"]
 ```
 
 `capybara coverage` reports which attribute namespaces went unmapped, so you can see what a new source needs before writing the file.
+
+## Diagnostics
+
+```sh
+capybara doctor
+```
+
+`doctor` does not open the database, start a persistent receiver, or print
+recorded content. It reports the version/platform, effective database and
+configuration paths, database-parent writability, stdin/stdout TTY state,
+whether configured OTLP ports can bind, and availability of the selected editor,
+Python replay runtime, and `nvidia-smi`. It briefly binds and closes the checked
+ports, so availability is diagnostic rather than a reservation. Use the global
+`-db` and `-otlp` flags plus `doctor -grpc host:port` to inspect non-default
+locations.
 
 ### External editor
 

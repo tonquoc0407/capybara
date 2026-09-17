@@ -63,7 +63,7 @@ func TestEditorProcessHandlesPathsWithSpaces(t *testing.T) {
 	}
 	configureTestEditor(t)
 	path := filepath.Join(t.TempDir(), "tool output 日本語.json")
-	name, args, err := editorCommand()
+	name, args, err := EditorCommand()
 	if err != nil {
 		t.Fatal(err)
 	}

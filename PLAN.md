@@ -70,7 +70,7 @@ covered. Cross-compilation is not a substitute for native runtime tests.
 
 ## Phase 2 — Diagnostics and deployment
 
-- [ ] Add `capybara doctor`: OS/arch/build, config/db paths, writable locations,
+- [x] Add `capybara doctor`: OS/arch/build, config/db paths, writable locations,
   terminal capabilities, listener conflicts, and optional Python/editor/GPU
   availability. Do not print recorded content or credentials.
 - [x] Add headless collection with graceful shutdown and clear listener status.

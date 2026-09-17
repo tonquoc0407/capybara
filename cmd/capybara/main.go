@@ -64,6 +64,8 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return watch(ctx, *dbPath, capture, args[1:])
 	case "collect":
 		return collectCmd(ctx, *dbPath, *otlpAddr, capture, args[1:], out)
+	case "doctor":
+		return doctorCmd(ctx, *dbPath, *otlpAddr, args[1:], out)
 	case "diff":
 		return diffCmd(ctx, *dbPath, args[1:], out)
 	case "replay":
@@ -238,6 +240,7 @@ watcher when ~/.claude/projects exists.
 
   watch    tail an external session source (claude)
   collect  receive and analyze traces without the TUI
+  doctor   report local configuration and runtime diagnostics
   import   import a trace file (agent-replay json, span-per-line jsonl)
   diff     compare two runs
   replay   re-run a recorded run, optionally with an edited tool output

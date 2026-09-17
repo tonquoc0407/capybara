@@ -97,7 +97,7 @@ func (m appModel) handleReplayKey() (tea.Model, tea.Cmd) {
 }
 
 func (m appModel) editorCmd(msg editReadyMsg) tea.Cmd {
-	name, args, err := editorCommand()
+	name, args, err := EditorCommand()
 	if err != nil {
 		return func() tea.Msg {
 			return editDoneMsg{span: msg.span, path: msg.path, err: err}

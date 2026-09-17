@@ -8,7 +8,8 @@ import (
 	"unicode"
 )
 
-func editorCommand() (string, []string, error) {
+// EditorCommand returns the configured editor without invoking a shell.
+func EditorCommand() (string, []string, error) {
 	return parseEditor(selectEditor(runtime.GOOS, os.Getenv("VISUAL"), os.Getenv("EDITOR")))
 }
 
