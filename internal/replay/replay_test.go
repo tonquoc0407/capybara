@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -192,17 +194,32 @@ func TestBuildRequiresARecordedEntrypoint(t *testing.T) {
 	}
 }
 
-func TestRunLinksTheReplayToItsParent(t *testing.T) {
+func TestRunExecutesTheRecordedRuntimeAndLinksItsParent(t *testing.T) {
 	st := openTemp(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	recorded(t, st)
 	m, err := Build(ctx, st, "r1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	m.Entrypoint = []string{"/bin/sh", "-c", "exit 0"}
-	if err := Run(ctx, st, m, true); err == nil {
-		t.Log("runner exited cleanly")
+	python, cwd, marker := fakePythonReplay(t)
+	m.Entrypoint = []string{python, "agent.py"}
+	m.Cwd = cwd
+	err = Run(ctx, st, m, true)
+	if err == nil || !strings.Contains(err.Error(), "fake replay ran") {
+		t.Fatalf("Run = %v, want the fake runner's failure", err)
+	}
+	raw, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("runner marker: %v", err)
+	}
+	var handedOff Manifest
+	if err := json.Unmarshal(raw, &handedOff); err != nil {
+		t.Fatalf("runner received invalid manifest: %v", err)
+	}
+	if handedOff.RunID != m.RunID || handedOff.ParentRunID != "r1" || handedOff.Endpoint == "" {
+		t.Fatalf("runner manifest = %+v", handedOff)
 	}
 	runs, err := st.ListRuns(ctx)
 	if err != nil {
@@ -217,4 +234,39 @@ func TestRunLinksTheReplayToItsParent(t *testing.T) {
 		}
 	}
 	t.Fatal("replay run was not created")
+}
+
+// fakePythonReplay provides the module Run invokes, using the platform's own
+// Python rather than a shell script. It records the handed-off manifest, then
+// fails deliberately so the test does not wait for spans that it never emits.
+func fakePythonReplay(t *testing.T) (python, cwd, marker string) {
+	t.Helper()
+	for _, name := range []string{"python3", "python"} {
+		path, err := exec.LookPath(name)
+		if err == nil {
+			python = path
+			break
+		}
+	}
+	if python == "" {
+		t.Skip("Python is required to exercise the Python replay runner")
+	}
+	cwd = t.TempDir()
+	pkg := filepath.Join(cwd, "capybara")
+	if err := os.MkdirAll(pkg, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg, "__init__.py"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	marker = filepath.Join(cwd, "runner marker.json")
+	source := "" +
+		"import pathlib, sys\n" +
+		"pathlib.Path('runner marker.json').write_bytes(pathlib.Path(sys.argv[1]).read_bytes())\n" +
+		"print('fake replay ran', file=sys.stderr)\n" +
+		"raise SystemExit(23)\n"
+	if err := os.WriteFile(filepath.Join(pkg, "replay.py"), []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return python, cwd, marker
 }
