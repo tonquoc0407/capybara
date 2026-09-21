@@ -11,7 +11,7 @@ require (
 	github.com/charmbracelet/x/exp/teatest v0.0.0-20260720091843-3eef36eaaa28
 	github.com/fsnotify/fsnotify v1.10.1
 	go.opentelemetry.io/collector/pdata v1.67.0
-	google.golang.org/grpc v1.84.0
+	google.golang.org/grpc v1.85.0-dev
 	modernc.org/sqlite v1.59.0
 )
 
