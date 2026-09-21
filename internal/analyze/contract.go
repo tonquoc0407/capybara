@@ -26,7 +26,7 @@ func (a *Analyzer) checkTool(ctx context.Context, sp store.Span) ([]store.Findin
 		switch contents[i].Role {
 		case "output":
 			output = &contents[i]
-		} else if contents[i].Role == "input" {
+		case "input":
 			input = &contents[i]
 		}
 	}
