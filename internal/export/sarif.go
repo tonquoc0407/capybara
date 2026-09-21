@@ -17,14 +17,14 @@ import (
 const infoURI = "https://github.com/tonquoc0407/capybara"
 
 var ruleDesc = map[string]string{
-	"improvised":        "model answered past a failed tool without acknowledging it",
-	"prompt_injection":  "tool or retrieval output carried a prompt-injection directive into the model",
-	"unsupported_claim": "answer stated a figure absent from the retrieved documents",
-	"unfaithful":        "answer claim unsupported by the retrieved documents (llm judge)",
-	"truncated":         "final answer stopped at the token limit, not at completion",
-	"secret_leak":       "span content carried a credential or card number",
-	"no_progress":       "model repeated the same answer across turns without converging",
-	"orphaned_span":     "span stopped reporting while still open, so the process died inside it",
+	"improvised":          "model answered past a failed tool without acknowledging it",
+	"prompt_injection":    "tool or retrieval output carried a prompt-injection directive into the model",
+	"unsupported_claim":   "answer stated a figure absent from the retrieved documents",
+	"unfaithful":          "answer claim unsupported by the retrieved documents (llm judge)",
+	"truncated":           "final answer stopped at the token limit, not at completion",
+	"secret_leak":         "span content carried a credential or card number",
+	"no_progress":         "model repeated the same answer across turns without converging",
+	"orphaned_span":       "span stopped reporting while still open, so the process died inside it",
 	"wrong_tool":          "agent called the wrong tool for the request (llm judge)",
 	"off_topic":           "final answer did not address the request (llm judge)",
 	"parse_error":         "trace payload failed to parse",
