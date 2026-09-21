@@ -59,6 +59,10 @@ func FindingSummary(f store.Finding) string {
 			return "malformed output, want " + d.Want
 		}
 		return "malformed output"
+	case "malformed_arguments":
+		return "malformed tool arguments"
+	case "rate_limited":
+		return "rate limited (429 or quota exceeded)"
 	case "empty_payload":
 		return "empty payload"
 	case "tool_error":

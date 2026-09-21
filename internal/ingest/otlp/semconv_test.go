@@ -93,6 +93,15 @@ func TestMapsAgentSpanAndErrorStatus(t *testing.T) {
 	}
 }
 
+func TestMapsPlanOperationToAgent(t *testing.T) {
+	td, span := singleSpan()
+	span.Attributes().PutStr("gen_ai.operation.name", "plan")
+	sp := ToBatch(td, true).Spans[0]
+	if sp.Kind != store.KindAgent {
+		t.Errorf("span = %+v, want KindAgent", sp)
+	}
+}
+
 func TestUnknownSpanPassesThroughAsOther(t *testing.T) {
 	td, span := singleSpan()
 	span.SetName("db.query")

@@ -71,6 +71,9 @@ func (a *Analyzer) Sweep(ctx context.Context) error {
 				costs[sp.ID] = *cost
 			}
 		}
+		if f := a.checkRateLimit(ctx, sp); f != nil {
+			findings = append(findings, *f)
+		}
 	}
 	taintsByRun := make(map[string][]store.Taint, len(runs))
 	for _, runID := range runs {

@@ -142,7 +142,7 @@ The recording above ends on a kill: the graphs keep the readings, the tree never
 
 ## What it looks for
 
-Findings are recorded, never enforced — analysis touches nothing outside the database, and only `findings --fail-on` turns a finding into a non-zero exit, when a CI job asks for it. Sixteen kinds: thirteen deterministic and passive, three opt-in judges that send data to an endpoint you name.
+Findings are recorded, never enforced — analysis touches nothing outside the database, and only `findings --fail-on` turns a finding into a non-zero exit, when a CI job asks for it. Eighteen kinds: fifteen deterministic and passive, three opt-in judges that send data to an endpoint you name.
 
 ### `improvised`
 
@@ -164,6 +164,14 @@ Fires when a tool's output stops matching the shape it's been returning — a fi
 ### `malformed` and `empty_payload`
 
 Cover output that won't parse, or that arrived empty — and only for tools whose output has always been structured.
+
+### `malformed_arguments`
+
+Marks a tool call whose input arguments could not be parsed as valid JSON — unclosed braces, bad escapes, or markdown backticks wrapping the payload. Only inputs opening with a JSON delimiter (`{`, `[`, or markdown block) are checked, so a tool that takes a plain shell command is never flagged.
+
+### `rate_limited`
+
+Marks a tool or model call that failed due to rate limiting or quota exhaustion: HTTP 429, `RateLimitError`, `insufficient_quota`, or `RESOURCE_EXHAUSTED`. Fires only on spans marked with an error, avoiding false alarms on tools that inspect quota limits.
 
 ### `tool_error`
 
@@ -217,7 +225,7 @@ A third opt-in judge, over whether the run's final answer actually addresses its
 
 ### Scored
 
-The detectors are held to a labelled corpus under [`corpus/`](corpus): 28 runs, each a positive for one type or a near-miss that must stay clean — a hedged answer after a failed call, a document that discusses prompt injection without carrying one, prose about API keys with no live credential in it. `capybara eval` re-analyses them and scores precision, recall and F1 per type; on this corpus every deterministic type sits at 1.0, and `sh corpus/run.sh` fails CI if one slips. The inputs are curated, so this is a regression gate on the detectors' spec, not a measurement of live traffic.
+The detectors are held to a labelled corpus under [`corpus/`](corpus): 32 runs, each a positive for one type or a near-miss that must stay clean — a hedged answer after a failed call, a document that discusses prompt injection without carrying one, prose about API keys with no live credential in it. `capybara eval` re-analyses them and scores precision, recall and F1 per type; on this corpus every deterministic type sits at 1.0, and `sh corpus/run.sh` fails CI if one slips. The inputs are curated, so this is a regression gate on the detectors' spec, not a measurement of live traffic.
 
 ## Other commands
 

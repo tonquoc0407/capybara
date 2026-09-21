@@ -64,7 +64,7 @@ func newRunContext(spans []store.Span, findings []store.Finding, fresh map[strin
 			continue
 		}
 		switch f.Type {
-		case "malformed", "empty_payload", "tool_error":
+		case "malformed", "malformed_arguments", "empty_payload", "tool_error", "rate_limited":
 			// A payload that is broken, empty, or says so itself is a stronger
 			// cause than a bare error status.
 			rc.failType[f.SpanID] = f.Type

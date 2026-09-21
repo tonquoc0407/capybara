@@ -13,4 +13,5 @@ __pycache__/
 CLAUDE.md
 capybara-spec.md
 .claude/
+.agents/
 

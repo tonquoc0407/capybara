@@ -100,6 +100,7 @@ var kindByOperation = map[string]store.Kind{
 	"invoke_agent":     store.KindAgent,
 	"create_agent":     store.KindAgent,
 	"invoke_workflow":  store.KindAgent,
+	"plan":             store.KindAgent,
 	"chat":             store.KindLLM,
 	"generate_content": store.KindLLM,
 	"text_completion":  store.KindLLM,
