@@ -23,7 +23,8 @@ func (a *Analyzer) checkTool(ctx context.Context, sp store.Span) ([]store.Findin
 	}
 	var output *store.Content
 	for i := range contents {
-		if contents[i].Role == "output" {
+		switch contents[i].Role {
+		case "output":
 			output = &contents[i]
 		}
 	}
