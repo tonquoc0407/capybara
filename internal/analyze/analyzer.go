@@ -152,6 +152,16 @@ func (a *Analyzer) checkRun(ctx context.Context, runID string,
 		return nil, nil, err
 	}
 	findings = append(findings, loopFindings(runID, calls)...)
+	errorSpans := make(map[string]bool)
+	for _, f := range append(known, findings...) {
+		switch f.Type {
+		case "tool_error", "malformed", "empty_payload", "rate_limited", "malformed_arguments":
+			if f.SpanID != "" {
+				errorSpans[f.SpanID] = true
+			}
+		}
+	}
+	findings = append(findings, oscillationFindings(runID, calls, errorSpans)...)
 	findings = append(findings, spikeFindings(spans)...)
 	taints := taintRun(spans, append(known, findings...))
 	return findings, taints, nil

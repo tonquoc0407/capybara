@@ -142,7 +142,7 @@ The recording above ends on a kill: the graphs keep the readings, the tree never
 
 ## What it looks for
 
-Findings are recorded, never enforced — analysis touches nothing outside the database, and only `findings --fail-on` turns a finding into a non-zero exit, when a CI job asks for it. Eighteen kinds: fifteen deterministic and passive, three opt-in judges that send data to an endpoint you name.
+Findings are recorded, never enforced — analysis touches nothing outside the database, and only `findings --fail-on` turns a finding into a non-zero exit, when a CI job asks for it. Nineteen kinds: sixteen deterministic and passive, three opt-in judges that send data to an endpoint you name.
 
 ### `improvised`
 
@@ -182,6 +182,10 @@ Only the top-level keys or the first line are read — searching the whole body 
 ### `loop`
 
 Marks the same call repeated back to back with the same arguments. A `Read` over ten files is a plan; the same `Read` ten times is a loop. Calls whose arguments were never recorded aren't compared against each other, because nothing is known about them.
+
+### `oscillation`
+
+Marks alternating tool calls trapped in a repeating cycle between two or more tools (e.g. A -> B -> A -> B -> A -> B) where the pattern fails to converge. A pipeline that cleanly processes items in pairs is left alone; oscillation flags cycles where at least one tool call in each iteration failed.
 
 ### `no_progress`
 

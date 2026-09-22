@@ -91,6 +91,8 @@ func FindingSummary(f store.Finding) string {
 		return fmt.Sprintf("parse error at line %d", d.Line)
 	case "loop":
 		return "tool loop: " + strings.Join(d.Pattern, ", ")
+	case "oscillation":
+		return "tool oscillation: " + strings.Join(d.Pattern, " <-> ")
 	case "cost_spike":
 		return fmt.Sprintf("token spike: %d vs %d baseline", d.Tokens, d.Baseline)
 	}

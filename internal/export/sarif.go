@@ -35,6 +35,7 @@ var ruleDesc = map[string]string{
 	"empty_payload":       "tool returned an empty payload",
 	"drift":               "tool output shape changed from its established contract",
 	"loop":                "a tool was called repeatedly with identical input",
+	"oscillation":         "tools alternated in a repeating cycle without converging",
 	"cost_spike":          "token usage spiked above the run baseline",
 }
 

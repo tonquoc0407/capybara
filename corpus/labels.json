@@ -13,7 +13,8 @@
     "secret_leak",
     "no_progress",
     "malformed_arguments",
-    "rate_limited"
+    "rate_limited",
+    "oscillation"
   ],
   "cases": [
     {
@@ -176,6 +177,16 @@
     },
     {
       "run": "rate-limited-benign",
+      "expect": []
+    },
+    {
+      "run": "oscillation-failing",
+      "expect": [
+        "oscillation"
+      ]
+    },
+    {
+      "run": "oscillation-benign",
       "expect": []
     }
   ]
