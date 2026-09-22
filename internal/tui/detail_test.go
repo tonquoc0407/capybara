@@ -132,3 +132,22 @@ func TestDetailWithoutContent(t *testing.T) {
 		t.Error("missing no-content notice")
 	}
 }
+
+func TestDetailYankText(t *testing.T) {
+	m := testDetail()
+	if got := m.yankText(); got != `{"price":42}` {
+		t.Errorf("yankText = %q, want output body", got)
+	}
+
+	// Without output, yanks user input
+	m.contents = []store.Content{{SpanID: "llm1", Role: "user", Body: "prompt text"}}
+	if got := m.yankText(); got != "prompt text" {
+		t.Errorf("yankText = %q, want prompt text", got)
+	}
+
+	// Without content, returns span name
+	m.contents = nil
+	if got := m.yankText(); got != "chat" {
+		t.Errorf("yankText = %q, want span name", got)
+	}
+}

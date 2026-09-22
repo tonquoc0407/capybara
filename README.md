@@ -127,8 +127,9 @@ The tree marks `x` for a failed span, `!` for one carrying a finding, and `?` fo
 | `tab` | change pane | `b` | blame the output |
 | `f` | filter by kind | `r` | re-run from a span |
 | `a` | raw attributes | `t` | export a pytest case |
-| `e` | edit a tool output | `?` | full help |
-| `q` | quit | `m` | resource monitor |
+| `e` | edit a tool output | `y` | copy to clipboard |
+| `q` | quit | `?` | full help |
+| `m` | resource monitor | | |
 
 The waterfall sorts spans by cost, so the turn that spent the money is the first line rather than something to scroll for. The context view shows what filled each turn's window — system text, tool output, history — and marks the turns where it dropped, which is where a compaction ate something.
 
