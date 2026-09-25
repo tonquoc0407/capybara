@@ -50,21 +50,3 @@ func TestLoadThemeRejectsUnknownName(t *testing.T) {
 		t.Fatal("expected an error for an unknown theme name")
 	}
 }
-
-func TestConfigDirUsesXDGWhenSet(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", "/xdg/config")
-	if got := configDir(); got != "/xdg/config" {
-		t.Errorf("configDir = %q, want /xdg/config", got)
-	}
-}
-
-func TestConfigDirFallsBackToHome(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", "")
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Skip("no home dir available")
-	}
-	if got := configDir(); got != filepath.Join(home, ".config") {
-		t.Errorf("configDir = %q, want %s", got, filepath.Join(home, ".config"))
-	}
-}

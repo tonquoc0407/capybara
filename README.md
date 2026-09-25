@@ -38,6 +38,13 @@ brew install tonquoc0407/tap/capybara
 
 Or `go install github.com/tonquoc0407/capybara/cmd/capybara@latest`, or grab a binary from the [releases page](https://github.com/tonquoc0407/capybara/releases). One file, no CGo, no runtime dependencies.
 
+Release targets are Linux, macOS, and Windows on x86-64 (`amd64`) and ARM64
+(`arm64`). Linux/macOS downloads are `.tar.gz`; Windows downloads are `.zip` and
+contain `capybara.exe`. The CLI does not require Python or Node; those runtimes
+are only needed for their SDKs and Python replay. Native runtime and terminal
+validation, broader Linux distribution testing, and packaging upgrades are
+tracked in [PLAN.md](PLAN.md).
+
 ## Getting a trace in
 
 Run it with no arguments. It opens the TUI, listens for OTLP on `127.0.0.1:4318` and `127.0.0.1:4317`, and tails `~/.claude/projects` when that directory exists:
@@ -83,6 +90,28 @@ capybara watch claude
 ```
 
 Tails Claude Code's own logs. No instrumentation, no restart — it reads what's already on disk.
+
+### Headless collection
+
+For a server, background job, or CI process that has no terminal, run the OTLP
+receiver and analyzer without the TUI:
+
+```sh
+capybara -db traces.db collect
+```
+
+It prints the database and the HTTP/gRPC addresses that actually bound, then
+runs until interrupted. The default listeners remain localhost-only. Move HTTP
+with the global `-otlp` flag before the command and gRPC with `-grpc` after it:
+
+```sh
+capybara -otlp 127.0.0.1:4319 collect -grpc 127.0.0.1:4320
+```
+
+Headless mode does not read Claude Code logs unless explicitly requested with
+`-watch-claude`; `-claude-root path` selects a non-default directory and implies
+the watcher. `-no-content` remains a global flag and reports `content dropped`
+at startup.
 
 ### A file you have
 
@@ -134,6 +163,12 @@ The tree marks `x` for a failed span, `!` for one carrying a finding, and `?` fo
 The waterfall sorts spans by cost, so the turn that spent the money is the first line rather than something to scroll for. The context view shows what filled each turn's window — system text, tool output, history — and marks the turns where it dropped, which is where a compaction ate something.
 
 The monitor graphs process CPU and memory, plus GPU where `nvidia-smi` finds a card, against the node that was running. It reads the sampler rather than the span tree, so it draws while a step is still going — a span only arrives once it ends, which is too late to watch. The strip under the graphs names the nodes in order, so a spike points at a step instead of a moment.
+
+The Python SDK uses `psutil` for current resident memory on Linux, macOS, and
+Windows. Unavailable measurements are omitted, not reported as zero. GPU
+readings are optional, NVIDIA-only, and describe the first device as a whole;
+Apple/AMD GPU monitoring is not implemented. Process readings are attributed to
+the newest open span, so attribution during concurrent tasks is approximate.
 
 <p align="center">
   <img src="demo/monitor.gif" alt="the monitor drawing a pipeline that is killed mid-step" width="720">
@@ -237,6 +272,8 @@ The detectors are held to a labelled corpus under [`corpus/`](corpus): 32 runs, 
 | Command | Description |
 | --- | --- |
 | `capybara watch claude` | tail a session source without the TUI |
+| `capybara collect` | receive and analyze traces without the TUI |
+| `capybara doctor` | report local configuration and runtime diagnostics |
 | `capybara diff <run_a> <run_b>` | align spans, mark the first divergence |
 | `capybara blame <run>` | walk the final output back to its tainted source |
 | `capybara replay <run>` | re-run a recording, optionally with an edited tool result |
@@ -263,7 +300,23 @@ The detectors are held to a labelled corpus under [`corpus/`](corpus): 32 runs, 
 
 ## Config
 
-`~/.config/capybara/config.toml`:
+User configuration lives under:
+
+| OS | Default directory |
+| --- | --- |
+| Linux | `~/.config/capybara` |
+| macOS | `~/Library/Application Support/capybara` |
+| Windows | `%APPDATA%\capybara` |
+
+`XDG_CONFIG_HOME`, when set, overrides the root on every OS: files are read from
+`$XDG_CONFIG_HOME/capybara` only. Without that override, each file uses its native
+location first and falls back to `~/.config/capybara` if the native file is
+absent. Existing files are never moved or deleted automatically; invalid or
+unreadable native files report an error instead of silently using an old copy.
+This applies to theme, pricing, mapping, and the one-time Claude watcher notice.
+The database still defaults to `capybara.db` in the working directory.
+
+`config.toml` in that directory:
 
 ```toml
 theme = "bara"
@@ -271,9 +324,9 @@ theme = "bara"
 
 `bara` is the default warm dark. `mono` drops the accent to grey; `paper` is for a light terminal. Red and amber mean the same thing in all three.
 
-Model rates live in a table built into the binary, covering the current Claude, OpenAI, and Gemini families. Extend or override it with `~/.config/capybara/pricing.json`, which is merged over the built-in one. A model with no entry stays unpriced rather than being guessed at, and a rate that varies by context length or by date is recorded at its standard tier — the table has no conditions in it.
+Model rates live in a table built into the binary, covering the current Claude, OpenAI, and Gemini families. Extend or override it with `pricing.json` in the config directory, which is merged over the built-in one. A model with no entry stays unpriced rather than being guessed at, and a rate that varies by context length or by date is recorded at its standard tier — the table has no conditions in it.
 
-The built-in conventions (OpenTelemetry `gen_ai`, OpenInference, OpenLLMetry, the Vercel AI SDK) cover most instrumentors. For one they don't, `~/.config/capybara/mapping.toml` names the attributes that decide a span's kind and where its model, tokens and content live, with no rebuild:
+The built-in conventions (OpenTelemetry `gen_ai`, OpenInference, OpenLLMetry, the Vercel AI SDK) cover most instrumentors. For one they don't, `mapping.toml` in the config directory names the attributes that decide a span's kind and where its model, tokens and content live, with no rebuild:
 
 ```toml
 [[kind]]
@@ -289,6 +342,37 @@ output = ["my.completion"]
 ```
 
 `capybara coverage` reports which attribute namespaces went unmapped, so you can see what a new source needs before writing the file.
+
+## Diagnostics
+
+```sh
+capybara doctor
+```
+
+`doctor` does not open the database, start a persistent receiver, or print
+recorded content. It reports the version/platform, effective database and
+configuration paths, database-parent writability, stdin/stdout TTY state,
+whether configured OTLP ports can bind, and availability of the selected editor,
+Python replay runtime, and `nvidia-smi`. It briefly binds and closes the checked
+ports, so availability is diagnostic rather than a reservation. Use the global
+`-db` and `-otlp` flags plus `doctor -grpc host:port` to inspect non-default
+locations.
+
+### External editor
+
+Editing a tool output uses `VISUAL`, then `EDITOR`, then `notepad.exe` on Windows
+or `vi` elsewhere. Quote executable paths and arguments that contain spaces, for
+example `export EDITOR='code --wait'` on Unix, or in PowerShell:
+
+```powershell
+$env:EDITOR = '"C:\Program Files\Microsoft VS Code\Code.exe" --wait'
+```
+
+Single and double quotes group words; backslashes are literal, so Windows paths
+are preserved. This is not a shell command: variables, globs, escapes, pipes,
+and redirection are not expanded. Use an editor's wait option when needed so
+capybara reads the replacement only after editing finishes. Empty or unclosed
+commands report an error and remove the staged edit file.
 
 ## Architecture
 

@@ -100,21 +100,37 @@ func (s *Store) ResetAnalysis(ctx context.Context) error {
 	return nil
 }
 
-// MarkAnalyzed flags spans as processed by the analyzer.
+// markAnalyzedChunk stays below SQLite's lowest common bind-variable limit.
+// A sweep can contain an entire imported trace, so one placeholder per span
+// stops working long before a 100k-span trace is unusual.
+const markAnalyzedChunk = 900
+
+// MarkAnalyzed flags spans as processed by the analyzer. Chunks share one
+// transaction, so a failure cannot leave a sweep only partly marked.
 func (s *Store) MarkAnalyzed(ctx context.Context, ids []string) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	args := make([]any, len(ids))
-	ph := make([]string, len(ids))
-	for i, id := range ids {
-		args[i] = id
-		ph[i] = "?"
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("mark analyzed: begin: %w", err)
 	}
-	if _, err := s.db.ExecContext(ctx,
-		`UPDATE spans SET analyzed = 1 WHERE id IN (`+strings.Join(ph, ",")+`)`,
-		args...); err != nil {
-		return fmt.Errorf("mark analyzed: %w", err)
+	defer func() { _ = tx.Rollback() }()
+	for start := 0; start < len(ids); start += markAnalyzedChunk {
+		end := min(start+markAnalyzedChunk, len(ids))
+		args := make([]any, end-start)
+		ph := make([]string, end-start)
+		for i, id := range ids[start:end] {
+			args[i], ph[i] = id, "?"
+		}
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE spans SET analyzed = 1 WHERE id IN (`+strings.Join(ph, ",")+`)`,
+			args...); err != nil {
+			return fmt.Errorf("mark analyzed: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("mark analyzed: commit: %w", err)
 	}
 	return nil
 }

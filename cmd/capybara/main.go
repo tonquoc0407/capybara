@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/tonquoc0407/capybara/internal/analyze"
+	"github.com/tonquoc0407/capybara/internal/configpath"
 	"github.com/tonquoc0407/capybara/internal/ingest/claude"
 	"github.com/tonquoc0407/capybara/internal/ingest/intake"
 	"github.com/tonquoc0407/capybara/internal/ingest/otlp"
@@ -61,6 +62,10 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return importFile(ctx, *dbPath, capture, args[1:])
 	case "watch":
 		return watch(ctx, *dbPath, capture, args[1:])
+	case "collect":
+		return collectCmd(ctx, *dbPath, *otlpAddr, capture, args[1:], out)
+	case "doctor":
+		return doctorCmd(ctx, *dbPath, *otlpAddr, args[1:], out)
 	case "diff":
 		return diffCmd(ctx, *dbPath, args[1:], out)
 	case "replay":
@@ -151,7 +156,7 @@ func receive(ctx context.Context, dbPath, otlpAddr string, capture bool) error {
 // claudeNoticeOnce announces the auto-enabled claude watcher on first
 // detection ever, tracked by a marker file in the config dir.
 func claudeNoticeOnce(root string) {
-	marker := filepath.Join(configDir(), "capybara", "claude-notice")
+	marker := configpath.File("claude-notice")
 	if _, err := os.Stat(marker); err == nil {
 		return
 	}
@@ -234,6 +239,8 @@ Without a command, starts the TUI, the OTLP receiver, and the claude
 watcher when ~/.claude/projects exists.
 
   watch    tail an external session source (claude)
+  collect  receive and analyze traces without the TUI
+  doctor   report local configuration and runtime diagnostics
   import   import a trace file (agent-replay json, span-per-line jsonl)
   diff     compare two runs
   replay   re-run a recorded run, optionally with an edited tool output

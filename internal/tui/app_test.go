@@ -3,9 +3,7 @@ package tui
 import (
 	"bytes"
 	"context"
-	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -146,9 +144,6 @@ func TestAppDiffFlow(t *testing.T) {
 // The re-run flow starts with e: the recorded output goes through $EDITOR and
 // the replacement is held until r.
 func TestAppEditStagesReplacementOutput(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("the stand-in editor is a shell script")
-	}
 	st := seededStore(t)
 	tool := store.Batch{
 		Source: "test",
@@ -160,15 +155,7 @@ func TestAppEditStagesReplacementOutput(t *testing.T) {
 	if err := st.WriteBatch(context.Background(), tool); err != nil {
 		t.Fatalf("WriteBatch: %v", err)
 	}
-	editor := filepath.Join(t.TempDir(), "ed.sh")
-	script := "#!/bin/sh\nprintf '{\"price\":99}' > \"$1\"\n"
-	if err := os.WriteFile(editor, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	// editorCommand() checks $VISUAL before $EDITOR; clear it so a host
-	// shell's own VISUAL can't shadow the stand-in editor here.
-	t.Setenv("VISUAL", "")
-	t.Setenv("EDITOR", editor)
+	configureTestEditor(t)
 	tm := startApp(t, st)
 	waitFor(t, tm, "lookup_price")
 	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})

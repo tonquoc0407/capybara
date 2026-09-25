@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -98,7 +97,12 @@ func (m appModel) handleReplayKey() (tea.Model, tea.Cmd) {
 }
 
 func (m appModel) editorCmd(msg editReadyMsg) tea.Cmd {
-	name, args := editorCommand()
+	name, args, err := EditorCommand()
+	if err != nil {
+		return func() tea.Msg {
+			return editDoneMsg{span: msg.span, path: msg.path, err: err}
+		}
+	}
 	c := exec.Command(name, append(args, msg.path)...)
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return editDoneMsg{span: msg.span, path: msg.path, err: err}
@@ -142,18 +146,6 @@ func (m appModel) finishReplay(msg replayDoneMsg) (tea.Model, tea.Cmd) {
 		}
 		return diffMsg{diff: d}
 	})
-}
-
-func editorCommand() (string, []string) {
-	editor := os.Getenv("VISUAL")
-	if editor == "" {
-		editor = os.Getenv("EDITOR")
-	}
-	if editor == "" {
-		editor = "vi"
-	}
-	fields := strings.Fields(editor)
-	return fields[0], fields[1:]
 }
 
 func spanLabel(sp store.Span) string {
