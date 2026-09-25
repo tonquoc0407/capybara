@@ -530,6 +530,7 @@ func TestToolOutputThatAnnouncesItsOwnFailure(t *testing.T) {
 	}{
 		{"error string", `{"status":502,"error":"upstream unavailable"}`, true},
 		{"mcp is_error", `{"isError":true,"content":"boom"}`, true},
+		{"mcp is_error snake", `{"is_error":true,"content":"boom"}`, true},
 		{"not ok", `{"ok":false,"data":null}`, true},
 		{"http status alone", `{"status":503}`, true},
 		{"empty error field", `{"error":"","rows":[1,2]}`, false},
@@ -559,6 +560,97 @@ func TestToolOutputThatAnnouncesItsOwnFailure(t *testing.T) {
 			}
 			if got != c.want {
 				t.Errorf("tool_error = %v, want %v for %s", got, c.want, c.output)
+			}
+		})
+	}
+}
+
+func TestMalformedArguments(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{"valid json object", `{"query":"test","limit":10}`, false},
+		{"broken json object", `{"query":"test",`, true},
+		{"broken json markdown", "```json\n{\"query\":\"test\"\n", true},
+		{"plain text command", "ls -la /tmp", false},
+		{"empty input", "", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			st := openTemp(t)
+			sp := store.Span{
+				ID: "s1", RunID: "r1", Kind: store.KindTool, Name: "bash",
+				StartedAt: t0, EndedAt: t0.Add(time.Second), Status: "ok",
+				Attrs: store.Attrs{ToolName: "bash"},
+			}
+			b := store.Batch{Source: "test", Spans: []store.Span{sp}}
+			if c.input != "" {
+				b.Contents = append(b.Contents, store.Content{
+					SpanID: sp.ID, Role: "input", Seq: 0, Body: c.input, MediaType: "text/plain",
+				})
+			}
+			b.Contents = append(b.Contents, store.Content{
+				SpanID: sp.ID, Role: "output", Seq: 1, Body: "ok", MediaType: "text/plain",
+			})
+			if err := st.WriteBatch(context.Background(), b); err != nil {
+				t.Fatalf("WriteBatch: %v", err)
+			}
+			sweep(t, st)
+			var got bool
+			for _, f := range runFindings(t, st, "r1") {
+				if f.Type == "malformed_arguments" {
+					got = true
+				}
+			}
+			if got != c.want {
+				t.Errorf("malformed_arguments = %v, want %v for input %q", got, c.want, c.input)
+			}
+		})
+	}
+}
+
+func TestRateLimited(t *testing.T) {
+	cases := []struct {
+		name   string
+		status string
+		rawErr string
+		body   string
+		want   bool
+	}{
+		{"http 429 status error", "error", "", "429 Too Many Requests: rate limit exceeded", true},
+		{"quota exceeded error", "error", "insufficient_quota", "You have exceeded your current quota", true},
+		{"resource exhausted gRPC", "error", "RESOURCE_EXHAUSTED", "Quota exceeded for quota metric", true},
+		{"clean quota discussion", "ok", "", `{"quota": 1000, "remaining": 500}`, false},
+		{"unrelated error", "error", "connection_refused", "dial tcp 127.0.0.1:8080: connect: connection refused", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			st := openTemp(t)
+			sp := store.Span{
+				ID: "llm1", RunID: "r1", Kind: store.KindLLM, Name: "chat",
+				StartedAt: t0, EndedAt: t0.Add(time.Second), Status: c.status,
+				Attrs: store.Attrs{Model: "fake-gpt", Raw: map[string]any{"error": c.rawErr}},
+			}
+			b := store.Batch{Source: "test", Spans: []store.Span{sp}}
+			if c.body != "" {
+				b.Contents = append(b.Contents, store.Content{
+					SpanID: sp.ID, Role: "assistant", Seq: 0, Body: c.body, MediaType: "text/plain",
+				})
+			}
+			if err := st.WriteBatch(context.Background(), b); err != nil {
+				t.Fatalf("WriteBatch: %v", err)
+			}
+			sweep(t, st)
+			var got bool
+			for _, f := range runFindings(t, st, "r1") {
+				if f.Type == "rate_limited" {
+					got = true
+				}
+			}
+			if got != c.want {
+				t.Errorf("rate_limited = %v, want %v", got, c.want)
 			}
 		})
 	}

@@ -239,3 +239,60 @@ func TestGeminiResourceNameIsPriced(t *testing.T) {
 		t.Errorf("models/ prefix priced as %+v, want %+v", full, bare)
 	}
 }
+
+func TestOscillationOnAlternatingFailingCalls(t *testing.T) {
+	calls := []store.ToolCall{
+		{SpanID: "s1", Tool: "query", Input: `{"q":"1"}`, Recorded: true, Status: "error"},
+		{SpanID: "s2", Tool: "inspect", Input: `{"t":"1"}`, Recorded: true, Status: "ok"},
+		{SpanID: "s3", Tool: "query", Input: `{"q":"2"}`, Recorded: true, Status: "error"},
+		{SpanID: "s4", Tool: "inspect", Input: `{"t":"2"}`, Recorded: true, Status: "ok"},
+		{SpanID: "s5", Tool: "query", Input: `{"q":"3"}`, Recorded: true, Status: "error"},
+		{SpanID: "s6", Tool: "inspect", Input: `{"t":"3"}`, Recorded: true, Status: "ok"},
+	}
+	fs := oscillationFindings("r1", calls, nil)
+	if len(fs) != 1 || fs[0].Type != "oscillation" || fs[0].SpanID != "s1" {
+		t.Fatalf("findings = %+v, want 1 oscillation finding on s1", fs)
+	}
+	if !strings.Contains(fs[0].Detail, "query") || !strings.Contains(fs[0].Detail, "inspect") {
+		t.Errorf("detail = %s", fs[0].Detail)
+	}
+}
+
+func TestNoOscillationWhenClean(t *testing.T) {
+	calls := []store.ToolCall{
+		{SpanID: "s1", Tool: "fetch", Input: `{"id":1}`, Recorded: true, Status: "ok"},
+		{SpanID: "s2", Tool: "save", Input: `{"id":1}`, Recorded: true, Status: "ok"},
+		{SpanID: "s3", Tool: "fetch", Input: `{"id":2}`, Recorded: true, Status: "ok"},
+		{SpanID: "s4", Tool: "save", Input: `{"id":2}`, Recorded: true, Status: "ok"},
+		{SpanID: "s5", Tool: "fetch", Input: `{"id":3}`, Recorded: true, Status: "ok"},
+		{SpanID: "s6", Tool: "save", Input: `{"id":3}`, Recorded: true, Status: "ok"},
+	}
+	if fs := oscillationFindings("r1", calls, nil); len(fs) != 0 {
+		t.Fatalf("clean calls flagged as oscillation: %+v", fs)
+	}
+}
+
+func TestNoOscillationOnSingleTool(t *testing.T) {
+	var calls []store.ToolCall
+	for i := range 6 {
+		calls = append(calls, store.ToolCall{
+			SpanID: fmt.Sprintf("s%d", i), Tool: "query", Input: fmt.Sprintf(`{"q":"%d"}`, i),
+			Recorded: true, Status: "error",
+		})
+	}
+	if fs := oscillationFindings("r1", calls, nil); len(fs) != 0 {
+		t.Fatalf("single tool flagged as oscillation: %+v", fs)
+	}
+}
+
+func TestNoOscillationOnTwoCycles(t *testing.T) {
+	calls := []store.ToolCall{
+		{SpanID: "s1", Tool: "query", Input: `{"q":"1"}`, Recorded: true, Status: "error"},
+		{SpanID: "s2", Tool: "inspect", Input: `{"t":"1"}`, Recorded: true, Status: "ok"},
+		{SpanID: "s3", Tool: "query", Input: `{"q":"2"}`, Recorded: true, Status: "error"},
+		{SpanID: "s4", Tool: "inspect", Input: `{"t":"2"}`, Recorded: true, Status: "ok"},
+	}
+	if fs := oscillationFindings("r1", calls, nil); len(fs) != 0 {
+		t.Fatalf("two cycles flagged as oscillation: %+v", fs)
+	}
+}

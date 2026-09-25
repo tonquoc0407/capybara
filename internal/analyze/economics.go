@@ -131,3 +131,94 @@ func sortSpansByEnd(spans []store.Span) {
 		return spans[i].ID < spans[j].ID
 	})
 }
+
+// oscillation detection: alternating sequence of distinct tools repeating in a
+// cycle across at least minRepeats iterations (e.g. A -> B -> A -> B -> A -> B),
+// where at least one tool call in each cycle failed or returned an error.
+const (
+	minOscillationGram    = 2
+	maxOscillationGram    = 3
+	minOscillationRepeats = 3
+)
+
+func oscillationFindings(runID string, calls []store.ToolCall, errorSpans map[string]bool) []store.Finding {
+	var findings []store.Finding
+	covered := make([]bool, len(calls))
+	for n := minOscillationGram; n <= maxOscillationGram; n++ {
+		for i := 0; i+n <= len(calls); {
+			if covered[i] {
+				i++
+				continue
+			}
+			pattern := make([]string, n)
+			for k := range n {
+				pattern[k] = calls[i+k].Tool
+			}
+			if !hasDistinctTools(pattern) {
+				i++
+				continue
+			}
+			repeats := 1
+			for j := i + n; j+n <= len(calls) && equalToolGram(calls, i, j, n); j += n {
+				repeats++
+			}
+			if repeats < minOscillationRepeats {
+				i++
+				continue
+			}
+			// Every cycle must have had at least one failed call.
+			allCyclesFailed := true
+			for r := range repeats {
+				cycleFailed := false
+				for k := range n {
+					c := calls[i+r*n+k]
+					if c.Status == "error" || errorSpans[c.SpanID] {
+						cycleFailed = true
+						break
+					}
+				}
+				if !cycleFailed {
+					allCyclesFailed = false
+					break
+				}
+			}
+			if !allCyclesFailed {
+				i++
+				continue
+			}
+			for k := i; k < i+repeats*n; k++ {
+				covered[k] = true
+			}
+			detail, _ := json.Marshal(map[string]any{
+				"pattern": pattern, "n": n, "repeats": repeats,
+			})
+			findings = append(findings, store.Finding{
+				RunID: runID, SpanID: calls[i].SpanID, Type: "oscillation",
+				Severity: "warning", Detail: string(detail),
+			})
+			i += repeats * n
+		}
+	}
+	return findings
+}
+
+func hasDistinctTools(pattern []string) bool {
+	for i := 1; i < len(pattern); i++ {
+		if pattern[i] != pattern[0] {
+			return true
+		}
+	}
+	return false
+}
+
+func equalToolGram(calls []store.ToolCall, a, b, n int) bool {
+	if b+n > len(calls) {
+		return false
+	}
+	for k := range n {
+		if calls[a+k].Tool != calls[b+k].Tool {
+			return false
+		}
+	}
+	return true
+}

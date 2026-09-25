@@ -76,6 +76,42 @@ func (m *detailModel) toggleRaw() {
 	m.render()
 }
 
+// yankText returns the primary text payload of the selected span or diff step.
+func (m *detailModel) yankText() string {
+	if m.diff != nil {
+		var parts []string
+		for _, c := range m.diff.sideA {
+			parts = append(parts, c.Body)
+		}
+		for _, c := range m.diff.sideB {
+			parts = append(parts, c.Body)
+		}
+		return strings.Join(parts, "\n")
+	}
+	if len(m.contents) == 0 {
+		if m.span != nil {
+			return m.span.Name
+		}
+		return ""
+	}
+	var outputs []string
+	for _, c := range m.contents {
+		if c.Role == "output" || c.Role == "assistant" {
+			outputs = append(outputs, c.Body)
+		}
+	}
+	if len(outputs) > 0 {
+		return strings.Join(outputs, "\n")
+	}
+	var all []string
+	for _, c := range m.contents {
+		if c.Body != "" {
+			all = append(all, c.Body)
+		}
+	}
+	return strings.Join(all, "\n")
+}
+
 func (m *detailModel) update(msg tea.KeyMsg) tea.Cmd {
 	if msg.String() == "a" {
 		m.toggleRaw()

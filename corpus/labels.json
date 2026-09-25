@@ -11,7 +11,10 @@
     "unsupported_claim",
     "truncated",
     "secret_leak",
-    "no_progress"
+    "no_progress",
+    "malformed_arguments",
+    "rate_limited",
+    "oscillation"
   ],
   "cases": [
     {
@@ -154,6 +157,36 @@
     },
     {
       "run": "no-progress-varied",
+      "expect": []
+    },
+    {
+      "run": "malformed-args-broken",
+      "expect": [
+        "malformed_arguments"
+      ]
+    },
+    {
+      "run": "malformed-args-plain",
+      "expect": []
+    },
+    {
+      "run": "rate-limited-429",
+      "expect": [
+        "rate_limited"
+      ]
+    },
+    {
+      "run": "rate-limited-benign",
+      "expect": []
+    },
+    {
+      "run": "oscillation-failing",
+      "expect": [
+        "oscillation"
+      ]
+    },
+    {
+      "run": "oscillation-benign",
       "expect": []
     }
   ]

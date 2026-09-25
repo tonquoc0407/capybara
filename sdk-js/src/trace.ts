@@ -14,6 +14,12 @@ export interface TraceOptions {
   target?: string;
 }
 
+export let toolServer: ((tool: string, argumentsText: string) => unknown) | undefined;
+
+export function setToolServer(server?: (tool: string, argumentsText: string) => unknown): void {
+  toolServer = server;
+}
+
 // trace wraps a function so each call is recorded as a capybara span, awaiting a
 // returned promise so the tool result lands on the span it belongs to.
 export function trace<A extends unknown[], R>(fn: (...a: A) => R, opts: TraceOptions = {}): (...a: A) => R {
@@ -28,13 +34,21 @@ export function trace<A extends unknown[], R>(fn: (...a: A) => R, opts: TraceOpt
       span.setAttribute('gen_ai.operation.name', operation);
       if (toolName !== undefined) {
         span.setAttribute('gen_ai.tool.name', toolName);
-        span.setAttribute('gen_ai.tool.call.arguments', dump(args));
+        const argStr = dump(args);
+        span.setAttribute('gen_ai.tool.call.arguments', argStr);
         if (opts.target !== undefined) {
           span.setAttribute('capybara.target', opts.target);
         }
         const declared = schemaFor(toolName);
         if (declared !== undefined) {
           span.setAttribute(SCHEMA_ATTR, declared);
+        }
+        if (toolServer !== undefined) {
+          const res = toolServer(toolName, argStr);
+          recordResult(span, toolName, res);
+          span.end();
+          const isAsync = fn.constructor?.name === 'AsyncFunction';
+          return (isAsync ? Promise.resolve(res) : res) as R;
         }
       }
       let result: R;

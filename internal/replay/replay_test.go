@@ -270,3 +270,18 @@ func fakePythonReplay(t *testing.T) (python, cwd, marker string) {
 	}
 	return python, cwd, marker
 }
+
+func TestReplayCommandRouting(t *testing.T) {
+	ctx := context.Background()
+	mPy := Manifest{Entrypoint: []string{"python3", "main.py"}}
+	cmdPy := replayCommand(ctx, mPy, "/tmp/manifest.json")
+	if len(cmdPy.Args) < 4 || cmdPy.Args[1] != "-m" || cmdPy.Args[2] != "capybara.replay" {
+		t.Errorf("python command = %v", cmdPy.Args)
+	}
+
+	mNode := Manifest{Entrypoint: []string{"node", "index.js"}}
+	cmdNode := replayCommand(ctx, mNode, "/tmp/manifest.json")
+	if len(cmdNode.Args) < 4 || cmdNode.Args[1] != "--input-type=module" {
+		t.Errorf("node command = %v", cmdNode.Args)
+	}
+}

@@ -38,7 +38,7 @@ func Run(ctx context.Context, st *store.Store, m Manifest, captureContent bool) 
 		return err
 	}
 	defer cleanup()
-	cmd := exec.CommandContext(ctx, m.Entrypoint[0], "-m", "capybara.replay", path)
+	cmd := replayCommand(ctx, m, path)
 	cmd.Dir = m.Cwd
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
@@ -47,6 +47,17 @@ func Run(ctx context.Context, st *store.Store, m Manifest, captureContent bool) 
 	}
 	waitForSpans(ctx, st, m.RunID)
 	return nil
+}
+
+func replayCommand(ctx context.Context, m Manifest, path string) *exec.Cmd {
+	exe := strings.ToLower(filepath.Base(m.Entrypoint[0]))
+	isNode := strings.Contains(exe, "node") || strings.Contains(exe, "bun") || strings.Contains(exe, "tsx") ||
+		(len(m.Entrypoint) > 1 && (strings.HasSuffix(m.Entrypoint[1], ".js") || strings.HasSuffix(m.Entrypoint[1], ".ts") || strings.HasSuffix(m.Entrypoint[1], ".mjs")))
+	if isNode {
+		code := fmt.Sprintf("import('capybara-sdk/replay').then(r => r.run(%q)).catch(e => { console.error(e.message || e); process.exit(1); })", path)
+		return exec.CommandContext(ctx, m.Entrypoint[0], "--input-type=module", "-e", code)
+	}
+	return exec.CommandContext(ctx, m.Entrypoint[0], "-m", "capybara.replay", path)
 }
 
 // serve gives the replay a receiver on a port of its own. Sharing the default

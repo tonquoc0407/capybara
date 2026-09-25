@@ -84,6 +84,7 @@ type keyMap struct {
 	Edit   key.Binding
 	Rerun  key.Binding
 	Attrs  key.Binding
+	Yank   key.Binding
 	Help   key.Binding
 	Quit   key.Binding
 }
@@ -102,6 +103,7 @@ func defaultKeys() keyMap {
 		Edit:   key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit output")),
 		Rerun:  key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "re-run")),
 		Attrs:  key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "attrs")),
+		Yank:   key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "yank")),
 		Help:   key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Quit:   key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 	}
@@ -116,7 +118,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.Nav, k.Expand, k.Panes},
 		{k.Search, k.Filter, k.Attrs},
 		{k.Views, k.Diff, k.Blame},
-		{k.Test, k.Edit, k.Rerun},
+		{k.Test, k.Edit, k.Rerun, k.Yank},
 		{k.Help, k.Quit},
 	}
 }
@@ -413,6 +415,8 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.handleEditKey()
 		case msg.String() == "r" && m.focus != focusDetail && !m.replaying:
 			return m.handleReplayKey()
+		case msg.String() == "y":
+			return m.handleYankKey()
 		case msg.String() == "esc" && m.focus == focusTree && m.mode != viewTree:
 			return m.switchMode(m.mode) // toggling the current mode returns to the tree
 		}
@@ -534,6 +538,22 @@ func (m *appModel) syncDiffDetail() {
 		d.sideB = m.diffv.diff.ContentsB[step.B.ID]
 	}
 	m.detail.setDiffStep(d)
+}
+
+func (m appModel) handleYankKey() (tea.Model, tea.Cmd) {
+	text := m.detail.yankText()
+	if text == "" {
+		m.notice = "nothing to copy"
+		return m, nil
+	}
+	_ = copyToClipboard(text)
+	n := len(text)
+	if n == 1 {
+		m.notice = "copied 1 byte"
+	} else {
+		m.notice = fmt.Sprintf("copied %d bytes", n)
+	}
+	return m, nil
 }
 
 // switchMode toggles the middle pane between the tree and the given view.

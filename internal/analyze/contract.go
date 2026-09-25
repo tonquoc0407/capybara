@@ -21,32 +21,46 @@ func (a *Analyzer) checkTool(ctx context.Context, sp store.Span) ([]store.Findin
 	if err != nil {
 		return nil, err
 	}
-	var output *store.Content
+	var input, output *store.Content
 	for i := range contents {
-		if contents[i].Role == "output" {
+		switch contents[i].Role {
+		case "output":
 			output = &contents[i]
+		case "input":
+			input = &contents[i]
 		}
-	}
-	if output == nil {
-		return nil, nil
 	}
 	tool := sp.Attrs.ToolName
 	if tool == "" {
 		tool = sp.Name
+	}
+	var argFindings []store.Finding
+	if input != nil {
+		body := strings.TrimSpace(input.Body)
+		isJSON := strings.HasPrefix(body, "{") || strings.HasPrefix(body, "[") || strings.HasPrefix(body, "```")
+		if isJSON && !json.Valid([]byte(body)) {
+			argFindings = append(argFindings, finding(sp, "malformed_arguments", "warning", map[string]any{
+				"tool": tool,
+			}))
+		}
+	}
+	if output == nil {
+		return argFindings, nil
 	}
 	current, declared, err := a.currentSchema(ctx, sp, tool)
 	if err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(output.Body) == "" {
-		return []store.Finding{finding(sp, "empty_payload", "warning",
-			map[string]any{"tool": tool})}, nil
+		return append(argFindings, finding(sp, "empty_payload", "warning",
+			map[string]any{"tool": tool})), nil
 	}
 	var value any
 	if err := json.Unmarshal([]byte(output.Body), &value); err != nil {
-		return a.nonJSONOutput(ctx, sp, tool, output.Body, current, declared)
+		fs, err := a.nonJSONOutput(ctx, sp, tool, output.Body, current, declared)
+		return append(argFindings, fs...), err
 	}
-	reported := reportedError(sp, tool, value)
+	reported := append(argFindings, reportedError(sp, tool, value)...)
 	obs := infer(value, 0)
 	if current == nil {
 		return reported, a.learn(ctx, sp, tool, obs)
@@ -90,7 +104,7 @@ func reportedError(sp store.Span, tool string, value any) []store.Finding {
 	switch {
 	case truthy(obj["error"]):
 		reason = "error"
-	case obj["isError"] == true: // the MCP tool-result convention
+	case obj["isError"] == true || obj["is_error"] == true: // the MCP tool-result convention
 		reason = "isError"
 	case obj["ok"] == false || obj["success"] == false:
 		reason = "not ok"
@@ -228,4 +242,43 @@ func finding(sp store.Span, typ, severity string, detail map[string]any) store.F
 	return store.Finding{
 		RunID: sp.RunID, SpanID: sp.ID, Type: typ, Severity: severity, Detail: string(raw),
 	}
+}
+
+// checkRateLimit catches HTTP 429 and rate limit / quota exhaustion errors on
+// any span, tool or llm.
+func (a *Analyzer) checkRateLimit(ctx context.Context, sp store.Span) *store.Finding {
+	if sp.Status != "error" {
+		return nil
+	}
+	raw := sp.Attrs.Raw
+	blob := strings.ToLower(fmt.Sprintf("%v %v %v", raw["error"], raw["exception.message"], raw["error.type"]))
+	if isRateLimitText(blob) {
+		f := finding(sp, "rate_limited", "warning", map[string]any{"kind": string(sp.Kind)})
+		return &f
+	}
+	contents, err := a.st.Contents(ctx, sp.ID)
+	if err == nil {
+		for _, c := range contents {
+			if isRateLimitText(strings.ToLower(c.Body)) {
+				f := finding(sp, "rate_limited", "warning", map[string]any{"kind": string(sp.Kind)})
+				return &f
+			}
+		}
+	}
+	return nil
+}
+
+func isRateLimitText(s string) bool {
+	return strings.Contains(s, "rate limit") ||
+		strings.Contains(s, "rate_limit") ||
+		strings.Contains(s, "ratelimit") ||
+		strings.Contains(s, "quota exceeded") ||
+		strings.Contains(s, "insufficient_quota") ||
+		strings.Contains(s, "resource_exhausted") ||
+		strings.Contains(s, "overloaded_error") ||
+		strings.Contains(s, "too many requests") ||
+		strings.Contains(s, "429 too many") ||
+		strings.Contains(s, "status 429") ||
+		strings.Contains(s, "code 429") ||
+		strings.Contains(s, "http 429")
 }

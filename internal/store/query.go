@@ -262,6 +262,7 @@ type ToolCall struct {
 	Tool     string
 	Input    string
 	Recorded bool
+	Status   string
 }
 
 // ToolCalls returns a run's completed tool calls with their inputs, in order.
@@ -271,7 +272,8 @@ func (s *Store) ToolCalls(ctx context.Context, runID string) ([]ToolCall, error)
 		        COALESCE(json_extract(s.attrs_json, '$.tool_name'), s.name),
 		        (SELECT c.body FROM contents c
 		         WHERE c.span_id = s.id AND c.role = 'input'
-		         ORDER BY c.seq LIMIT 1)
+		         ORDER BY c.seq LIMIT 1),
+		        s.status
 		 FROM spans s
 		 WHERE s.run_id = ? AND s.kind = 'tool' AND s.ended_at IS NOT NULL
 		 ORDER BY s.ended_at, s.id`, runID)
@@ -283,7 +285,7 @@ func (s *Store) ToolCalls(ctx context.Context, runID string) ([]ToolCall, error)
 	for rows.Next() {
 		var c ToolCall
 		var input sql.NullString
-		if err := rows.Scan(&c.SpanID, &c.Tool, &input); err != nil {
+		if err := rows.Scan(&c.SpanID, &c.Tool, &input, &c.Status); err != nil {
 			return nil, fmt.Errorf("scan tool call: %w", err)
 		}
 		c.Input, c.Recorded = input.String, input.Valid

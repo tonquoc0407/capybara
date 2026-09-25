@@ -5,6 +5,7 @@ import type { Span, SpanProcessor, ReadableSpan } from '@opentelemetry/sdk-trace
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { SchemaSpanProcessor } from './schema.js';
+import { ActiveSpansProcessor, metricsEndpoint, startMetrics } from './metrics.js';
 
 export const DEFAULT_ENDPOINT = 'http://127.0.0.1:4318/v1/traces';
 export const ENTRYPOINT_ATTR = 'capybara.entrypoint';
@@ -50,23 +51,44 @@ export function resolveEndpoint(endpoint?: string): string | undefined {
 export interface InitOptions {
   serviceName?: string;
   endpoint?: string;
+  metrics?: boolean;
 }
 
 // init exports spans to a local capybara. Calling it twice keeps the first
 // provider, mirroring an app that only wants one tracer pipeline.
+//
+// metrics defaults to on for a local capybara and off for any other
+// collector: the readings carry a span id, and that is a cardinality a real
+// metrics backend should not be handed without being asked.
 export function init(opts: InitOptions = {}): NodeTracerProvider {
   if (provider !== undefined) {
     return provider;
   }
   const url = resolveEndpoint(opts.endpoint);
+  const enableMetrics = opts.metrics ?? (url === DEFAULT_ENDPOINT);
+
+  const spanProcessors: SpanProcessor[] = [
+    new EntrypointSpanProcessor(),
+    new SchemaSpanProcessor(),
+  ];
+
+  if (enableMetrics) {
+    const activeSpans = new ActiveSpansProcessor();
+    spanProcessors.push(activeSpans);
+    const timer = startMetrics(metricsEndpoint(url), activeSpans);
+    activeSpans.setTimer(timer);
+  }
+
+  spanProcessors.push(new BatchSpanProcessor(new OTLPTraceExporter(url !== undefined ? { url } : {})));
+
   provider = new NodeTracerProvider({
     resource: resourceFromAttributes({ 'service.name': opts.serviceName ?? 'capybara' }),
-    spanProcessors: [
-      new EntrypointSpanProcessor(),
-      new SchemaSpanProcessor(),
-      new BatchSpanProcessor(new OTLPTraceExporter(url !== undefined ? { url } : {})),
-    ],
+    spanProcessors,
   });
   provider.register();
   return provider;
+}
+
+export function _resetForTests(): void {
+  provider = undefined;
 }
