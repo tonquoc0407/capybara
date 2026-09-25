@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -132,6 +133,33 @@ func TestWriteBatchReplacesSpans(t *testing.T) {
 	}
 	if len(spans) != 3 {
 		t.Errorf("got %d spans after rewrite, want 3", len(spans))
+	}
+}
+
+func TestMarkAnalyzedChunksLargeSweep(t *testing.T) {
+	s := openTemp(t)
+	ctx := context.Background()
+	const count = markAnalyzedChunk + 101
+	batch := Batch{Source: "test", Spans: make([]Span, 0, count)}
+	ids := make([]string, 0, count)
+	for i := range count {
+		id := fmt.Sprintf("span-%04d", i)
+		ids = append(ids, id)
+		batch.Spans = append(batch.Spans, Span{
+			ID: id, RunID: "r1", Kind: KindLLM, Name: "chat",
+			StartedAt: t0.Add(time.Duration(i) * time.Second),
+			EndedAt:   t0.Add(time.Duration(i+1) * time.Second),
+			Status:    "ok",
+		})
+	}
+	if err := s.WriteBatch(ctx, batch); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	if err := s.MarkAnalyzed(ctx, ids); err != nil {
+		t.Fatalf("MarkAnalyzed: %v", err)
+	}
+	if got, err := s.UnanalyzedSpans(ctx); err != nil || len(got) != 0 {
+		t.Fatalf("UnanalyzedSpans = %d, %v; want none", len(got), err)
 	}
 }
 

@@ -100,8 +100,8 @@ executable signing. Publishing and signing depend on maintainer authorization.
 
 ## Phase 4 — Measure and optimize large traces
 
-- [ ] Add reproducible fixtures/benchmarks for 1k/10k/100k spans, burst OTLP,
-  large tool outputs, resource samples, and repeated imports.
+- [x] Add reproducible fixtures/benchmarks for 1k/10k/100k spans, burst OTLP,
+  large tool outputs, resource samples, and fresh/repeated JSONL imports.
 - [ ] Capture import/analysis duration, allocations/peak memory, database growth,
   receiver throughput, UI response/refresh latency, and SDK overhead.
 - [ ] Define regression budgets from measured baselines, not guessed numbers.
@@ -199,3 +199,18 @@ could not run, rather than treating them as passed.
   filesystem watchers, and SDK wheels/install behavior.
 - Next patch: replace replay's misleading/Unix-specific process stand-ins with
   native subprocess tests, then implement `doctor` and headless collection.
+
+### 2026-09-18 — Large-trace benchmark fixtures
+
+- Added deterministic 1k/10k/100k-span benchmarks for SQLite writes, analysis
+  sweeps, run listing, burst OTLP mapping/ingest, resource samples, and fresh
+  versus repeated JSONL imports.
+- Added 64 KiB and 1 MiB tool-output workloads, plus an end-to-end analyzer test
+  proving a sweep larger than SQLite's bind-variable limit completes and marks
+  every span analyzed.
+- Baseline command:
+  `CGO_ENABLED=0 go test ./internal/store ./internal/analyze ./internal/ingest/intake ./internal/ingest/otlp`
+  and
+  `CGO_ENABLED=0 go test ./internal/store ./internal/analyze ./internal/ingest/intake ./internal/ingest/otlp -run '^$' -bench 'Benchmark(WriteBatch|Sweep|ListRuns|PutResourceSamples|ImportJSONL|BurstOTLP)' -benchtime=1x`.
+- Benchmark numbers are captured from the local NixOS x86-64 host after the
+  patch is verified; they are comparative baselines, not release budgets.
