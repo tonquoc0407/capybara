@@ -17,12 +17,20 @@ func exportCmd(ctx context.Context, dbPath string, args []string, out io.Writer)
 	fs.SetOutput(io.Discard)
 	golden := fs.Bool("golden", false, "snapshot a known-good run as a CI fixture")
 	html := fs.Bool("html", false, "write the run as a self-contained page")
+	ts := fs.Bool("ts", false, "write a Node.js/TypeScript regression test")
+	curl := fs.Bool("curl", false, "emit a curl command to reproduce the LLM call")
 	dir := fs.String("o", "", "output directory")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if fs.NArg() != 1 || (*golden && *html) {
-		return errors.New("usage: capybara export [--golden | --html] <run>")
+	modes := 0
+	for _, b := range []*bool{golden, html, ts, curl} {
+		if *b {
+			modes++
+		}
+	}
+	if fs.NArg() != 1 || modes > 1 {
+		return errors.New("usage: capybara export [--golden | --html | --ts | --curl] <run>")
 	}
 	st, err := store.Open(dbPath)
 	if err != nil {
@@ -31,6 +39,14 @@ func exportCmd(ctx context.Context, dbPath string, args []string, out io.Writer)
 	defer st.Close()
 	run, err := st.ResolveRunID(ctx, fs.Arg(0))
 	if err != nil {
+		return err
+	}
+	if *curl {
+		cmdStr, err := export.Curl(ctx, st, run)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(out, cmdStr)
 		return err
 	}
 	if *html {
@@ -54,6 +70,17 @@ func exportCmd(ctx context.Context, dbPath string, args []string, out io.Writer)
 		}
 		_, err = fmt.Fprintln(out, path)
 		return err
+	}
+	if *ts {
+		paths, err := export.WriteTypeScript(orDefault(*dir, export.DefaultDir), fx)
+		if err != nil {
+			return err
+		}
+		w := &errWriter{w: out}
+		for _, path := range paths {
+			w.printf("%s\n", path)
+		}
+		return w.err
 	}
 	paths, err := export.WritePytest(orDefault(*dir, export.DefaultDir), fx)
 	if err != nil {

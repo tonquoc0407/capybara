@@ -183,6 +183,50 @@ func TestExportWithoutGoldenWritesAPytestCase(t *testing.T) {
 	}
 }
 
+func TestExportTypeScriptCase(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "test.db")
+	importLine(t, db, dir, "run.jsonl", toolRunJSONL("ts-run", `{"price":42}`))
+	var stdout strings.Builder
+	args := []string{"-db", db, "export", "--ts", "-o", filepath.Join(dir, "tests"), "ts-run"}
+	if err := run(context.Background(), args, &stdout); err != nil {
+		t.Fatalf("export --ts: %v", err)
+	}
+	paths := strings.Fields(stdout.String())
+	if len(paths) != 2 {
+		t.Fatalf("printed %v, want a fixture and a test", paths)
+	}
+	src, err := os.ReadFile(paths[1])
+	if err != nil {
+		t.Fatalf("read test: %v", err)
+	}
+	for _, want := range []string{"import { Session } from 'capybara-sdk';", "session.serveTool"} {
+		if !strings.Contains(string(src), want) {
+			t.Errorf("generated test missing %q", want)
+		}
+	}
+}
+
+func TestExportCurlCase(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "test.db")
+	llmLine := `{"run":"curl-run","span":"c1","kind":"llm","name":"chat",` +
+		`"model":"gpt-4o","provider":"openai","start":"2026-07-22T10:00:00Z","end":"2026-07-22T10:00:01Z","status":"ok",` +
+		`"contents":[{"role":"user","body":"what is 1+1?"}]}` + "\n"
+	importLine(t, db, dir, "run.jsonl", llmLine)
+	var stdout strings.Builder
+	args := []string{"-db", db, "export", "--curl", "curl-run"}
+	if err := run(context.Background(), args, &stdout); err != nil {
+		t.Fatalf("export --curl: %v", err)
+	}
+	got := stdout.String()
+	if !strings.Contains(got, "https://api.openai.com/v1/chat/completions") ||
+		!strings.Contains(got, "$OPENAI_API_KEY") ||
+		!strings.Contains(got, "what is 1+1?") {
+		t.Errorf("export --curl unexpected output:\n%s", got)
+	}
+}
+
 // toolRunJSONL is one completed tool call, the unit capybara check compares.
 func toolRunJSONL(runID, output string) string {
 	return `{"run":"` + runID + `","span":"` + runID + `-t","kind":"tool","tool":"fetch",` +

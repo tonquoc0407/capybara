@@ -241,6 +241,8 @@ The detectors are held to a labelled corpus under [`corpus/`](corpus): 32 runs, 
 | `capybara blame <run>` | walk the final output back to its tainted source |
 | `capybara replay <run>` | re-run a recording, optionally with an edited tool result |
 | `capybara export <run>` | write a pytest case for the failure |
+| `capybara export <run> --ts` | write a node:test TypeScript regression test |
+| `capybara export <run> --curl` | emit a curl command reproducing an LLM call |
 | `capybara export <run> --golden` | write a CI fixture |
 | `capybara export <run> --html` | write a self-contained page |
 | `capybara check <golden> <run>` | compare against a golden, non-zero on divergence |
