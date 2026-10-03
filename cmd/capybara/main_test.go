@@ -392,3 +392,10 @@ func TestReceiverModeStopsOnCancelledContext(t *testing.T) {
 		t.Fatalf("run() = %v, want nil on cancelled context", err)
 	}
 }
+
+func TestMCPCommandRequiresCommandOrSSE(t *testing.T) {
+	err := run(context.Background(), []string{"mcp"}, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "usage: capybara mcp") {
+		t.Errorf("run(mcp) = %v, want usage error", err)
+	}
+}

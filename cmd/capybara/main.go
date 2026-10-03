@@ -87,6 +87,8 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return relevanceCmd(ctx, *dbPath, args[1:], out)
 	case "serve":
 		return serveCmd(ctx, *dbPath, args[1:], out)
+	case "mcp":
+		return mcpCmd(ctx, *dbPath, capture, args[1:])
 	case "help":
 		return usage(out)
 	}
@@ -239,6 +241,7 @@ watcher when ~/.claude/projects exists.
   replay   re-run a recorded run, optionally with an edited tool output
   blame    walk a run's final output back to its tainted source
   serve    serve the read-only web view
+  mcp      proxy and trace an MCP (Model Context Protocol) server
   export   export a run (--golden a CI fixture, --html a shareable page)
   check    compare a run against a golden snapshot, non-zero on divergence
   eval     score detectors against a labelled corpus (--fail-under gates CI)

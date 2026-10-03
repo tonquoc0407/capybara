@@ -240,6 +240,8 @@ The detectors are held to a labelled corpus under [`corpus/`](corpus): 32 runs, 
 | `capybara diff <run_a> <run_b>` | align spans, mark the first divergence |
 | `capybara blame <run>` | walk the final output back to its tainted source |
 | `capybara replay <run>` | re-run a recording, optionally with an edited tool result |
+| `capybara mcp -- <cmd>` | zero-config stdio proxy interceptor for any MCP server |
+| `capybara mcp --sse <url>` | bridge stdio MCP client to remote SSE server |
 | `capybara export <run>` | write a pytest case for the failure |
 | `capybara export <run> --ts` | write a node:test TypeScript regression test |
 | `capybara export <run> --curl` | emit a curl command reproducing an LLM call |
