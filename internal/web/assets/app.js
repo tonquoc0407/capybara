@@ -72,6 +72,9 @@
     runs.forEach(function (run) {
       var item = tag("li");
       item.dataset.id = run.id;
+      if (state.run && state.run.id === run.id) {
+        item.className = "on";
+      }
       var m = mark(run.status, run.findings);
       var head = tag("span");
       head.append(tag("span", m.cls, m.text), " ", run.label || shortID(run.id));
@@ -135,6 +138,11 @@
     }
     var found = findingsBySpan();
     buildTree(spans).forEach(function (node) { host.append(nodeView(node, found)); });
+    if (state.span) {
+      Array.prototype.forEach.call(document.querySelectorAll(".row"), function (row) {
+        row.classList.toggle("on", row.dataset.id === state.span);
+      });
+    }
   }
 
   function nodeView(node, found) {
@@ -214,12 +222,63 @@
     status([String(err)], "err");
   }
 
+  function reloadData() {
+    loadRuns().then(function (runs) {
+      renderRuns(runs);
+      if (state.run) {
+        var currentID = state.run.id;
+        var cur = runs.find ? runs.find(function (r) { return r.id === currentID; }) : null;
+        if (!cur) {
+          for (var j = 0; j < runs.length; j++) {
+            if (runs[j].id === currentID) { cur = runs[j]; break; }
+          }
+        }
+        if (cur) {
+          el("run-head").textContent = [
+            shortID(cur.id), cur.source, cur.status, money(cur.cost),
+          ].filter(Boolean).join(" - ");
+        }
+        loadRun(currentID).then(function (detail) {
+          state.run = detail;
+          renderTree();
+          var findings = (detail.findings || []).length;
+          status([
+            findings ? count(findings, "finding") : "",
+            count((detail.spans || []).length, "span"),
+          ], findings ? "warn" : "");
+          if (state.span) {
+            var found = null;
+            var spans = detail.spans || [];
+            for (var i = 0; i < spans.length; i++) {
+              if (spans[i].id === state.span) {
+                found = spans[i];
+                break;
+              }
+            }
+            if (found) {
+              var spanFindings = (detail.findings || []).filter(function (f) { return f.span === state.span; });
+              selectSpan(found, spanFindings);
+            }
+          }
+        }).catch(function () {});
+      } else if (runs.length) {
+        selectRun(runs[0]);
+      }
+    }).catch(fail);
+  }
+
   loadRuns().then(function (runs) {
     renderRuns(runs);
     if (runs.length) {
       selectRun(runs[0]);
     } else {
       status(["no runs recorded"]);
+    }
+    if (!inline && typeof EventSource !== "undefined") {
+      var source = new EventSource("api/events");
+      source.addEventListener("update", function () {
+        reloadData();
+      });
     }
   }).catch(fail);
 })();

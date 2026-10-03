@@ -68,6 +68,35 @@ func Handler(st *store.Store) http.Handler {
 		detail, err := Run(r.Context(), st, id)
 		writeJSON(w, detail, err)
 	})
+	mux.HandleFunc("GET /api/events", func(w http.ResponseWriter, r *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		ch, cancel := st.Subscribe()
+		defer cancel()
+
+		_, _ = fmt.Fprintf(w, ": connected\n\n")
+		flusher.Flush()
+
+		for {
+			select {
+			case <-r.Context().Done():
+				return
+			case _, ok := <-ch:
+				if !ok {
+					return
+				}
+				_, _ = fmt.Fprintf(w, "event: update\ndata: {}\n\n")
+				flusher.Flush()
+			}
+		}
+	})
 	return mux
 }
 

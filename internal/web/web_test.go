@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"io"
@@ -174,5 +175,66 @@ func decode(t *testing.T, url string, into any) {
 	t.Helper()
 	if err := json.Unmarshal([]byte(getBody(t, url)), into); err != nil {
 		t.Fatalf("decode %s: %v", url, err)
+	}
+}
+
+func TestHandlerEventsSSE(t *testing.T) {
+	st := seeded(t)
+	srv := httptest.NewServer(Handler(st))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", srv.URL+"/api/events", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET /api/events: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/event-stream") {
+		t.Fatalf("Content-Type = %q, want text/event-stream", ct)
+	}
+
+	r := bufio.NewReader(resp.Body)
+	line, err := r.ReadString('\n')
+	if err != nil {
+		t.Fatalf("read initial comment: %v", err)
+	}
+	if !strings.HasPrefix(line, ": connected") {
+		t.Errorf("initial line = %q, want : connected", line)
+	}
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		_ = st.WriteBatch(context.Background(), store.Batch{
+			Source: "test",
+			Spans: []store.Span{{
+				ID: "live-span", RunID: "run-live", Kind: store.KindTool, Name: "live_call",
+				StartedAt: t0, EndedAt: t0.Add(time.Second), Status: "ok",
+			}},
+		})
+	}()
+
+	received := false
+	for {
+		l, err := r.ReadString('\n')
+		if err != nil {
+			t.Fatalf("read sse event: %v", err)
+		}
+		if strings.HasPrefix(l, "event: update") {
+			received = true
+			break
+		}
+	}
+	if !received {
+		t.Error("did not receive event: update")
 	}
 }

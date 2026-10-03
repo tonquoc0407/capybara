@@ -255,7 +255,7 @@ The detectors are held to a labelled corpus under [`corpus/`](corpus): 32 runs, 
 | `capybara relevance` | grade answer relevance with an opt-in llm judge |
 | `capybara eval` | score detectors against a labelled corpus (precision, recall) |
 | `capybara coverage` | report typed-span coverage and unmapped namespaces |
-| `capybara serve` | read-only web view |
+| `capybara serve` | read-only web view with live SSE updates |
 
 `findings --write-baseline` records the findings a run already carries; `findings --baseline <file>` then reports and gates only the ones absent from it, so CI fails on what a change introduced rather than on the standing total. A finding's identity is its run, span and type, so editing a detail is not a regression.
 
@@ -263,7 +263,7 @@ The detectors are held to a labelled corpus under [`corpus/`](corpus): 32 runs, 
 
 `replay` serves the recorded model responses and tool outputs back to the agent process, so nothing touches the network. Edit one tool result first and only the turns after it go live — that's how you ask what the agent would have done with the answer it should have got. A call that isn't in the recording stops the replay rather than running live.
 
-`serve` and `export --html` render the same read-only page, one from the database and one with a single run inlined. Recorded bodies are written as text, never as markup.
+`serve` and `export --html` render the same read-only page, one from the database with live Server-Sent Events (SSE) updates and one with a single run inlined. Recorded bodies are written as text, never as markup.
 
 ## Config
 
