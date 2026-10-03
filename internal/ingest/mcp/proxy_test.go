@@ -362,7 +362,8 @@ func TestRunSSEBridge(t *testing.T) {
 
 	sseMsgCh := make(chan string, 10)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
+		switch r.Method {
+		case http.MethodGet:
 			w.Header().Set("Content-Type", "text/event-stream")
 			w.WriteHeader(http.StatusOK)
 			flusher, _ := w.(http.Flusher)
@@ -381,7 +382,7 @@ func TestRunSSEBridge(t *testing.T) {
 					return
 				}
 			}
-		} else if r.Method == "POST" {
+		case http.MethodPost:
 			body, _ := io.ReadAll(r.Body)
 			if strings.Contains(string(body), "tools/call") {
 				sseMsgCh <- `{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"pong"}],"isError":false}}`

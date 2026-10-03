@@ -1,3 +1,4 @@
+// Package mcp proxies and traces Model Context Protocol (MCP) servers.
 package mcp
 
 import (
@@ -292,11 +293,11 @@ func (p *StreamProxy) recordCompletedCall(ctx context.Context, call *inFlightCal
 	} else {
 		outputBody = string(msg.Result)
 		var resObj struct {
-			IsError  bool `json:"isError"`
-			Is_Error bool `json:"is_error"`
+			IsError      bool `json:"isError"`
+			IsErrorSnake bool `json:"is_error"`
 		}
 		if err := json.Unmarshal(msg.Result, &resObj); err == nil {
-			if resObj.IsError || resObj.Is_Error {
+			if resObj.IsError || resObj.IsErrorSnake {
 				status = "error"
 			}
 		}

@@ -64,9 +64,10 @@ func formatOpenAICurl(model string, contents []store.Content) (string, error) {
 	var messages []msg
 	for _, c := range contents {
 		role := c.Role
-		if role == "assistant" || role == "user" || role == "system" {
+		switch role {
+		case "assistant", "user", "system":
 			messages = append(messages, msg{Role: role, Content: c.Body})
-		} else if role == "prompt" || role == "input" {
+		case "prompt", "input":
 			messages = append(messages, msg{Role: "user", Content: c.Body})
 		}
 	}
@@ -95,11 +96,12 @@ func formatAnthropicCurl(model string, contents []store.Content) (string, error)
 	var system string
 	var messages []msg
 	for _, c := range contents {
-		if c.Role == "system" {
+		switch c.Role {
+		case "system":
 			system = c.Body
-		} else if c.Role == "user" || c.Role == "prompt" || c.Role == "input" {
+		case "user", "prompt", "input":
 			messages = append(messages, msg{Role: "user", Content: c.Body})
-		} else if c.Role == "assistant" {
+		case "assistant":
 			messages = append(messages, msg{Role: "assistant", Content: c.Body})
 		}
 	}
@@ -136,9 +138,10 @@ func formatGoogleCurl(model string, contents []store.Content) (string, error) {
 	var cList []contentObj
 	for _, c := range contents {
 		role := c.Role
-		if role == "assistant" {
+		switch role {
+		case "assistant":
 			role = "model"
-		} else if role == "prompt" || role == "input" {
+		case "prompt", "input":
 			role = "user"
 		}
 		cList = append(cList, contentObj{
