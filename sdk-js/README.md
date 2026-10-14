@@ -35,5 +35,5 @@ a JSON Schema to that tool's spans — the `{type, properties, required, items}`
 subset capybara understands, so no schema library is pulled in — and capybara
 then reports contract drift on the first violating call.
 
-Replay (`r` in the TUI) is Python-only for now; this package traces and declares
-schemas.
+Replay (`r` in the TUI, or `capybara replay <run>`) re-runs the Node entrypoint
+against recorded outputs, serving cached results and overrides via `capybara-sdk/replay`.

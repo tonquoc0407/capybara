@@ -1,7 +1,7 @@
 name: release
 
-# Tag v<version> to publish the binaries. The sdk-v* tags belong to the Python
-# package and are handled by publish-sdk.yml.
+# Tag v<version> to publish the binaries. The sdk-v* and sdk-js-v* tags belong
+# to the Python and Node.js packages and are handled by their respective workflows.
 on:
   push:
     tags: ["v*"]

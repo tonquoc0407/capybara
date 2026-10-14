@@ -302,7 +302,7 @@ Spans arrive over OTLP or from a file and are normalised into one shape: a run, 
 
 Analysis is a background pass over spans not yet analysed, woken whenever the store is written. It's incremental and restart-safe: a re-imported span is analysed again, and findings carry a unique key so the second pass records nothing new. Cost is computed per LLM span from the recorded token counts, cache reads included where the source reports them.
 
-The SDKs are optional. The Python one produces OTLP spans, a declared schema per tool when you give it one, and the replay entry point the binary calls back into; the Node one in `sdk-js/` mirrors the tracing and schema half. Neither is required — any OTLP source works.
+The SDKs are optional. The Python and Node ([`sdk-js/`](sdk-js)) ones produce OTLP spans, metrics, declared schemas per tool, and the replay runner the binary calls back into. Neither is required — any OTLP source works.
 
 ## License
 
