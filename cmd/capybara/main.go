@@ -89,6 +89,10 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return serveCmd(ctx, *dbPath, args[1:], out)
 	case "mcp":
 		return mcpCmd(ctx, *dbPath, capture, args[1:])
+	case "prune":
+		return pruneCmd(ctx, *dbPath, args[1:], out)
+	case "vacuum":
+		return vacuumCmd(ctx, *dbPath, args[1:], out)
 	case "help":
 		return usage(out)
 	}
@@ -242,6 +246,8 @@ watcher when ~/.claude/projects exists.
   blame    walk a run's final output back to its tainted source
   serve    serve the read-only web view
   mcp      proxy and trace an MCP (Model Context Protocol) server
+  prune    delete old runs (--keep, --older-than, --clean-ok)
+  vacuum   reclaim disk space from the SQLite database
   export   export a run (--golden a CI fixture, --html a shareable page)
   check    compare a run against a golden snapshot, non-zero on divergence
   eval     score detectors against a labelled corpus (--fail-under gates CI)
