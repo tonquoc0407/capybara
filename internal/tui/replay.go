@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -150,7 +151,11 @@ func editorCommand() (string, []string) {
 		editor = os.Getenv("EDITOR")
 	}
 	if editor == "" {
-		editor = "vi"
+		if runtime.GOOS == "windows" {
+			editor = "notepad.exe"
+		} else {
+			editor = "vi"
+		}
 	}
 	fields := strings.Fields(editor)
 	return fields[0], fields[1:]
