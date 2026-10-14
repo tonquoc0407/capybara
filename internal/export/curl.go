@@ -30,8 +30,13 @@ func Curl(ctx context.Context, st *store.Store, runID string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	model := llmSpan.Attrs.Model
-	provider := strings.ToLower(llmSpan.Attrs.Provider)
+	return CurlForSpan(*llmSpan, contents)
+}
+
+// CurlForSpan builds a copy-pasteable curl command reproducing an LLM span call.
+func CurlForSpan(sp store.Span, contents []store.Content) (string, error) {
+	model := sp.Attrs.Model
+	provider := strings.ToLower(sp.Attrs.Provider)
 	if provider == "" {
 		switch {
 		case strings.Contains(model, "claude"):

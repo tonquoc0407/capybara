@@ -68,44 +68,47 @@ type (
 		paths []string
 		err   error
 	}
-	errMsg struct{ err error }
+	yankCurlDoneMsg struct{}
+	errMsg          struct{ err error }
 )
 
 type keyMap struct {
-	Nav    key.Binding
-	Expand key.Binding
-	Panes  key.Binding
-	Search key.Binding
-	Filter key.Binding
-	Views  key.Binding
-	Diff   key.Binding
-	Blame  key.Binding
-	Test   key.Binding
-	Edit   key.Binding
-	Rerun  key.Binding
-	Attrs  key.Binding
-	Yank   key.Binding
-	Help   key.Binding
-	Quit   key.Binding
+	Nav      key.Binding
+	Expand   key.Binding
+	Panes    key.Binding
+	Search   key.Binding
+	Filter   key.Binding
+	Views    key.Binding
+	Diff     key.Binding
+	Blame    key.Binding
+	Test     key.Binding
+	Edit     key.Binding
+	Rerun    key.Binding
+	Attrs    key.Binding
+	Yank     key.Binding
+	YankCurl key.Binding
+	Help     key.Binding
+	Quit     key.Binding
 }
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Nav:    key.NewBinding(key.WithKeys("j", "k"), key.WithHelp("j/k", "nav")),
-		Expand: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "expand")),
-		Panes:  key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "panes")),
-		Search: key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
-		Filter: key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "filter")),
-		Views:  key.NewBinding(key.WithKeys("w", "c", "m"), key.WithHelp("w/c/m", "waterfall/context/monitor")),
-		Diff:   key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "diff")),
-		Blame:  key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "blame")),
-		Test:   key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "export test")),
-		Edit:   key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit output")),
-		Rerun:  key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "re-run")),
-		Attrs:  key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "attrs")),
-		Yank:   key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "yank")),
-		Help:   key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
-		Quit:   key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+		Nav:      key.NewBinding(key.WithKeys("j", "k"), key.WithHelp("j/k", "nav")),
+		Expand:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "expand")),
+		Panes:    key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "panes")),
+		Search:   key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
+		Filter:   key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "filter")),
+		Views:    key.NewBinding(key.WithKeys("w", "c", "m"), key.WithHelp("w/c/m", "waterfall/context/monitor")),
+		Diff:     key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "diff")),
+		Blame:    key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "blame")),
+		Test:     key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "export test")),
+		Edit:     key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit output")),
+		Rerun:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "re-run")),
+		Attrs:    key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "attrs")),
+		Yank:     key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "yank")),
+		YankCurl: key.NewBinding(key.WithKeys("Y"), key.WithHelp("Y", "curl")),
+		Help:     key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		Quit:     key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 	}
 }
 
@@ -118,7 +121,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.Nav, k.Expand, k.Panes},
 		{k.Search, k.Filter, k.Attrs},
 		{k.Views, k.Diff, k.Blame},
-		{k.Test, k.Edit, k.Rerun, k.Yank},
+		{k.Test, k.Edit, k.Rerun, k.Yank, k.YankCurl},
 		{k.Help, k.Quit},
 	}
 }
@@ -365,6 +368,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.detail.setSpan(msg.span, msg.contents, msg.findings, msg.sample)
 		}
 		return m, nil
+	case yankCurlDoneMsg:
+		m.notice = "copied curl command"
+		return m, nil
 	case errMsg:
 		m.lastErr = msg.err
 		return m, nil
@@ -417,6 +423,8 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.handleReplayKey()
 		case msg.String() == "y":
 			return m.handleYankKey()
+		case msg.String() == "Y":
+			return m.handleYankCurlKey()
 		case msg.String() == "esc" && m.focus == focusTree && m.mode != viewTree:
 			return m.switchMode(m.mode) // toggling the current mode returns to the tree
 		}
@@ -554,6 +562,27 @@ func (m appModel) handleYankKey() (tea.Model, tea.Cmd) {
 		m.notice = fmt.Sprintf("copied %d bytes", n)
 	}
 	return m, nil
+}
+
+func (m appModel) handleYankCurlKey() (tea.Model, tea.Cmd) {
+	sp, ok := m.middleSelected()
+	if !ok || sp.Kind != store.KindLLM {
+		m.notice = "Y copies curl for an llm span"
+		return m, nil
+	}
+	st := m.st
+	return m, func() tea.Msg {
+		contents, err := st.Contents(context.Background(), sp.ID)
+		if err != nil {
+			return errMsg{err}
+		}
+		cmdStr, err := export.CurlForSpan(sp, contents)
+		if err != nil {
+			return errMsg{err}
+		}
+		_ = copyToClipboard(cmdStr)
+		return yankCurlDoneMsg{}
+	}
 }
 
 // switchMode toggles the middle pane between the tree and the given view.
