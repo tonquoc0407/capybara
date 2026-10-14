@@ -48,7 +48,7 @@ func pruneCmd(ctx context.Context, dbPath string, args []string, out io.Writer) 
 	return err
 }
 
-func vacuumCmd(ctx context.Context, dbPath string, args []string, out io.Writer) error {
+func vacuumCmd(ctx context.Context, dbPath string, args []string, _ io.Writer) error {
 	fs := flag.NewFlagSet("vacuum", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {
@@ -64,4 +64,3 @@ func vacuumCmd(ctx context.Context, dbPath string, args []string, out io.Writer)
 	defer st.Close()
 	return st.Vacuum(ctx)
 }
-

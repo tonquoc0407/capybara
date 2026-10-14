@@ -62,4 +62,3 @@ func TestPruneCmd(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-

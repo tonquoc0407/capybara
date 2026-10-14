@@ -116,4 +116,3 @@ func (s *Store) deleteRuns(ctx context.Context, runIDs []string) error {
 	}
 	return nil
 }
-
