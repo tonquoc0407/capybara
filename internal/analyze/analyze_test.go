@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tonquoc0407/capybara/internal/store"
+	"github.com/tonquoc0407/capybara/internal/testutil"
 )
 
 var t0 = time.Date(2026, 7, 22, 10, 0, 0, 0, time.UTC)
@@ -139,6 +140,25 @@ func TestTextToolsNeverDriftOrMalform(t *testing.T) {
 	sweep(t, st)
 	if fs := runFindings(t, st, "r2"); len(fs) != 0 {
 		t.Fatalf("text tool findings = %+v", fs)
+	}
+}
+
+func TestSweepHandlesMoreThanSQLiteBindLimit(t *testing.T) {
+	st := openTemp(t)
+	ctx := context.Background()
+	const spanCount = 1001
+	if err := st.WriteBatch(ctx, testutil.TraceBatch(spanCount)); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+	if err := newAnalyzer(t, st).Sweep(ctx); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	spans, err := st.UnanalyzedSpans(ctx)
+	if err != nil {
+		t.Fatalf("UnanalyzedSpans: %v", err)
+	}
+	if len(spans) != 0 {
+		t.Fatalf("UnanalyzedSpans = %d, want none after large sweep", len(spans))
 	}
 }
 

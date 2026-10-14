@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"strings"
 
+	"github.com/tonquoc0407/capybara/internal/configpath"
 	"github.com/tonquoc0407/capybara/internal/store"
 )
 
@@ -52,17 +52,9 @@ func loadPricing(overridePath string) (pricing, error) {
 	return p, nil
 }
 
-// DefaultPricingPath returns ~/.config/capybara/pricing.json.
+// DefaultPricingPath returns the native or legacy user configuration path.
 func DefaultPricingPath() string {
-	dir := os.Getenv("XDG_CONFIG_HOME")
-	if dir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return ""
-		}
-		dir = filepath.Join(home, ".config")
-	}
-	return filepath.Join(dir, "capybara", "pricing.json")
+	return configpath.File("pricing.json")
 }
 
 func (p pricing) lookup(model string) (rates, bool) {

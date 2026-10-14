@@ -9,22 +9,17 @@ from __future__ import annotations
 
 import itertools
 import os
-import sys
 import threading
 import time
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
+import psutil
 from opentelemetry.metrics import CallbackOptions, Observation
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.trace import SpanProcessor
 
 from ._gpu import GPUReader
-
-try:
-    import resource
-except ImportError:  # windows
-    resource = None  # type: ignore[assignment]
 
 if TYPE_CHECKING:
     from opentelemetry.context import Context
@@ -47,6 +42,8 @@ GPU_MEM_METRIC = "capybara.gpu.memory.usage"
 # short enough to leave several samples inside a step that runs for a few
 # seconds. Not tuned against real traffic yet, unlike the cost-spike floor.
 INTERVAL_MS = 1000
+
+_PROCESS: psutil.Process | None = None
 
 
 class ActiveSpans(SpanProcessor):
@@ -87,20 +84,16 @@ class ActiveSpans(SpanProcessor):
 
 
 def _rss_bytes() -> int | None:
-    """Current resident set, falling back to the peak where /proc is absent."""
+    """Return the current resident set, or None if the OS denies it."""
+    global _PROCESS
     try:
-        with open("/proc/self/statm") as fh:
-            pages = int(fh.read().split()[1])
-        return pages * os.sysconf("SC_PAGE_SIZE")
-    except (OSError, IndexError, ValueError):
-        pass
-    if resource is None:
+        # Lazy creation avoids an OS probe on import; refresh after a fork so a
+        # child never reports its parent's memory through an inherited handle.
+        if _PROCESS is None or _PROCESS.pid != os.getpid():
+            _PROCESS = psutil.Process(os.getpid())
+        return _PROCESS.memory_info().rss
+    except (psutil.Error, OSError):
         return None
-    # The high-water mark, which never falls back after a release. Still the
-    # shape that matters before an out-of-memory kill, so it is reported.
-    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    # Linux counts kilobytes here; the BSDs and macOS count bytes.
-    return peak if sys.platform == "darwin" else peak * 1024
 
 
 class _Sampler:
