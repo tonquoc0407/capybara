@@ -16,12 +16,13 @@ func mcpCmd(ctx context.Context, dbPath string, capture bool, args []string) err
 	runID := fs.String("run", "", "run id to record under")
 	name := fs.String("name", "", "name or label for this MCP server")
 	sseURL := fs.String("sse", "", "connect to remote MCP SSE server URL instead of local command")
+	maxTurns := fs.Int("max-turns", 0, "circuit breaker: maximum allowed tool call turns (0 = unlimited)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	cmdArgs := fs.Args()
 	if *sseURL == "" && len(cmdArgs) == 0 {
-		return errors.New("usage: capybara mcp [--run id] [--name label] [--sse url | -- <command> [args...]]")
+		return errors.New("usage: capybara mcp [--run id] [--name label] [--max-turns N] [--sse url | -- <command> [args...]]")
 	}
 	st, err := store.Open(dbPath)
 	if err != nil {
@@ -30,9 +31,10 @@ func mcpCmd(ctx context.Context, dbPath string, capture bool, args []string) err
 	defer st.Close()
 
 	opts := mcp.Options{
-		RunID:   *runID,
-		Name:    *name,
-		Capture: capture,
+		RunID:    *runID,
+		Name:     *name,
+		Capture:  capture,
+		MaxTurns: *maxTurns,
 	}
 
 	if *sseURL != "" {

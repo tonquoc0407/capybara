@@ -501,3 +501,87 @@ func TestRunStdioProcess(t *testing.T) {
 		t.Errorf("spans missing greet tool call: %+v", spans)
 	}
 }
+
+func TestProxyStreamsCircuitBreaker(t *testing.T) {
+	st := openTemp(t)
+	runID := "mcp-cb-test"
+	proxy := NewStreamProxy(st, runID, "root-1", true)
+	proxy.SetMaxTurns(1)
+
+	clientInR, clientInW := io.Pipe()
+	clientOutR, clientOutW := io.Pipe()
+	serverInR, serverInW := io.Pipe()
+	serverOutR, serverOutW := io.Pipe()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	errc := make(chan error, 1)
+	go func() {
+		errc <- proxy.ProxyStreams(ctx, clientInR, clientOutW, serverInW, serverOutR)
+	}()
+
+	// 1st tool call (should pass)
+	req1 := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"t1","arguments":{}}}` + "\n"
+	go func() {
+		_, _ = clientInW.Write([]byte(req1))
+	}()
+
+	buf := make([]byte, 1024)
+	n, err := serverInR.Read(buf)
+	if err != nil {
+		t.Fatalf("serverIn read req1: %v", err)
+	}
+	if string(buf[:n]) != req1 {
+		t.Fatalf("server got %q, want %q", string(buf[:n]), req1)
+	}
+
+	// Server responds to call 1
+	resp1 := `{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"ok1"}]}}` + "\n"
+	go func() {
+		_, _ = serverOutW.Write([]byte(resp1))
+	}()
+
+	n, err = clientOutR.Read(buf)
+	if err != nil {
+		t.Fatalf("clientOut read resp1: %v", err)
+	}
+	if string(buf[:n]) != resp1 {
+		t.Fatalf("client got %q, want %q", string(buf[:n]), resp1)
+	}
+
+	// 2nd tool call (should trip circuit breaker: max turns reached)
+	req2 := `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"t2","arguments":{}}}` + "\n"
+	go func() {
+		_, _ = clientInW.Write([]byte(req2))
+	}()
+
+	// Client receives circuit breaker error directly without server involvement
+	n, err = clientOutR.Read(buf)
+	if err != nil {
+		t.Fatalf("clientOut read resp2: %v", err)
+	}
+	gotResp2 := string(buf[:n])
+	if !strings.Contains(gotResp2, "circuit breaker tripped: max turns reached") {
+		t.Fatalf("client expected circuit breaker error, got %q", gotResp2)
+	}
+
+	_ = clientInW.Close()
+	_ = serverOutW.Close()
+	<-errc
+
+	// Verify store has error span for second tool call
+	spans, err := st.Spans(context.Background(), runID)
+	if err != nil {
+		t.Fatalf("Spans: %v", err)
+	}
+	foundError := false
+	for _, sp := range spans {
+		if sp.Kind == store.KindTool && sp.Name == "t2" && sp.Status == "error" {
+			foundError = true
+		}
+	}
+	if !foundError {
+		t.Errorf("expected error span for t2, got %+v", spans)
+	}
+}

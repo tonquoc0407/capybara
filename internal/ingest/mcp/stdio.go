@@ -67,6 +67,9 @@ func RunStdio(ctx context.Context, st *store.Store, opts Options, cmdArgs []stri
 	}
 
 	proxy := NewStreamProxy(st, runID, rootSpanID, opts.Capture)
+	if opts.MaxTurns > 0 {
+		proxy.SetMaxTurns(opts.MaxTurns)
+	}
 	proxyErr := proxy.ProxyStreams(ctx, os.Stdin, os.Stdout, serverIn, serverOut)
 
 	waitErr := cmd.Wait()

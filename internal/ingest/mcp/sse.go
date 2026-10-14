@@ -126,6 +126,9 @@ func RunSSEBridge(ctx context.Context, st *store.Store, opts Options, sseURL str
 	}
 
 	proxy := NewStreamProxy(st, runID, rootSpanID, opts.Capture)
+	if opts.MaxTurns > 0 {
+		proxy.SetMaxTurns(opts.MaxTurns)
+	}
 	proxyErr := proxy.ProxyStreams(ctx, os.Stdin, os.Stdout, serverIn, serverOutR)
 
 	rootSpan.EndedAt = time.Now().UTC()

@@ -19,10 +19,11 @@ import (
 
 // Options configures MCP proxy tracing.
 type Options struct {
-	RunID   string
-	Name    string
-	Capture bool
-	Source  string
+	RunID    string
+	Name     string
+	Capture  bool
+	Source   string
+	MaxTurns int
 }
 
 type inFlightCall struct {
@@ -56,9 +57,32 @@ type StreamProxy struct {
 	parentSpanID     string
 	capture          bool
 	source           string
+	maxTurns         int
+	toolCalls        int
+	clientOut        io.Writer
 	mu               sync.Mutex
 	inFlight         map[string]*inFlightCall
 	inFlightSampling map[string]*inFlightCall
+}
+
+type safeWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (s *safeWriter) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.w.Write(p)
+}
+
+func (s *safeWriter) Flush() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if f, ok := s.w.(interface{ Flush() error }); ok {
+		return f.Flush()
+	}
+	return nil
 }
 
 // NewStreamProxy creates a new MCP stream proxy interceptor.
@@ -74,19 +98,32 @@ func NewStreamProxy(st *store.Store, runID, parentSpanID string, capture bool) *
 	}
 }
 
+// SetMaxTurns limits the maximum number of tool call turns before tripping the circuit breaker.
+func (p *StreamProxy) SetMaxTurns(n int) {
+	p.mu.Lock()
+	p.maxTurns = n
+	p.mu.Unlock()
+}
+
 // ProxyStreams pipes client <-> server streams and intercepts MCP messages in real-time.
 func (p *StreamProxy) ProxyStreams(ctx context.Context, clientIn io.Reader, clientOut io.Writer, serverIn io.Writer, serverOut io.Reader) error {
+	safeOut := &safeWriter{w: clientOut}
+	p.mu.Lock()
+	p.clientOut = safeOut
+	p.mu.Unlock()
+
 	errc := make(chan error, 2)
 
 	go func() {
-		errc <- p.pipe(ctx, clientIn, serverIn, func(line []byte) {
-			p.handleClientLine(ctx, line)
+		errc <- p.pipe(ctx, clientIn, serverIn, func(line []byte) bool {
+			return p.handleClientLine(ctx, line)
 		})
 	}()
 
 	go func() {
-		errc <- p.pipe(ctx, serverOut, clientOut, func(line []byte) {
+		errc <- p.pipe(ctx, serverOut, safeOut, func(line []byte) bool {
 			p.handleServerLine(ctx, line)
+			return true
 		})
 	}()
 
@@ -106,7 +143,7 @@ func (p *StreamProxy) ProxyStreams(ctx context.Context, clientIn io.Reader, clie
 	return firstErr
 }
 
-func (p *StreamProxy) pipe(ctx context.Context, src io.Reader, dst io.Writer, onLine func([]byte)) error {
+func (p *StreamProxy) pipe(ctx context.Context, src io.Reader, dst io.Writer, onLine func([]byte) bool) error {
 	defer func() {
 		if c, ok := dst.(io.Closer); ok {
 			if f, ok := dst.(*os.File); !ok || (f != os.Stdout && f != os.Stderr) {
@@ -121,12 +158,14 @@ func (p *StreamProxy) pipe(ctx context.Context, src io.Reader, dst io.Writer, on
 		}
 		line, err := r.ReadBytes('\n')
 		if len(line) > 0 {
-			onLine(line)
-			if _, werr := dst.Write(line); werr != nil {
-				return werr
-			}
-			if flusher, ok := dst.(interface{ Flush() error }); ok {
-				_ = flusher.Flush()
+			forward := onLine(line)
+			if forward {
+				if _, werr := dst.Write(line); werr != nil {
+					return werr
+				}
+				if flusher, ok := dst.(interface{ Flush() error }); ok {
+					_ = flusher.Flush()
+				}
 			}
 		}
 		if err != nil {
@@ -138,14 +177,14 @@ func (p *StreamProxy) pipe(ctx context.Context, src io.Reader, dst io.Writer, on
 	}
 }
 
-func (p *StreamProxy) handleClientLine(ctx context.Context, line []byte) {
+func (p *StreamProxy) handleClientLine(ctx context.Context, line []byte) bool {
 	trimmed := bytes.TrimSpace(line)
 	if len(trimmed) == 0 || trimmed[0] != '{' {
-		return
+		return true
 	}
 	var msg jsonRPCMessage
 	if err := json.Unmarshal(trimmed, &msg); err != nil {
-		return
+		return true
 	}
 	idKey := string(msg.ID)
 
@@ -160,11 +199,11 @@ func (p *StreamProxy) handleClientLine(ctx context.Context, line []byte) {
 		if ok {
 			p.recordCompletedCall(ctx, call, msg)
 		}
-		return
+		return true
 	}
 
 	if msg.Method == "" || len(msg.ID) == 0 || idKey == "null" {
-		return
+		return true
 	}
 
 	spanID := randomHex(8)
@@ -185,6 +224,31 @@ func (p *StreamProxy) handleClientLine(ctx context.Context, line []byte) {
 			inputBody = string(msg.Params)
 		}
 		p.mu.Lock()
+		if p.maxTurns > 0 && p.toolCalls >= p.maxTurns {
+			clientOut := p.clientOut
+			p.mu.Unlock()
+
+			errMsg := "circuit breaker tripped: max turns reached"
+			resp := jsonRPCMessage{
+				JSONRPC: "2.0",
+				ID:      msg.ID,
+				Error: &jsonRPCError{
+					Code:    -32000,
+					Message: errMsg,
+				},
+			}
+			respBytes, _ := json.Marshal(resp)
+			respBytes = append(respBytes, '\n')
+			if clientOut != nil {
+				_, _ = clientOut.Write(respBytes)
+				if flusher, ok := clientOut.(interface{ Flush() error }); ok {
+					_ = flusher.Flush()
+				}
+			}
+			p.recordDirectError(ctx, spanID, toolName, inputBody, errMsg, now)
+			return false
+		}
+		p.toolCalls++
 		p.inFlight[idKey] = &inFlightCall{
 			spanID:    spanID,
 			kind:      store.KindTool,
@@ -235,6 +299,7 @@ func (p *StreamProxy) handleClientLine(ctx context.Context, line []byte) {
 		}
 		p.mu.Unlock()
 	}
+	return true
 }
 
 func (p *StreamProxy) handleServerLine(ctx context.Context, line []byte) {
@@ -346,6 +411,52 @@ func (p *StreamProxy) recordCompletedCall(ctx context.Context, call *inFlightCal
 		Contents: contents,
 	}
 	_ = p.st.WriteBatch(ctx, batch)
+}
+
+func (p *StreamProxy) recordDirectError(ctx context.Context, spanID, toolName, inputBody, errMsg string, startedAt time.Time) {
+	if p.st == nil {
+		return
+	}
+	endedAt := time.Now().UTC()
+	sp := store.Span{
+		ID:        spanID,
+		RunID:     p.runID,
+		ParentID:  p.parentSpanID,
+		Kind:      store.KindTool,
+		Name:      toolName,
+		StartedAt: startedAt,
+		EndedAt:   endedAt,
+		Status:    "error",
+		Attrs: store.Attrs{
+			ToolName: toolName,
+			MCP:      true,
+		},
+	}
+	var contents []store.Content
+	if p.capture {
+		if inputBody != "" {
+			contents = append(contents, store.Content{
+				SpanID:    spanID,
+				Role:      "input",
+				Seq:       0,
+				Body:      inputBody,
+				MediaType: "application/json",
+			})
+		}
+		errPayload, _ := json.Marshal(map[string]any{"error": errMsg})
+		contents = append(contents, store.Content{
+			SpanID:    spanID,
+			Role:      "output",
+			Seq:       1,
+			Body:      string(errPayload),
+			MediaType: "application/json",
+		})
+	}
+	_ = p.st.WriteBatch(ctx, store.Batch{
+		Source:   p.source,
+		Spans:    []store.Span{sp},
+		Contents: contents,
+	})
 }
 
 func randomHex(n int) string {
