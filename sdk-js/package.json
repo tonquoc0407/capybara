@@ -7,7 +7,7 @@
   "homepage": "https://github.com/tonquoc0407/capybara",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tonquoc0407/capybara.git",
+    "url": "git+https://github.com/tonquoc0407/capybara.git",
     "directory": "sdk-js"
   },
   "keywords": [
