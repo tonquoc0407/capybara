@@ -227,6 +227,28 @@ func TestExportCurlCase(t *testing.T) {
 	}
 }
 
+func TestExportHARCase(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "test.db")
+	llmLine := `{"run":"har-run","span":"h1","kind":"llm","name":"chat",` +
+		`"model":"gpt-4o","provider":"openai","start":"2026-07-22T10:00:00Z","end":"2026-07-22T10:00:01Z","status":"ok",` +
+		`"contents":[{"role":"user","body":"hello"},{"role":"assistant","body":"world"}]}` + "\n"
+	importLine(t, db, dir, "run.jsonl", llmLine)
+	var stdout strings.Builder
+	args := []string{"-db", db, "export", "--har", "-o", dir, "har-run"}
+	if err := run(context.Background(), args, &stdout); err != nil {
+		t.Fatalf("export --har: %v", err)
+	}
+	outPath := strings.TrimSpace(stdout.String())
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read har output %s: %v", outPath, err)
+	}
+	if !strings.Contains(string(data), `"version": "1.2"`) || !strings.Contains(string(data), "openai.com") {
+		t.Errorf("unexpected har contents:\n%s", string(data))
+	}
+}
+
 // toolRunJSONL is one completed tool call, the unit capybara check compares.
 func toolRunJSONL(runID, output string) string {
 	return `{"run":"` + runID + `","span":"` + runID + `-t","kind":"tool","tool":"fetch",` +

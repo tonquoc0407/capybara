@@ -322,3 +322,77 @@ func TestCurlGeneratesCorrectCommands(t *testing.T) {
 		t.Error("Curl expected error for run without LLM spans")
 	}
 }
+
+func TestBuildHARAndWriteHAR(t *testing.T) {
+	st := openTemp(t)
+	at := time.Date(2026, 7, 22, 10, 0, 0, 0, time.UTC)
+	sp1 := store.Span{
+		ID: "llm-1", RunID: "r-har", Kind: store.KindLLM, Name: "chat",
+		StartedAt: at, EndedAt: at.Add(250 * time.Millisecond), Status: "ok",
+		Attrs: store.Attrs{Model: "gpt-4o", Provider: "openai"},
+	}
+	sp2 := store.Span{
+		ID: "llm-err", RunID: "r-har", Kind: store.KindLLM, Name: "chat-failed",
+		StartedAt: at.Add(time.Second), EndedAt: at.Add(1500 * time.Millisecond), Status: "error",
+		Attrs: store.Attrs{Model: "claude-3-5-sonnet-20241022", Provider: "anthropic"},
+	}
+	batch := store.Batch{
+		Source: "test",
+		Spans:  []store.Span{sp1, sp2},
+		Contents: []store.Content{
+			{SpanID: "llm-1", Role: "user", Seq: 0, Body: "Hello GPT", MediaType: "text/plain"},
+			{SpanID: "llm-1", Role: "assistant", Seq: 1, Body: "Hello user", MediaType: "text/plain"},
+			{SpanID: "llm-err", Role: "user", Seq: 0, Body: "Fail me", MediaType: "text/plain"},
+		},
+	}
+	if err := st.WriteBatch(context.Background(), batch); err != nil {
+		t.Fatalf("WriteBatch: %v", err)
+	}
+
+	har, err := BuildHAR(context.Background(), st, "r-har")
+	if err != nil {
+		t.Fatalf("BuildHAR: %v", err)
+	}
+	if har.Log.Version != "1.2" {
+		t.Errorf("version = %q, want 1.2", har.Log.Version)
+	}
+	if len(har.Log.Entries) != 2 {
+		t.Fatalf("entries count = %d, want 2", len(har.Log.Entries))
+	}
+
+	entry1 := har.Log.Entries[0]
+	if entry1.Request.Method != "POST" || !strings.Contains(entry1.Request.URL, "openai.com") {
+		t.Errorf("entry1 request: %+v", entry1.Request)
+	}
+	if entry1.Response.Status != 200 || entry1.Response.Content.Text != "Hello user" {
+		t.Errorf("entry1 response: %+v", entry1.Response)
+	}
+	if entry1.Time != 250 {
+		t.Errorf("entry1 time = %d, want 250", entry1.Time)
+	}
+
+	entry2 := har.Log.Entries[1]
+	if entry2.Response.Status != 500 {
+		t.Errorf("entry2 status = %d, want 500 for error span", entry2.Response.Status)
+	}
+
+	tmpDir := t.TempDir()
+	path, err := WriteHAR(context.Background(), st, "r-har", tmpDir)
+	if err != nil {
+		t.Fatalf("WriteHAR: %v", err)
+	}
+	if !strings.HasSuffix(path, ".har") {
+		t.Errorf("path %s does not end in .har", path)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	var roundtrip HARRoot
+	if err := json.Unmarshal(data, &roundtrip); err != nil {
+		t.Fatalf("Unmarshal HAR json: %v", err)
+	}
+	if len(roundtrip.Log.Entries) != 2 {
+		t.Errorf("roundtrip entries count = %d, want 2", len(roundtrip.Log.Entries))
+	}
+}

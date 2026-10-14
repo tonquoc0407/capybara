@@ -19,18 +19,19 @@ func exportCmd(ctx context.Context, dbPath string, args []string, out io.Writer)
 	html := fs.Bool("html", false, "write the run as a self-contained page")
 	ts := fs.Bool("ts", false, "write a Node.js/TypeScript regression test")
 	curl := fs.Bool("curl", false, "emit a curl command to reproduce the LLM call")
+	har := fs.Bool("har", false, "export LLM calls as HTTP Archive (HAR)")
 	dir := fs.String("o", "", "output directory")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	modes := 0
-	for _, b := range []*bool{golden, html, ts, curl} {
+	for _, b := range []*bool{golden, html, ts, curl, har} {
 		if *b {
 			modes++
 		}
 	}
 	if fs.NArg() != 1 || modes > 1 {
-		return errors.New("usage: capybara export [--golden | --html | --ts | --curl] <run>")
+		return errors.New("usage: capybara export [--golden | --html | --ts | --curl | --har] <run>")
 	}
 	st, err := store.Open(dbPath)
 	if err != nil {
@@ -47,6 +48,14 @@ func exportCmd(ctx context.Context, dbPath string, args []string, out io.Writer)
 			return err
 		}
 		_, err = fmt.Fprintln(out, cmdStr)
+		return err
+	}
+	if *har {
+		path, err := export.WriteHAR(ctx, st, run, orDefault(*dir, "."))
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(out, path)
 		return err
 	}
 	if *html {

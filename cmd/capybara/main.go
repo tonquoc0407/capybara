@@ -248,7 +248,7 @@ watcher when ~/.claude/projects exists.
   mcp      proxy and trace an MCP (Model Context Protocol) server
   prune    delete old runs (--keep, --older-than, --clean-ok)
   vacuum   reclaim disk space from the SQLite database
-  export   export a run (--golden a CI fixture, --html a shareable page)
+  export   export a run (--golden a CI fixture, --html a shareable page, --har archive)
   check    compare a run against a golden snapshot, non-zero on divergence
   eval     score detectors against a labelled corpus (--fail-under gates CI)
   runs     list runs, filtered by finding, model, status, source or cost
