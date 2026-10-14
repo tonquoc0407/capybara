@@ -90,7 +90,7 @@ Tails Claude Code's own logs. No instrumentation, no restart — it reads what's
 capybara import trace.jsonl
 ```
 
-Takes span-per-line JSONL, or agent-replay JSON when the name ends in `.json`. [`scripts/langfuse_export.py`](scripts/langfuse_export.py), [`scripts/phoenix_export.py`](scripts/phoenix_export.py) and [`scripts/langsmith_export.py`](scripts/langsmith_export.py) each produce that JSONL from a trace already sitting in Langfuse, Arize Phoenix or LangSmith, for pulling one run out of production to debug locally.
+Takes span-per-line JSONL, or agent-replay JSON when the name ends in `.json`. [`scripts/langfuse_export.py`](scripts/langfuse_export.py), [`scripts/phoenix_export.py`](scripts/phoenix_export.py), [`scripts/langsmith_export.py`](scripts/langsmith_export.py) and [`scripts/weave_export.py`](scripts/weave_export.py) each produce that JSONL from a trace already sitting in Langfuse, Arize Phoenix, LangSmith or Weights & Biases Weave, for pulling one run out of production to debug locally.
 
 ### From your own agent
 
@@ -127,7 +127,7 @@ The tree marks `x` for a failed span, `!` for one carrying a finding, and `?` fo
 | `tab` | change pane | `b` | blame the output |
 | `f` | filter by kind | `r` | re-run from a span |
 | `a` | raw attributes | `t` | export a pytest case |
-| `e` | edit a tool output | `y` | copy to clipboard |
+| `e` | edit a tool output | `y` / `Y` | copy content / curl |
 | `q` | quit | `?` | full help |
 | `m` | resource monitor | | |
 
@@ -240,11 +240,14 @@ The detectors are held to a labelled corpus under [`corpus/`](corpus): 32 runs, 
 | `capybara diff <run_a> <run_b>` | align spans, mark the first divergence |
 | `capybara blame <run>` | walk the final output back to its tainted source |
 | `capybara replay <run>` | re-run a recording, optionally with an edited tool result |
-| `capybara mcp -- <cmd>` | zero-config stdio proxy interceptor for any MCP server |
+| `capybara mcp [--max-turns N] -- <cmd>` | zero-config stdio proxy interceptor (optional turn limit circuit breaker) |
 | `capybara mcp --sse <url>` | bridge stdio MCP client to remote SSE server |
+| `capybara prune` | delete old runs (`--keep`, `--older-than`, `--clean-ok`) |
+| `capybara vacuum` | reclaim disk space from the SQLite database |
 | `capybara export <run>` | write a pytest case for the failure |
 | `capybara export <run> --ts` | write a node:test TypeScript regression test |
 | `capybara export <run> --curl` | emit a curl command reproducing an LLM call |
+| `capybara export <run> --har` | export LLM calls as HTTP Archive (HAR) |
 | `capybara export <run> --golden` | write a CI fixture |
 | `capybara export <run> --html` | write a self-contained page |
 | `capybara check <golden> <run>` | compare against a golden, non-zero on divergence |
