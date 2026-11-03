@@ -40,6 +40,8 @@ brew install tonquoc0407/tap/capybara
 
 Or `go install github.com/tonquoc0407/capybara/cmd/capybara@latest`, or grab a binary from the [releases page](https://github.com/tonquoc0407/capybara/releases). One file, no CGo, no runtime dependencies.
 
+This README describes `main`. The latest published release, `v0.6.0`, predates the local HTTP events, Connect menu and hub features below. To try those features before the next release, install the current source with `go install github.com/tonquoc0407/capybara/cmd/capybara@main`.
+
 ## Getting a trace in
 
 Run it with no arguments. It opens the TUI, listens for OTLP on `127.0.0.1:4318` and `127.0.0.1:4317`, and tails `~/.claude/projects` when that directory exists:
