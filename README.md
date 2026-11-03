@@ -20,6 +20,8 @@
   <img src="demo/demo.gif" alt="capybara demo" width="720">
 </p>
 
+Capybara runs locally and stores traces in SQLite. Capture them with OTLP, HTTP JSON events, an SDK, a Claude Code session, or a file. Inspect failures in the TUI or read-only Web view; compare runs, export regression fixtures, and review cost provenance. The optional hub adds project tokens and a shared Web workspace.
+
 ## Contents
 
 - [Install](#install)
@@ -52,7 +54,7 @@ To inspect a labelled synthetic failure immediately, run `capybara sample` again
 
 If something else already holds 4317 or 4318 — a collector, Jaeger, another tracing UI — capybara keeps the transport that did bind, reports which one it lost, and carries on. `-otlp 127.0.0.1:4319` moves the HTTP listener somewhere free.
 
-There are three ways in, and one database can hold all of them.
+The TUI and `listen` write to the same database. Choose the input that fits your app.
 
 ### OTLP
 
@@ -102,6 +104,8 @@ Takes span-per-line JSONL, or agent-replay JSON when the name ends in `.json`. U
 
 For a local app without an SDK, press `i` in the TUI and select **HTTP JSON events**. The listener accepts `POST /api/v1/events` on the same local HTTP address as OTLP (normally `http://127.0.0.1:4318`). Run [`examples/local_events.py`](examples/local_events.py) or [`examples/local_events.mjs`](examples/local_events.mjs) for a live start, update and end. Set `CAPYBARA_EVENTS_URL` if the listener was moved with `-otlp`.
 
+[Watch the local API demo](demo/local-api.gif), or follow the [event format and response codes](docs/local-events.md).
+
 For a long-running local service without a terminal UI, run `capybara listen`. It prints the bound HTTP events and OTLP endpoints, stores incoming spans, and runs the same analyzer. `capybara -otlp 127.0.0.1:4319 listen` moves its HTTP port.
 
 Each request needs a unique `event_id`, `type`, `run_id`, `span_id` and RFC3339 `time`. `span.start` needs `kind` and `name`; `span.end` needs `status` (`ok` or `error`). `span.complete` can send a finished span in one request, with optional `start_time`. Retries with the same event ID and body are safe. An update or end before start returns HTTP 409. The receiver stores `model`, `provider`, `tool_name`, `tokens_in`, `tokens_out`, `cost_usd`, `attrs` and `contents` when provided. `-no-content` drops content bodies and untrusted attributes. The endpoint accepts requests from the same machine only; it has no API key.
@@ -137,6 +141,7 @@ The tree marks `x` for a failed span, `!` for one carrying a finding, and `?` fo
 | --- | --- | --- | --- |
 | `j` / `k` | move | `w` | cost waterfall |
 | `enter` | expand | `d` | diff two runs |
+| `i` | connect an app | `ctrl+p` | search commands |
 | `/` | search | `c` | context view |
 | `tab` | change pane | `b` | blame the output |
 | `f` | filter by kind | `r` | re-run from a span |
@@ -144,7 +149,7 @@ The tree marks `x` for a failed span, `!` for one carrying a finding, and `?` fo
 | `e` | edit a tool output | `y` / `Y` | copy content / curl |
 | `q` | quit | `?` | full help |
 | `m` | resource monitor | | |
-| `ctrl+p` | search commands | `space` in detail | full-screen detail |
+| `space` in detail | full-screen detail | | |
 
 The TUI uses three panes on wide terminals, two on medium ones, and one on narrow ones. Arrow keys work alongside `j/k`. There is no timed splash screen.
 
@@ -253,6 +258,9 @@ The labelled [`corpus/`](corpus) has 34 curated runs: positives and near misses 
 
 | Command | Description |
 | --- | --- |
+| `capybara listen` | receive local HTTP events and OTLP without the TUI |
+| `capybara sample` | load a labelled synthetic failure for a first inspection |
+| `capybara import <file>` | load span JSONL, OTLP JSONL, Claude JSONL, or agent-replay JSON |
 | `capybara watch claude` | tail a session source without the TUI |
 | `capybara diff <run_a> <run_b>` | align spans, mark the first divergence |
 | `capybara blame <run>` | walk the final output back to its tainted source |

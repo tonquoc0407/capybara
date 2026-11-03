@@ -20,8 +20,14 @@ func TestConnectUsesBoundAddressAndShowsLiveRun(t *testing.T) {
 	}
 	m.connectRuns = 1
 	view := plain(m.View())
-	if !strings.Contains(view, "HTTP event runs stored: 1") || !strings.Contains(view, "metadata only") {
+	if !strings.Contains(view, "HTTP event runs stored: 1") || !strings.Contains(view, "metadata only") || !strings.Contains(view, "Send spans from a local app without an SDK.") {
 		t.Fatalf("connect view: %s", view)
+	}
+	m.notice = "copy requested; paste to confirm"
+	updated, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyDown})
+	m = updated.(appModel)
+	if m.connectIndex != 1 || m.notice != "" {
+		t.Fatalf("selection=%d notice=%q", m.connectIndex, m.notice)
 	}
 	updated, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
 	if updated.(appModel).connectOpen {

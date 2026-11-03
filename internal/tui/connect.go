@@ -10,6 +10,14 @@ import (
 )
 
 var connectOptions = []string{"HTTP JSON events", "OTLP", "Python SDK", "Node SDK (source build)", "Claude watcher", "File import"}
+var connectDescriptions = []string{
+	"Send spans from a local app without an SDK.",
+	"Point an instrumented app at the local OTLP receiver.",
+	"Add tracing to Python code and export it locally.",
+	"Build the Node SDK from this repository, then instrument your app.",
+	"Read Claude Code sessions already stored on this machine.",
+	"Load a saved trace file into this database.",
+}
 
 func (m appModel) handleConnectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
@@ -17,8 +25,10 @@ func (m appModel) handleConnectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.connectOpen = false
 	case "up", "k":
 		m.connectIndex = (m.connectIndex + len(connectOptions) - 1) % len(connectOptions)
+		m.notice = ""
 	case "down", "j":
 		m.connectIndex = (m.connectIndex + 1) % len(connectOptions)
+		m.notice = ""
 	case "y", "enter":
 		snippet := m.connectSnippet()
 		if snippet != "" {
@@ -121,6 +131,7 @@ func (m appModel) connectView() string {
 		}
 	}
 	lines = append(lines, "")
+	lines = append(lines, m.th.Dim.Render(connectDescriptions[m.connectIndex]), "")
 	if snippet := m.connectSnippet(); snippet != "" {
 		lines = append(lines, m.th.Dim.Render("Enter/y: send copy request  ·  j/k: select"))
 		for _, line := range strings.Split(snippet, "\n") {
