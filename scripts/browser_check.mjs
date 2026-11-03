@@ -96,6 +96,14 @@ try {
     else await page.getByText(loaded, { exact: true }).waitFor();
     const size = await page.evaluate(() => ({ content: document.documentElement.scrollWidth, viewport: innerWidth }));
     assert.ok(size.content <= size.viewport + 1, name + " overflows horizontally: " + JSON.stringify(size));
+    const navigation = await page.locator("nav a").evaluateAll((links) => links.map((link) => {
+      const box = link.getBoundingClientRect();
+      return { name: link.textContent.trim(), left: box.left, right: box.right };
+    }));
+    for (const link of navigation) {
+      assert.ok(link.left >= 0 && link.right <= size.viewport + 1,
+        name + " hides navigation link: " + JSON.stringify(link));
+    }
     await page.screenshot({ path: join(directory, name + ".png"), fullPage: true });
   }
   assert.deepEqual(errors, [], "browser runtime errors");

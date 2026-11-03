@@ -58,7 +58,7 @@ footer { position:sticky; bottom:0; background:var(--bg); border-top:1px solid v
 @media (max-width:800px) {
   .two,.trace { grid-template-columns:1fr; }
   header { gap:.7rem; }
-  nav { width:100%; overflow:auto; flex-wrap:nowrap; }
+  nav { width:100%; }
   main { padding:1rem; }
   .row { flex-wrap:wrap; gap:.2rem; }
   .row button { flex-basis:100%; min-width:0; overflow-wrap:anywhere; }
