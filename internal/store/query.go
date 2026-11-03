@@ -24,6 +24,7 @@ func (s *Store) ListRuns(ctx context.Context) ([]Run, error) {
 	return scanRuns(rows)
 }
 
+// GetRun returns one run and its finding count, or sql.ErrNoRows.
 func (s *Store) GetRun(ctx context.Context, id string) (Run, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT r.id, r.project, r.environment, r.release, r.session_id, r.user_id,
 		r.source, r.started_at, r.ended_at, r.model_main, r.tokens_in, r.tokens_out,
@@ -50,6 +51,7 @@ func (s *Store) ListRunsPage(ctx context.Context, project string, limit, offset 
 	return s.SearchRuns(ctx, RunSearch{Project: project, Limit: limit, Offset: offset})
 }
 
+// RunSearch selects runs by project, metadata, time, and incident state.
 type RunSearch struct {
 	Project, Environment, Release, Status, Query string
 	From, To                                     time.Time
@@ -74,8 +76,10 @@ func (s *Store) SearchRuns(ctx context.Context, filter RunSearch) ([]Run, error)
 	args := []any{}
 	var conditions []string
 	for _, field := range []struct{ column, value string }{
-		{"project", filter.Project}, {"environment", filter.Environment},
-		{"release", filter.Release}, {"status", filter.Status},
+		{"project", filter.Project},
+		{"environment", filter.Environment},
+		{"release", filter.Release},
+		{"status", filter.Status},
 	} {
 		if field.value != "" {
 			conditions = append(conditions, "r."+field.column+" = ?")
@@ -222,12 +226,14 @@ func (s *Store) Contents(ctx context.Context, spanID string) ([]Content, error) 
 	return contents, nil
 }
 
+// SpanBelongsToRun checks whether a span is attached to the given run.
 func (s *Store) SpanBelongsToRun(ctx context.Context, spanID, runID string) bool {
 	var found int
 	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM spans WHERE id = ? AND run_id = ?`, spanID, runID).Scan(&found)
 	return err == nil
 }
 
+// RunBelongsToProject checks the project boundary for a run.
 func (s *Store) RunBelongsToProject(ctx context.Context, runID, project string) bool {
 	var found int
 	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM runs WHERE id = ? AND project = ?`, runID, project).Scan(&found)

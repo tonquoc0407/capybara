@@ -11,9 +11,16 @@ import (
 	"time"
 )
 
+// ErrEventConflict means an event ID was reused with a different payload.
 var ErrEventConflict = errors.New("event id already used with different data")
+
+// ErrSpanNotStarted means an update or end arrived before the span's start.
 var ErrSpanNotStarted = errors.New("span has not started in this run")
+
+// ErrEventTime means a span's end precedes its recorded start.
 var ErrEventTime = errors.New("span end time precedes start time")
+
+// ErrEventCost means a supplied cost is negative or nonfinite.
 var ErrEventCost = errors.New("cost_usd must be a finite nonnegative number")
 
 // SpanEvent is one incremental event sent by a local application.
@@ -38,6 +45,7 @@ type SpanEvent struct {
 	Contents  []EventContent `json:"contents,omitempty"`
 }
 
+// EventContent is one optional body attached to an incremental span event.
 type EventContent struct {
 	Role      string `json:"role"`
 	Body      string `json:"body"`
@@ -58,7 +66,7 @@ func (s *Store) ApplySpanEvent(ctx context.Context, e SpanEvent, captureContent 
 	if err != nil {
 		return false, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var prior string
 	err = tx.QueryRowContext(ctx, `SELECT payload_hash FROM ingest_events WHERE event_id = ?`, e.EventID).Scan(&prior)
 	if err == nil {

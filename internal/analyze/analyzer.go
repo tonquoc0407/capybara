@@ -42,8 +42,10 @@ func New(st *store.Store) (*Analyzer, error) {
 	if _, err := os.Stat(pricePath); err == nil {
 		source = "capybara embedded + local override"
 	}
-	return &Analyzer{st: st, prices: prices, priceSource: source,
-		priceVersion: hex.EncodeToString(hash[:8]), versions: make(map[schemaScope]int64)}, nil
+	return &Analyzer{
+		st: st, prices: prices, priceSource: source,
+		priceVersion: hex.EncodeToString(hash[:8]), versions: make(map[schemaScope]int64),
+	}, nil
 }
 
 // Sweep analyzes all completed spans not yet processed.
@@ -109,9 +111,13 @@ func (a *Analyzer) Sweep(ctx context.Context) error {
 				if _, ok := sp.Attrs.Raw["usage"]; ok {
 					usageSource = "observed usage breakdown"
 				}
-				costs[sp.ID] = store.SpanEstimate{CostUSD: *cost, Revision: sp.Revision,
-					Provenance: store.CostProvenance{Kind: "estimate", PriceSource: a.priceSource,
-						PriceVersion: a.priceVersion, CheckedAt: time.Now().UTC(), UsageSource: usageSource}}
+				costs[sp.ID] = store.SpanEstimate{
+					CostUSD: *cost, Revision: sp.Revision,
+					Provenance: store.CostProvenance{
+						Kind: "estimate", PriceSource: a.priceSource,
+						PriceVersion: a.priceVersion, CheckedAt: time.Now().UTC(), UsageSource: usageSource,
+					},
+				}
 			}
 		}
 		if f := a.checkRateLimit(ctx, sp); f != nil {

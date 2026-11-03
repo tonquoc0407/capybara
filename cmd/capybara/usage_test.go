@@ -19,9 +19,13 @@ func TestUsageWindowReportsReleaseAndRejectsBadBounds(t *testing.T) {
 		t.Fatal(err)
 	}
 	at := time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
-	if err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{{ID: "span", RunID: "run", Kind: store.KindAgent,
-		Name: "agent", Status: "error", StartedAt: at, EndedAt: at.Add(time.Second)}},
-		RunContexts: map[string]store.RunContext{"run": {Project: "p", Release: "v2"}}}); err != nil {
+	if err := st.WriteBatch(ctx, store.Batch{
+		Source: "test", Spans: []store.Span{{
+			ID: "span", RunID: "run", Kind: store.KindAgent,
+			Name: "agent", Status: "error", StartedAt: at, EndedAt: at.Add(time.Second),
+		}},
+		RunContexts: map[string]store.RunContext{"run": {Project: "p", Release: "v2"}},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	st.Close()

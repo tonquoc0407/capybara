@@ -5,6 +5,7 @@ import (
 	"database/sql"
 )
 
+// UsageSummary separates estimated, reported, and unattributed project costs.
 type UsageSummary struct {
 	Project          string  `json:"project"`
 	Runs             int64   `json:"runs"`
@@ -16,6 +17,7 @@ type UsageSummary struct {
 	UnpricedLLMSpans int64   `json:"unpriced_llm_spans"`
 }
 
+// UsageByProject totals recorded usage without assigning a price to unpriced spans.
 func (s *Store) UsageByProject(ctx context.Context) ([]UsageSummary, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT r.project, COUNT(DISTINCT r.id),
 		COALESCE(SUM(CASE WHEN sp.kind = 'llm' THEN sp.tokens_in ELSE 0 END), 0),
@@ -44,6 +46,7 @@ func (s *Store) UsageByProject(ctx context.Context) ([]UsageSummary, error) {
 	return out, rows.Err()
 }
 
+// CostProvenanceForRun returns the source and pricing basis for each priced span.
 func (s *Store) CostProvenanceForRun(ctx context.Context, runID string) ([]CostProvenance, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT p.span_id, p.kind, p.price_source, p.price_version,
 		p.price_effective_at, p.checked_at, p.usage_source

@@ -11,9 +11,11 @@ func TestSearchRunsFiltersBeforePagination(t *testing.T) {
 	ctx := context.Background()
 	for i, env := range []string{"production", "staging", "production"} {
 		id := string(rune('a' + i))
-		sp := Span{ID: "span-" + id, RunID: "run-" + id, Kind: KindAgent,
+		sp := Span{
+			ID: "span-" + id, RunID: "run-" + id, Kind: KindAgent,
 			Name: "agent", StartedAt: t0.Add(time.Duration(i) * time.Minute),
-			EndedAt: t0.Add(time.Duration(i)*time.Minute + time.Second), Status: "ok"}
+			EndedAt: t0.Add(time.Duration(i)*time.Minute + time.Second), Status: "ok",
+		}
 		b := Batch{Source: "test", Spans: []Span{sp}, RunContexts: map[string]RunContext{
 			sp.RunID: {Environment: env, Release: "v1"},
 		}}

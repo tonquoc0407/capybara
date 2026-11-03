@@ -31,8 +31,11 @@ func TestAlertMonitorSendsOnceUntilThresholdClears(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls := 0
-	m := alertMonitor{store: st, config: AlertConfig{Project: "default", WebhookURL: "https://example.test/alert",
-		Window: 10 * time.Minute, Interval: time.Minute, MinErrors: 1},
+	m := alertMonitor{
+		store: st, config: AlertConfig{
+			Project: "default", WebhookURL: "https://example.test/alert",
+			Window: 10 * time.Minute, Interval: time.Minute, MinErrors: 1,
+		},
 		client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			calls++
 			body, _ := io.ReadAll(req.Body)
@@ -40,7 +43,8 @@ func TestAlertMonitorSendsOnceUntilThresholdClears(t *testing.T) {
 				t.Errorf("wrong alert payload: %s", body)
 			}
 			return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("ok")), Header: make(http.Header)}, nil
-		})}}
+		})},
+	}
 	if sent, err := m.check(ctx, at.Add(time.Minute)); err != nil || !sent {
 		t.Fatalf("first check: %v %v", sent, err)
 	}

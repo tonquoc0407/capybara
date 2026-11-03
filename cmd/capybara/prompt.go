@@ -14,7 +14,7 @@ import (
 
 func promptCmd(ctx context.Context, dbPath string, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: capybara prompt register|list|show ...")
+		return errors.New("usage: capybara prompt <register|list|show>")
 	}
 	st, err := store.Open(dbPath)
 	if err != nil {
@@ -75,5 +75,5 @@ func promptCmd(ctx context.Context, dbPath string, args []string, out io.Writer)
 		_, err = io.WriteString(out, p.Content)
 		return err
 	}
-	return errors.New("usage: capybara prompt register|list|show ...")
+	return errors.New("usage: capybara prompt <register|list|show>")
 }

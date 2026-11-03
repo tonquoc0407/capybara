@@ -52,13 +52,16 @@ func PromptfooCases(ctx context.Context, st *store.Store, datasetID string) ([]b
 		if err := json.Unmarshal([]byte(item.ExpectedJSON), &expected); err != nil {
 			return nil, err
 		}
-		cases = append(cases, testCase{Description: "capybara case " + item.ID,
-			Vars: map[string]string{"input": input}, Assert: []assertion{{Type: "equals", Value: expected}},
-			Metadata: map[string]string{"source_run_id": item.SourceRunID}})
+		cases = append(cases, testCase{
+			Description: "capybara case " + item.ID,
+			Vars:        map[string]string{"input": input}, Assert: []assertion{{Type: "equals", Value: expected}},
+			Metadata: map[string]string{"source_run_id": item.SourceRunID},
+		})
 	}
 	return json.MarshalIndent(cases, "", "  ")
 }
 
+// WritePromptfooCases exports a dataset as Promptfoo exact-answer cases.
 func WritePromptfooCases(ctx context.Context, st *store.Store, datasetID, path string) error {
 	raw, err := PromptfooCases(ctx, st, datasetID)
 	if err != nil {

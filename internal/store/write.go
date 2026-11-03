@@ -442,6 +442,7 @@ func (s *Store) PutResourceSamples(ctx context.Context, source string, samples [
 	return s.putResourceSamples(ctx, source, "", samples)
 }
 
+// PutProjectResourceSamples binds process readings to runs in one project.
 func (s *Store) PutProjectResourceSamples(ctx context.Context, source, project string, samples []ResourceSample) error {
 	if project == "" {
 		return fmt.Errorf("project is required")

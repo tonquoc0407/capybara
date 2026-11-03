@@ -25,6 +25,7 @@ type Packet struct {
 	ReplayInputsRecorded bool                   `json:"replay_inputs_recorded"`
 }
 
+// RunContext records the run metadata needed to interpret an incident.
 type RunContext struct {
 	Project     string   `json:"project"`
 	Environment string   `json:"environment"`
@@ -34,6 +35,7 @@ type RunContext struct {
 	CostUSD     *float64 `json:"cost_usd,omitempty"`
 }
 
+// Comparison records observed differences from a parent replay run.
 type Comparison struct {
 	ParentRunID     string   `json:"parent_run_id"`
 	ParentStatus    string   `json:"parent_status"`
@@ -42,12 +44,14 @@ type Comparison struct {
 	CostDeltaUSD    *float64 `json:"cost_delta_usd,omitempty"`
 }
 
+// Observed holds trace evidence separately from detector findings.
 type Observed struct {
 	Spans    []store.Span               `json:"spans"`
 	Logs     []store.TraceLog           `json:"logs"`
 	Contents map[string][]store.Content `json:"contents"`
 }
 
+// BuildPacket gathers evidence, hypotheses, and known gaps for one run.
 func BuildPacket(ctx context.Context, st *store.Store, runID string) (Packet, error) {
 	run, err := st.GetRun(ctx, runID)
 	if err != nil {
@@ -89,11 +93,15 @@ func BuildPacket(ctx context.Context, st *store.Store, runID string) (Packet, er
 		cachedBySpan[c.SpanID] = true
 	}
 	fp, _ := Fingerprint(spans, findings)
-	p := Packet{RunID: runID, Fingerprint: fp,
-		Context: RunContext{Project: run.Project, Environment: run.Environment, Release: run.Release,
-			SessionID: run.SessionID, Status: run.Status, CostUSD: run.CostUSD},
+	p := Packet{
+		RunID: runID, Fingerprint: fp,
+		Context: RunContext{
+			Project: run.Project, Environment: run.Environment, Release: run.Release,
+			SessionID: run.SessionID, Status: run.Status, CostUSD: run.CostUSD,
+		},
 		Observed:   Observed{Spans: spans, Logs: logs, Contents: contents},
-		Hypotheses: findings, Costs: costs, Scores: scores}
+		Hypotheses: findings, Costs: costs, Scores: scores,
+	}
 	if fixture, err := export.BuildFixture(ctx, st, runID); err == nil {
 		p.Fixture = &fixture
 	} else {
@@ -104,8 +112,10 @@ func BuildPacket(ctx context.Context, st *store.Store, runID string) (Packet, er
 		if err == nil {
 			diff, err := analyze.DiffRuns(ctx, st, run.ParentRunID, runID)
 			if err == nil {
-				comparison := &Comparison{ParentRunID: parent.ID, ParentStatus: parent.Status,
-					CurrentStatus: run.Status, FirstDivergence: diff.FirstDivergence}
+				comparison := &Comparison{
+					ParentRunID: parent.ID, ParentStatus: parent.Status,
+					CurrentStatus: run.Status, FirstDivergence: diff.FirstDivergence,
+				}
 				if parent.CostUSD != nil && run.CostUSD != nil {
 					delta := *run.CostUSD - *parent.CostUSD
 					comparison.CostDeltaUSD = &delta

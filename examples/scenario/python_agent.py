@@ -4,6 +4,7 @@ The harness sends one JSON request on stdin and expects one JSON response on
 stdout. This process runs with normal host permissions; mock tools are only
 supplied through the protocol, not enforced against arbitrary user code.
 """
+
 import json
 import sys
 

@@ -2,6 +2,7 @@ package store
 
 import "context"
 
+// ListProjects returns project names known to the local store.
 func (s *Store) ListProjects(ctx context.Context) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT project FROM runs
 		UNION SELECT project FROM datasets

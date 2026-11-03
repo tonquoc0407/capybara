@@ -11,6 +11,7 @@ func (s *Store) PutTraceLogs(ctx context.Context, source string, logs []TraceLog
 	return s.putTraceLogs(ctx, source, "", logs)
 }
 
+// PutProjectTraceLogs stores logs only if their run belongs to the given project.
 func (s *Store) PutProjectTraceLogs(ctx context.Context, source, project string, logs []TraceLog) error {
 	if project == "" {
 		return fmt.Errorf("project is required")
@@ -26,7 +27,7 @@ func (s *Store) putTraceLogs(ctx context.Context, source, project string, logs [
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	for _, l := range logs {
 		owner := project
 		if owner == "" {
@@ -58,6 +59,7 @@ func (s *Store) putTraceLogs(ctx context.Context, source, project string, logs [
 	return nil
 }
 
+// TraceLogs returns linked logs with their bodies in observation order.
 func (s *Store) TraceLogs(ctx context.Context, runID string) ([]TraceLog, error) {
 	return s.traceLogs(ctx, runID, true)
 }

@@ -78,10 +78,12 @@ func main() {
 		operationsTimes = append(operationsTimes, float64(time.Since(started))/float64(time.Millisecond))
 	}
 	sort.Float64s(operationsTimes)
-	result := map[string]any{"spans": spans, "runs": runs, "samples": 100,
+	result := map[string]any{
+		"spans": spans, "runs": runs, "samples": 100,
 		"list_p95_ms": listTimes[94], "open_run_p95_ms": openTimes[94],
 		"operations_samples": 10, "operations_p95_ms": operationsTimes[9],
-		"deepest_offset": (pages - 1) * 50}
+		"deepest_offset": (pages - 1) * 50,
+	}
 	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
 		panic(err)
 	}

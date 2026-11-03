@@ -52,17 +52,23 @@ func Check(golden, run Fixture) []Divergence {
 			if match >= 0 {
 				used[match] = true
 				got := run.Spans[match]
-				out = append(out, Divergence{Span: want.Name, Reason: "status changed",
-					Golden: want.Status, Run: got.Status})
+				out = append(out, Divergence{
+					Span: want.Name, Reason: "status changed",
+					Golden: want.Status, Run: got.Status,
+				})
 			} else {
-				out = append(out, Divergence{Span: want.Name, Reason: "span not recorded",
-					Golden: string(want.Kind) + " " + want.Status})
+				out = append(out, Divergence{
+					Span: want.Name, Reason: "span not recorded",
+					Golden: string(want.Kind) + " " + want.Status,
+				})
 			}
 		}
 		for i, extra := range run.Spans {
 			if !used[i] {
-				out = append(out, Divergence{Span: extra.Name, Reason: "span not in golden",
-					Run: string(extra.Kind) + " " + extra.Status})
+				out = append(out, Divergence{
+					Span: extra.Name, Reason: "span not in golden",
+					Run: string(extra.Kind) + " " + extra.Status,
+				})
 			}
 		}
 	}

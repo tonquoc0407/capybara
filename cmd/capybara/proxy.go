@@ -45,8 +45,10 @@ func proxyCmd(ctx context.Context, dbPath string, allowContent bool, args []stri
 		return err
 	}
 	defer st.Close()
-	s := &proxy.Server{Store: st, UpstreamURL: *upstream, APIKey: os.Getenv(*keyEnv),
+	s := &proxy.Server{
+		Store: st, UpstreamURL: *upstream, APIKey: os.Getenv(*keyEnv),
 		CaptureContent: *capture && allowContent, DenyPattern: pattern,
-		MaxCostUSD: *budget, InputPerM: *inputPrice, OutputPerM: *outputPrice}
+		MaxCostUSD: *budget, InputPerM: *inputPrice, OutputPerM: *outputPrice,
+	}
 	return s.Serve(ctx, *addr, out)
 }

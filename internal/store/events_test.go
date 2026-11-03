@@ -71,8 +71,10 @@ func TestSpanEventEndBeforeStart(t *testing.T) {
 func TestSpanEventContentIsAppendedOnce(t *testing.T) {
 	s := openTemp(t)
 	ctx := context.Background()
-	e := SpanEvent{EventID: "a", Type: "span.start", RunID: "r", SpanID: "s", Kind: "agent", Name: "run", Time: t0,
-		Contents: []EventContent{{Role: "user", Body: "first"}}}
+	e := SpanEvent{
+		EventID: "a", Type: "span.start", RunID: "r", SpanID: "s", Kind: "agent", Name: "run", Time: t0,
+		Contents: []EventContent{{Role: "user", Body: "first"}},
+	}
 	if _, err := s.ApplySpanEvent(ctx, e, true); err != nil {
 		t.Fatal(err)
 	}

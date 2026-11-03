@@ -18,6 +18,7 @@ type AlertWindow struct {
 	P95LatencyMS float64 `json:"p95_latency_ms"`
 }
 
+// RunAlertWindow aggregates observed errors, known costs, and completed latency since a time.
 func (s *Store) RunAlertWindow(ctx context.Context, project string, since time.Time) (AlertWindow, error) {
 	result := AlertWindow{Project: project, Since: since.UTC().Format(time.RFC3339)}
 	var cost sql.NullFloat64

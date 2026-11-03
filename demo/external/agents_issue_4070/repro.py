@@ -20,7 +20,11 @@ def import_upstream(repo: Path) -> tuple[Any, ...]:
     from agents.tracing.provider import DefaultTraceProvider
     from agents.tracing.setup import set_trace_provider
     from tests.fake_model import FakeModel
-    from tests.test_responses import get_function_tool, get_function_tool_call, get_text_message
+    from tests.test_responses import (
+        get_function_tool,
+        get_function_tool_call,
+        get_text_message,
+    )
     from tests.testing_processor import SPAN_PROCESSOR_TESTING
 
     provider = DefaultTraceProvider()
@@ -44,9 +48,14 @@ async def capture(mode: str, upstream: tuple[Any, ...]) -> list[dict[str, Any]]:
     model = FakeModel(tracing_enabled=True)
     if mode == "tool_then_error":
         model.add_multiple_turn_outputs(
-            [[get_message("Checking the quote"), get_call("lookup_quote", "{}")], RuntimeError("boom")]
+            [
+                [get_message("Checking the quote"), get_call("lookup_quote", "{}")],
+                RuntimeError("boom"),
+            ]
         )
-        agent = Agent(name="quote_agent", model=model, tools=[get_tool("lookup_quote", "42 USD")])
+        agent = Agent(
+            name="quote_agent", model=model, tools=[get_tool("lookup_quote", "42 USD")]
+        )
     else:
         model.set_next_output(RuntimeError("boom"))
         agent = Agent(name="quote_agent", model=model)
@@ -66,7 +75,9 @@ async def capture(mode: str, upstream: tuple[Any, ...]) -> list[dict[str, Any]]:
     exported = [span.export() for span in processor.get_ordered_spans()]
     spans = [span for span in exported if span is not None]
     agent_errors = [
-        span.get("error") for span in spans if span.get("span_data", {}).get("type") == "agent"
+        span.get("error")
+        for span in spans
+        if span.get("span_data", {}).get("type") == "agent"
     ]
     assert len(agent_errors) == 1
     assert (agent_errors[0] is not None) == (mode == "streamed"), agent_errors
@@ -86,7 +97,10 @@ async def capture(mode: str, upstream: tuple[Any, ...]) -> list[dict[str, Any]]:
             "kind": kind,
             "name": data.get("name") or span_type,
             "status": "error" if span.get("error") else "ok",
-            "attrs": {"source": "openai-agents-python-v0.19.1", "sdk_error": span.get("error")},
+            "attrs": {
+                "source": "openai-agents-python-v0.19.1",
+                "sdk_error": span.get("error"),
+            },
         }
         if kind == "tool":
             line["tool"] = data.get("name") or ""
@@ -104,7 +118,9 @@ async def capture(mode: str, upstream: tuple[Any, ...]) -> list[dict[str, Any]]:
 
 async def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("agents_repo", type=Path, help="checkout of openai-agents-python v0.19.1")
+    parser.add_argument(
+        "agents_repo", type=Path, help="checkout of openai-agents-python v0.19.1"
+    )
     parser.add_argument("output", type=Path, help="capybara span-per-line JSONL output")
     args = parser.parse_args()
     upstream = import_upstream(args.agents_repo)

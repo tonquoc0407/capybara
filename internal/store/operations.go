@@ -8,11 +8,13 @@ import (
 	"time"
 )
 
+// OperationsFilter selects one project and a bounded time range for reporting.
 type OperationsFilter struct {
 	Project, Environment, Release string
 	From, To                      time.Time
 }
 
+// OperationsGroup holds counts, known cost, and latency for a release or hour.
 type OperationsGroup struct {
 	Key              string   `json:"key"`
 	Runs             int64    `json:"runs"`
@@ -25,6 +27,7 @@ type OperationsGroup struct {
 	P95LatencyMS     *float64 `json:"p95_latency_ms"`
 }
 
+// OperationsQuality holds the latest scored observations for a release and metric.
 type OperationsQuality struct {
 	Release    string  `json:"release"`
 	Name       string  `json:"name"`
@@ -33,6 +36,7 @@ type OperationsQuality struct {
 	Average    float64 `json:"average"`
 }
 
+// OperationsReport combines totals, release and hourly groups, and quality scores.
 type OperationsReport struct {
 	Project     string              `json:"project"`
 	Environment string              `json:"environment"`
@@ -45,6 +49,7 @@ type OperationsReport struct {
 	Quality     []OperationsQuality `json:"quality"`
 }
 
+// Validate requires a project and a time range no longer than 31 days.
 func (f OperationsFilter) Validate() error {
 	if f.Project == "" || f.From.IsZero() || f.To.IsZero() || !f.From.Before(f.To) || f.To.Sub(f.From) > 31*24*time.Hour {
 		return errors.New("operations requires a project and an increasing time range of at most 31 days")
@@ -56,8 +61,10 @@ func (f OperationsFilter) Validate() error {
 // runs do not enter latency percentiles. Costs include only known amounts.
 // Quality uses the latest score per run/item/name, keeping metrics separate.
 func (s *Store) Operations(ctx context.Context, f OperationsFilter) (OperationsReport, error) {
-	report := OperationsReport{Project: f.Project, Environment: f.Environment, Release: f.Release,
-		From: f.From.UTC(), To: f.To.UTC(), Releases: []OperationsGroup{}, Hourly: []OperationsGroup{}, Quality: []OperationsQuality{}}
+	report := OperationsReport{
+		Project: f.Project, Environment: f.Environment, Release: f.Release,
+		From: f.From.UTC(), To: f.To.UTC(), Releases: []OperationsGroup{}, Hourly: []OperationsGroup{}, Quality: []OperationsQuality{},
+	}
 	if err := f.Validate(); err != nil {
 		return report, err
 	}
@@ -78,7 +85,7 @@ func (s *Store) Operations(ctx context.Context, f OperationsFilter) (OperationsR
 	if err != nil {
 		return report, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	rows, err := tx.QueryContext(ctx, query+`
 	SELECT r.release, r.started_at, r.ended_at, r.status, r.cost_usd,
 		(SELECT COUNT(*) FROM spans sp WHERE sp.run_id = r.id AND sp.kind = 'llm' AND sp.cost_usd IS NULL)

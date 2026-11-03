@@ -9,8 +9,10 @@ import (
 func TestReplaceAnalysisRejectsChangedRun(t *testing.T) {
 	st := openTemp(t)
 	ctx := context.Background()
-	sp := Span{ID: "s", RunID: "r", Kind: KindTool, Name: "fetch",
-		StartedAt: t0, EndedAt: t0.Add(1), Status: "ok"}
+	sp := Span{
+		ID: "s", RunID: "r", Kind: KindTool, Name: "fetch",
+		StartedAt: t0, EndedAt: t0.Add(1), Status: "ok",
+	}
 	if err := st.WriteBatch(ctx, Batch{Source: "test", Spans: []Span{sp}}); err != nil {
 		t.Fatal(err)
 	}
@@ -22,8 +24,10 @@ func TestReplaceAnalysisRejectsChangedRun(t *testing.T) {
 	if err := st.WriteBatch(ctx, Batch{Source: "test", Spans: []Span{sp}}); err != nil {
 		t.Fatal(err)
 	}
-	finding := Finding{RunID: "r", SpanID: "s", Type: "tool_error", Severity: "warning",
-		Detail: `{}`, Origin: "analyzer_span"}
+	finding := Finding{
+		RunID: "r", SpanID: "s", Type: "tool_error", Severity: "warning",
+		Detail: `{}`, Origin: "analyzer_span",
+	}
 	if err := st.ReplaceAnalysis(ctx, "r", snapshot, snapshot, []Finding{finding}, nil); !errors.Is(err, ErrAnalysisStale) {
 		t.Fatalf("ReplaceAnalysis = %v, want stale snapshot", err)
 	}

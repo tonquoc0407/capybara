@@ -18,11 +18,17 @@ func TestGroupsAndPacketKeepEvidenceSeparate(t *testing.T) {
 	}
 	defer st.Close()
 	for _, id := range []string{"a", "b"} {
-		sp := store.Span{ID: id + "-span", RunID: id, Kind: store.KindTool,
-			Name: "fetch", StartedAt: time.Now(), EndedAt: time.Now(), Status: "error"}
-		if err := st.WriteBatch(ctx, store.Batch{Source: "test",
-			Spans: []store.Span{sp}, Findings: []store.Finding{{RunID: id, SpanID: sp.ID,
-				Type: "drift", Severity: "warning", Detail: `{}`}}}); err != nil {
+		sp := store.Span{
+			ID: id + "-span", RunID: id, Kind: store.KindTool,
+			Name: "fetch", StartedAt: time.Now(), EndedAt: time.Now(), Status: "error",
+		}
+		if err := st.WriteBatch(ctx, store.Batch{
+			Source: "test",
+			Spans:  []store.Span{sp}, Findings: []store.Finding{{
+				RunID: id, SpanID: sp.ID,
+				Type: "drift", Severity: "warning", Detail: `{}`,
+			}},
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -51,9 +57,11 @@ func TestListFiltersBeforeLimit(t *testing.T) {
 	defer st.Close()
 	base := time.Now().Add(-time.Hour)
 	for i, sample := range []struct{ id, status string }{{"broken", "error"}, {"healthy-1", "ok"}, {"healthy-2", "ok"}} {
-		sp := store.Span{ID: sample.id + "-span", RunID: sample.id, Kind: store.KindAgent,
+		sp := store.Span{
+			ID: sample.id + "-span", RunID: sample.id, Kind: store.KindAgent,
 			Name: "agent", StartedAt: base.Add(time.Duration(i) * time.Minute),
-			EndedAt: base.Add(time.Duration(i)*time.Minute + time.Second), Status: sample.status}
+			EndedAt: base.Add(time.Duration(i)*time.Minute + time.Second), Status: sample.status,
+		}
 		if err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{sp}}); err != nil {
 			t.Fatal(err)
 		}
@@ -65,8 +73,10 @@ func TestListFiltersBeforeLimit(t *testing.T) {
 }
 
 func TestFingerprintSeparatesFailurePositionsAndCanonicalSchemaChanges(t *testing.T) {
-	spans := []store.Span{{ID: "a", Kind: store.KindTool, Name: "fetch", Status: "error"},
-		{ID: "b", Kind: store.KindTool, Name: "fetch", Status: "ok"}}
+	spans := []store.Span{
+		{ID: "a", Kind: store.KindTool, Name: "fetch", Status: "error"},
+		{ID: "b", Kind: store.KindTool, Name: "fetch", Status: "ok"},
+	}
 	first, _ := Fingerprint(spans, nil)
 	later := append([]store.Span(nil), spans...)
 	later[0].Status, later[1].Status = "ok", "error"
@@ -106,8 +116,10 @@ func TestFingerprintSeparatesFailurePositionsAndCanonicalSchemaChanges(t *testin
 }
 
 func TestPacketHTMLEscapesRecordedContent(t *testing.T) {
-	p := Packet{RunID: "r", Context: RunContext{Project: "default"},
-		Observed: Observed{Contents: map[string][]store.Content{"s": {{SpanID: "s", Role: "output", Body: `<script>alert(1)</script>`}}}}}
+	p := Packet{
+		RunID: "r", Context: RunContext{Project: "default"},
+		Observed: Observed{Contents: map[string][]store.Content{"s": {{SpanID: "s", Role: "output", Body: `<script>alert(1)</script>`}}}},
+	}
 	body, err := PacketHTML(p)
 	if err != nil {
 		t.Fatal(err)
@@ -126,9 +138,11 @@ func TestPacketLinksReplayComparisonAndScores(t *testing.T) {
 	defer st.Close()
 	now := time.Now().UTC()
 	for _, sample := range []struct{ id, status string }{{"before", "error"}, {"after", "ok"}} {
-		err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{{ID: sample.id + "-span",
+		err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{{
+			ID:    sample.id + "-span",
 			RunID: sample.id, Kind: store.KindAgent, Name: "agent", StartedAt: now,
-			EndedAt: now.Add(time.Second), Status: sample.status}}})
+			EndedAt: now.Add(time.Second), Status: sample.status,
+		}}})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -18,9 +18,13 @@ func TestPromptVersionsResolveLateTraceReference(t *testing.T) {
 	content := "Answer with evidence."
 	h := sha256.Sum256([]byte(content))
 	sha := hex.EncodeToString(h[:])
-	if err := st.WriteBatch(ctx, Batch{Source: "otlp", RunContexts: map[string]RunContext{"run": {Project: "checkout"}},
-		Spans: []Span{{ID: "span", RunID: "run", Kind: KindLLM, Name: "chat", Status: "ok",
-			Attrs: Attrs{Raw: map[string]any{"capybara.prompt.sha256": sha}}}}}); err != nil {
+	if err := st.WriteBatch(ctx, Batch{
+		Source: "otlp", RunContexts: map[string]RunContext{"run": {Project: "checkout"}},
+		Spans: []Span{{
+			ID: "span", RunID: "run", Kind: KindLLM, Name: "chat", Status: "ok",
+			Attrs: Attrs{Raw: map[string]any{"capybara.prompt.sha256": sha}},
+		}},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	refs, err := st.PromptReferencesForRun(ctx, "run")

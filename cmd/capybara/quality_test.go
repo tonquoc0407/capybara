@@ -21,13 +21,17 @@ func TestQualityCommandsGatePairedRegression(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"before-run", "after-run"} {
-		sp := store.Span{ID: id + "-span", RunID: id, Kind: store.KindAgent,
-			Name: "answer", StartedAt: time.Now(), EndedAt: time.Now(), Status: "ok"}
-		if err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{sp},
+		sp := store.Span{
+			ID: id + "-span", RunID: id, Kind: store.KindAgent,
+			Name: "answer", StartedAt: time.Now(), EndedAt: time.Now(), Status: "ok",
+		}
+		if err := st.WriteBatch(ctx, store.Batch{
+			Source: "test", Spans: []store.Span{sp},
 			Contents: []store.Content{
 				{SpanID: sp.ID, Role: "user", Seq: 0, Body: "question", MediaType: "text/plain"},
 				{SpanID: sp.ID, Role: "assistant", Seq: 1, Body: "answer", MediaType: "text/plain"},
-			}}); err != nil {
+			},
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -46,7 +50,7 @@ func TestQualityCommandsGatePairedRegression(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := filepath.Join(t.TempDir(), "expected.txt")
-	if err := os.WriteFile(expected, []byte("reviewed answer\n"), 0600); err != nil {
+	if err := os.WriteFile(expected, []byte("reviewed answer\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if output, err := command("dataset", "expect", dataset, item, expected); err != nil || !strings.Contains(output, "reviewed answer") {

@@ -26,6 +26,7 @@ func (s *Store) LatestToolSchema(ctx context.Context, tool string) (*ToolSchema,
 	return s.LatestProjectToolSchema(ctx, "default", tool)
 }
 
+// LatestProjectToolSchema returns the newest output schema within one project.
 func (s *Store) LatestProjectToolSchema(ctx context.Context, project, tool string) (*ToolSchema, error) {
 	row := s.db.QueryRowContext(ctx,
 		`SELECT project, tool_name, version, schema_json, learned_from_run, first_seen, last_seen
@@ -67,6 +68,7 @@ func (s *Store) TouchToolSchema(ctx context.Context, tool string, version int64,
 	return s.TouchProjectToolSchema(ctx, "default", tool, version, schema, lastSeen)
 }
 
+// TouchProjectToolSchema updates a version's learned shape and last-seen time.
 func (s *Store) TouchProjectToolSchema(ctx context.Context, project, tool string, version int64, schema string, lastSeen time.Time) error {
 	if _, err := s.db.ExecContext(ctx,
 		`UPDATE tool_schemas SET schema_json = ?, last_seen = ?
@@ -122,7 +124,7 @@ func (s *Store) MarkAnalyzed(ctx context.Context, spans []Span) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	for first := 0; first < len(spans); first += 256 {
 		batch := spans[first:min(first+256, len(spans))]
 		args, placeholders := make([]any, 0, 2*len(batch)), make([]string, 0, len(batch))

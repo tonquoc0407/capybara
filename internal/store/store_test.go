@@ -167,12 +167,18 @@ func TestRunStatusSurfacesTerminalModelFailureAndRecovery(t *testing.T) {
 	s := openTemp(t)
 	ctx := context.Background()
 	b := Batch{Source: "test", Spans: []Span{
-		{ID: "task", RunID: "r1", Kind: KindOther, Name: "task",
-			StartedAt: t0, EndedAt: t0.Add(5 * time.Second), Status: "ok"},
-		{ID: "agent", RunID: "r1", ParentID: "task", Kind: KindAgent, Name: "agent",
-			StartedAt: t0, EndedAt: t0.Add(4 * time.Second), Status: "ok"},
-		{ID: "llm1", RunID: "r1", ParentID: "agent", Kind: KindLLM, Name: "chat",
-			StartedAt: t0, EndedAt: t0.Add(3 * time.Second), Status: "error"},
+		{
+			ID: "task", RunID: "r1", Kind: KindOther, Name: "task",
+			StartedAt: t0, EndedAt: t0.Add(5 * time.Second), Status: "ok",
+		},
+		{
+			ID: "agent", RunID: "r1", ParentID: "task", Kind: KindAgent, Name: "agent",
+			StartedAt: t0, EndedAt: t0.Add(4 * time.Second), Status: "ok",
+		},
+		{
+			ID: "llm1", RunID: "r1", ParentID: "agent", Kind: KindLLM, Name: "chat",
+			StartedAt: t0, EndedAt: t0.Add(3 * time.Second), Status: "error",
+		},
 	}}
 	if err := s.WriteBatch(ctx, b); err != nil {
 		t.Fatal(err)
@@ -181,9 +187,11 @@ func TestRunStatusSurfacesTerminalModelFailureAndRecovery(t *testing.T) {
 	if err != nil || len(runs) != 1 || runs[0].Status != "error" {
 		t.Fatalf("terminal model failure = %+v, %v", runs, err)
 	}
-	b.Spans = []Span{{ID: "llm2", RunID: "r1", ParentID: "agent",
+	b.Spans = []Span{{
+		ID: "llm2", RunID: "r1", ParentID: "agent",
 		Kind: KindLLM, Name: "chat", StartedAt: t0.Add(3 * time.Second),
-		EndedAt: t0.Add(4 * time.Second), Status: "ok"}}
+		EndedAt: t0.Add(4 * time.Second), Status: "ok",
+	}}
 	if err := s.WriteBatch(ctx, b); err != nil {
 		t.Fatal(err)
 	}
@@ -240,10 +248,12 @@ func TestDropContentRedactsRawAndPreviousBodies(t *testing.T) {
 
 func TestDropContentKeepsInvalidCacheCountAsMissingPriceSignal(t *testing.T) {
 	s := openTemp(t)
-	sp := Span{ID: "s1", RunID: "r1", Kind: KindLLM, Name: "chat",
+	sp := Span{
+		ID: "s1", RunID: "r1", Kind: KindLLM, Name: "chat",
 		EndedAt: t0, Status: "ok", Attrs: Attrs{Raw: map[string]any{
 			"gen_ai.usage.cache_read.input_tokens": "DEMO_SECRET",
-		}}}
+		}},
+	}
 	if err := s.WriteBatch(context.Background(), Batch{
 		Source: "test", Spans: []Span{sp}, DropContent: true,
 	}); err != nil {

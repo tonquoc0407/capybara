@@ -13,8 +13,10 @@ import (
 // An empty forcedProject permits local cross-project exploration.
 func ParseRunSearch(r *http.Request, forcedProject string) (store.RunSearch, error) {
 	q := r.URL.Query()
-	filter := store.RunSearch{Project: q.Get("project"), Environment: q.Get("environment"),
-		Release: q.Get("release"), Status: q.Get("status"), Query: q.Get("q"), Limit: 50}
+	filter := store.RunSearch{
+		Project: q.Get("project"), Environment: q.Get("environment"),
+		Release: q.Get("release"), Status: q.Get("status"), Query: q.Get("q"), Limit: 50,
+	}
 	if forcedProject != "" {
 		filter.Project = forcedProject
 	}

@@ -16,7 +16,7 @@ import (
 
 func datasetCmd(ctx context.Context, dbPath string, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: capybara dataset create|list|add|items|expect|clone|export ...")
+		return errors.New("usage: capybara dataset <create|list|add|items|expect|clone|export>")
 	}
 	st, err := store.Open(dbPath)
 	if err != nil {
@@ -116,7 +116,7 @@ func datasetCmd(ctx context.Context, dbPath string, args []string, out io.Writer
 		_, err = fmt.Fprintln(out, args[3])
 		return err
 	}
-	return errors.New("usage: capybara dataset create|list|add|items|expect|clone|export ...")
+	return errors.New("usage: capybara dataset <create|list|add|items|expect|clone|export>")
 }
 
 func scoreCmd(ctx context.Context, dbPath string, args []string, out io.Writer) error {
@@ -155,7 +155,7 @@ func scoreCmd(ctx context.Context, dbPath string, args []string, out io.Writer) 
 
 func experimentCmd(ctx context.Context, dbPath string, capture bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: capybara experiment create|record|compare ...")
+		return errors.New("usage: capybara experiment <create|record|compare>")
 	}
 	st, err := store.Open(dbPath)
 	if err != nil {
@@ -213,5 +213,5 @@ func experimentCmd(ctx context.Context, dbPath string, capture bool, args []stri
 		}
 		return nil
 	}
-	return errors.New("usage: capybara experiment create|record|compare ...")
+	return errors.New("usage: capybara experiment <create|record|compare>")
 }

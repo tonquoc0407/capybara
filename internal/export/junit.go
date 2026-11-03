@@ -32,14 +32,20 @@ func WriteExperimentJUnit(path string, result store.ExperimentComparison, minDel
 		Case     testCase `xml:"testcase"`
 	}
 	pass := result.Delta >= minDelta
-	artifact := suite{Name: "capybara experiment", Tests: 1,
-		Case: testCase{Name: result.ScoreName, Class: "capybara.experiment",
+	artifact := suite{
+		Name: "capybara experiment", Tests: 1,
+		Case: testCase{
+			Name: result.ScoreName, Class: "capybara.experiment",
 			Output: fmt.Sprintf("dataset=%s items=%d baseline=%.6f candidate=%.6f delta=%.6f min_delta=%.6f",
-				result.DatasetID, result.Items, result.Baseline, result.Candidate, result.Delta, minDelta)}}
+				result.DatasetID, result.Items, result.Baseline, result.Candidate, result.Delta, minDelta),
+		},
+	}
 	if !pass {
 		artifact.Failures = 1
-		artifact.Case.Failure = &failure{Message: "experiment regression",
-			Text: fmt.Sprintf("delta %.6f is below minimum %.6f", result.Delta, minDelta)}
+		artifact.Case.Failure = &failure{
+			Message: "experiment regression",
+			Text:    fmt.Sprintf("delta %.6f is below minimum %.6f", result.Delta, minDelta),
+		}
 	}
 	raw, err := xml.MarshalIndent(artifact, "", "  ")
 	if err != nil {

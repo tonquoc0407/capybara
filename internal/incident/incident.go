@@ -11,6 +11,7 @@ import (
 	"github.com/tonquoc0407/capybara/internal/store"
 )
 
+// Group collects runs that share a trace fingerprint within one project.
 type Group struct {
 	Fingerprint string   `json:"fingerprint"`
 	Runs        []string `json:"runs"`
@@ -122,6 +123,7 @@ func List(ctx context.Context, st *store.Store, project string, limit int) ([]Gr
 	return ListForSearch(ctx, st, store.RunSearch{Project: project, Limit: limit})
 }
 
+// ListForSearch groups incident runs selected by the supplied run filters.
 func ListForSearch(ctx context.Context, st *store.Store, filter store.RunSearch) ([]Group, error) {
 	filter.OnlyIncidents = true
 	runs, err := st.SearchRuns(ctx, filter)
@@ -149,8 +151,10 @@ func ListForSearch(ctx context.Context, st *store.Store, filter store.RunSearch)
 			groups[idx].Count++
 		} else {
 			index[key] = len(groups)
-			groups = append(groups, Group{Fingerprint: fp, Runs: []string{r.ID}, Count: 1,
-				FirstError: first, Project: r.Project})
+			groups = append(groups, Group{
+				Fingerprint: fp, Runs: []string{r.ID}, Count: 1,
+				FirstError: first, Project: r.Project,
+			})
 		}
 	}
 	return groups, nil

@@ -27,9 +27,11 @@ func TestExperimentRunExecutesDatasetAndScoresAnswers(t *testing.T) {
 	for i, want := range []string{"one", "two"} {
 		id := "source-" + want
 		span := store.Span{ID: id + "-span", RunID: id, Kind: store.KindAgent, Name: "source", StartedAt: time.Now(), EndedAt: time.Now(), Status: "ok"}
-		if err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{span},
+		if err := st.WriteBatch(ctx, store.Batch{
+			Source: "test", Spans: []store.Span{span},
 			RunContexts: map[string]store.RunContext{id: {Project: dataset.Project}},
-			Contents:    []store.Content{{SpanID: span.ID, Role: "user", Body: want}, {SpanID: span.ID, Role: "assistant", Seq: 1, Body: []string{"broken", "wrong"}[i]}}}); err != nil {
+			Contents:    []store.Content{{SpanID: span.ID, Role: "user", Body: want}, {SpanID: span.ID, Role: "assistant", Seq: 1, Body: []string{"broken", "wrong"}[i]}},
+		}); err != nil {
 			t.Fatal(err)
 		}
 		item, err := st.AddDatasetItem(ctx, dataset.ID, id)
@@ -47,12 +49,12 @@ func TestExperimentRunExecutesDatasetAndScoresAnswers(t *testing.T) {
 	}
 	dir := t.TempDir()
 	agent := filepath.Join(dir, "agent.py")
-	if err := os.WriteFile(agent, []byte("import json,sys\nr=json.load(sys.stdin)\nprint(json.dumps({'assistant':r['messages'][-1]['content'],'cost_usd':0.01}))\n"), 0600); err != nil {
+	if err := os.WriteFile(agent, []byte("import json,sys\nr=json.load(sys.stdin)\nprint(json.dumps({'assistant':r['messages'][-1]['content'],'cost_usd':0.01}))\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	spec := filepath.Join(dir, "spec.json")
 	specJSON, _ := json.Marshal(map[string]any{"command": []string{"python3", agent}, "max_cost_usd": 0.1, "turns": []any{map[string]string{"user": "placeholder"}}})
-	if err := os.WriteFile(spec, specJSON, 0600); err != nil {
+	if err := os.WriteFile(spec, specJSON, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
@@ -116,12 +118,12 @@ func TestExperimentRunExecutesDatasetAndScoresAnswers(t *testing.T) {
 		t.Fatalf("compare: %v: %s", err, out.String())
 	}
 	badAgent := filepath.Join(dir, "bad.py")
-	if err := os.WriteFile(badAgent, []byte("import json\nprint(json.dumps({'assistant':'bad','cost_usd':0.0}))\n"), 0600); err != nil {
+	if err := os.WriteFile(badAgent, []byte("import json\nprint(json.dumps({'assistant':'bad','cost_usd':0.0}))\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	badSpec := filepath.Join(dir, "bad.json")
 	badJSON, _ := json.Marshal(map[string]any{"command": []string{"python3", badAgent}, "max_cost_usd": 0.1, "turns": []any{map[string]string{"user": "placeholder"}}})
-	if err := os.WriteFile(badSpec, badJSON, 0600); err != nil {
+	if err := os.WriteFile(badSpec, badJSON, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	out.Reset()

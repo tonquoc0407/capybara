@@ -25,7 +25,7 @@ func Run(ctx context.Context, st *store.Store, m Manifest, captureContent bool) 
 		return fmt.Errorf("manifest has no entrypoint")
 	}
 	if nodeEntrypoint(m) && !m.AllowLive {
-		return fmt.Errorf("Node replay may call a live model; pass --allow-live to permit it")
+		return fmt.Errorf("node replay may call a live model; pass --allow-live to permit it")
 	}
 	if err := st.SetRunParent(ctx, m.RunID, "otlp", m.ParentRunID); err != nil {
 		return err

@@ -14,14 +14,18 @@ func TestCostProvenanceAndUsage(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	sp := Span{ID: "llm", RunID: "run", Kind: KindLLM, Name: "chat", Status: "ok",
-		StartedAt: time.Now(), EndedAt: time.Now(), TokensIn: 100, TokensOut: 20}
+	sp := Span{
+		ID: "llm", RunID: "run", Kind: KindLLM, Name: "chat", Status: "ok",
+		StartedAt: time.Now(), EndedAt: time.Now(), TokensIn: 100, TokensOut: 20,
+	}
 	if err := st.WriteBatch(ctx, Batch{Source: "test", RunContexts: map[string]RunContext{"run": {Project: "checkout"}}, Spans: []Span{sp}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.SetSpanEstimates(ctx, map[string]SpanEstimate{"llm": {
-		CostUSD: 0.05, Provenance: CostProvenance{Kind: "estimate", PriceSource: "test-table",
-			PriceVersion: "abc", UsageSource: "observed token totals"},
+		CostUSD: 0.05, Provenance: CostProvenance{
+			Kind: "estimate", PriceSource: "test-table",
+			PriceVersion: "abc", UsageSource: "observed token totals",
+		},
 	}}); err != nil {
 		t.Fatal(err)
 	}

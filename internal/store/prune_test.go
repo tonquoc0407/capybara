@@ -106,16 +106,20 @@ func TestPruneKeepsQualityEvidenceAndDeletesLinkedLogs(t *testing.T) {
 	}
 	defer st.Close()
 	for _, id := range []string{"pinned", "removable"} {
-		sp := Span{ID: id + "-span", RunID: id, Kind: KindAgent, Name: "answer",
-			StartedAt: time.Now(), EndedAt: time.Now(), Status: "ok"}
+		sp := Span{
+			ID: id + "-span", RunID: id, Kind: KindAgent, Name: "answer",
+			StartedAt: time.Now(), EndedAt: time.Now(), Status: "ok",
+		}
 		if err := st.WriteBatch(ctx, Batch{Source: "test", Spans: []Span{sp}, Contents: []Content{
 			{SpanID: sp.ID, Role: "user", Seq: 0, Body: "q", MediaType: "text/plain"},
 			{SpanID: sp.ID, Role: "assistant", Seq: 1, Body: "a", MediaType: "text/plain"},
 		}}); err != nil {
 			t.Fatal(err)
 		}
-		if err := st.PutTraceLogs(ctx, "test", []TraceLog{{ID: id + "-log", RunID: id,
-			SpanID: sp.ID, Body: "log", AttrsJSON: `{}`}}); err != nil {
+		if err := st.PutTraceLogs(ctx, "test", []TraceLog{{
+			ID: id + "-log", RunID: id,
+			SpanID: sp.ID, Body: "log", AttrsJSON: `{}`,
+		}}); err != nil {
 			t.Fatal(err)
 		}
 	}

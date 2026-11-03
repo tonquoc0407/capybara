@@ -19,9 +19,11 @@ func TestPromptfooExportUsesRecordedInputAndExpectedOutput(t *testing.T) {
 	}
 	defer st.Close()
 	now := time.Now().UTC()
-	err = st.WriteBatch(ctx, store.Batch{Source: "test",
+	err = st.WriteBatch(ctx, store.Batch{
+		Source:   "test",
 		Spans:    []store.Span{{ID: "s", RunID: "r", Kind: store.KindAgent, Name: "agent", StartedAt: now, EndedAt: now.Add(time.Second), Status: "ok"}},
-		Contents: []store.Content{{SpanID: "s", Role: "user", Body: "What is 2+2?"}, {SpanID: "s", Role: "assistant", Seq: 1, Body: "4"}}})
+		Contents: []store.Content{{SpanID: "s", Role: "user", Body: "What is 2+2?"}, {SpanID: "s", Role: "assistant", Seq: 1, Body: "4"}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

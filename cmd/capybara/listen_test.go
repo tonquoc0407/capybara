@@ -63,7 +63,9 @@ func TestListenHeadlessReceivesEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	io.Copy(io.Discard, resp.Body)
+	if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+		t.Fatal(err)
+	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("status = %d", resp.StatusCode)
@@ -81,7 +83,9 @@ func TestListenHeadlessReceivesEvents(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		io.Copy(io.Discard, resp.Body)
+		if _, err := io.Copy(io.Discard, resp.Body); err != nil {
+			t.Fatal(err)
+		}
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusCreated {
 			t.Fatalf("status = %d for %s", resp.StatusCode, payload)

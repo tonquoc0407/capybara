@@ -93,10 +93,12 @@ func main() {
 		}
 		openTimes = append(openTimes, float64(time.Since(start))/float64(time.Millisecond))
 	}
-	result := report{StreamingSpans: *stream, StreamingSeconds: streamSeconds,
+	result := report{
+		StreamingSpans: *stream, StreamingSeconds: streamSeconds,
 		SpansPerSecond: float64(*stream) / streamSeconds,
 		StoredSpans:    count, ExpectedSpans: *target, ListP95MS: p95(listTimes), OpenRunP95MS: p95(openTimes),
-		RSSBytes: rss(), DBBytes: dbSize(*path), CPUCount: runtime.NumCPU()}
+		RSSBytes: rss(), DBBytes: dbSize(*path), CPUCount: runtime.NumCPU(),
+	}
 	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
 		panic(err)
 	}
@@ -117,9 +119,11 @@ func makeBatch(first, count int) store.Batch {
 			parent = ""
 			kind = store.KindAgent
 		}
-		b.Spans = append(b.Spans, store.Span{ID: fmt.Sprintf("%016x", first+i+1), RunID: runID,
+		b.Spans = append(b.Spans, store.Span{
+			ID: fmt.Sprintf("%016x", first+i+1), RunID: runID,
 			ParentID: parent, Kind: kind, Name: "synthetic", StartedAt: start,
-			EndedAt: start.Add(20 * time.Millisecond), Status: "ok", TokensIn: 10, TokensOut: 5})
+			EndedAt: start.Add(20 * time.Millisecond), Status: "ok", TokensIn: 10, TokensOut: 5,
+		})
 	}
 	return b
 }

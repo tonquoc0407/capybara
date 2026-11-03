@@ -88,10 +88,14 @@ func TestReimportClearsDerivedFindingsAndTaints(t *testing.T) {
 	st := openTemp(t)
 	ctx := context.Background()
 	toolRun(t, st, "r1", "fetch", "", t0)
-	llm := store.Span{ID: "r1-llm", RunID: "r1", Kind: store.KindLLM, Name: "answer",
-		StartedAt: t0.Add(2 * time.Second), EndedAt: t0.Add(3 * time.Second), Status: "ok"}
-	if err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{llm},
-		Findings: []store.Finding{{RunID: "r1", Type: "parse_error", Severity: "warning", Detail: `{"line":1}`}}}); err != nil {
+	llm := store.Span{
+		ID: "r1-llm", RunID: "r1", Kind: store.KindLLM, Name: "answer",
+		StartedAt: t0.Add(2 * time.Second), EndedAt: t0.Add(3 * time.Second), Status: "ok",
+	}
+	if err := st.WriteBatch(ctx, store.Batch{
+		Source: "test", Spans: []store.Span{llm},
+		Findings: []store.Finding{{RunID: "r1", Type: "parse_error", Severity: "warning", Detail: `{"line":1}`}},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	sweep(t, st)

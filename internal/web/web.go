@@ -51,6 +51,7 @@ type RunDetail struct {
 	Logs     []LogView            `json:"logs,omitempty"`
 }
 
+// LogView is one linked log rendered with optional body and attributes.
 type LogView struct {
 	ID        string `json:"id"`
 	SpanID    string `json:"span_id"`
@@ -118,10 +119,12 @@ func Runs(ctx context.Context, st *store.Store) ([]RunSummary, error) {
 	return out, nil
 }
 
+// RunsForProject returns one project page without loading span content.
 func RunsForProject(ctx context.Context, st *store.Store, project string, limit, offset int) ([]RunSummary, error) {
 	return RunsForSearch(ctx, st, store.RunSearch{Project: project, Limit: limit, Offset: offset})
 }
 
+// RunsForSearch maps a filtered run page into Web summaries.
 func RunsForSearch(ctx context.Context, st *store.Store, filter store.RunSearch) ([]RunSummary, error) {
 	runs, err := st.SearchRuns(ctx, filter)
 	if err != nil {
@@ -151,6 +154,7 @@ func Run(ctx context.Context, st *store.Store, runID string) (RunDetail, error) 
 	return run(ctx, st, runID, true)
 }
 
+// RunMetadata loads spans and findings while leaving recorded bodies unread.
 func RunMetadata(ctx context.Context, st *store.Store, runID string) (RunDetail, error) {
 	return run(ctx, st, runID, false)
 }
@@ -203,8 +207,10 @@ func run(ctx context.Context, st *store.Store, runID string, withContent bool) (
 		}
 	}
 	for _, l := range logs {
-		d.Logs = append(d.Logs, LogView{ID: l.ID, SpanID: l.SpanID,
-			At: stamp(l.ObservedAt), Severity: l.Severity, Body: l.Body, AttrsJSON: l.AttrsJSON})
+		d.Logs = append(d.Logs, LogView{
+			ID: l.ID, SpanID: l.SpanID,
+			At: stamp(l.ObservedAt), Severity: l.Severity, Body: l.Body, AttrsJSON: l.AttrsJSON,
+		})
 	}
 	return d, nil
 }

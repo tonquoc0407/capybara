@@ -59,8 +59,10 @@ func TestScenarioFailsClosedOnUnmockedToolAndStepLimit(t *testing.T) {
 }
 
 func TestScenarioRejectsUnverifiableOrExcessCost(t *testing.T) {
-	spec := Spec{Command: []string{"python3", "-c", `import json;print(json.dumps({"assistant":"ok","cost_usd":0.2}))`},
-		Turns: []Turn{{User: "hello"}}, MaxCostUSD: 0.1}
+	spec := Spec{
+		Command: []string{"python3", "-c", `import json;print(json.dumps({"assistant":"ok","cost_usd":0.2}))`},
+		Turns:   []Turn{{User: "hello"}}, MaxCostUSD: 0.1,
+	}
 	if _, err := exec.LookPath(spec.Command[0]); err != nil {
 		t.Skip(err)
 	}

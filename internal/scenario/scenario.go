@@ -16,6 +16,7 @@ import (
 	"time"
 )
 
+// Spec declares the agent command, test turns, mock tools, and execution limits.
 type Spec struct {
 	Name       string                     `json:"name"`
 	Command    []string                   `json:"command"`
@@ -26,11 +27,13 @@ type Spec struct {
 	MaxCostUSD float64                    `json:"max_cost_usd"`
 }
 
+// Turn supplies one user input and an optional expected answer fragment.
 type Turn struct {
 	User           string `json:"user"`
 	ExpectContains string `json:"expect_contains"`
 }
 
+// Message is one entry in the conversation sent to the agent process.
 type Message struct {
 	Role    string          `json:"role"`
 	Name    string          `json:"name,omitempty"`
@@ -38,22 +41,26 @@ type Message struct {
 	JSON    json.RawMessage `json:"json,omitempty"`
 }
 
+// Request is the JSON object written to the agent process on stdin.
 type Request struct {
 	Messages []Message `json:"messages"`
 	Tools    []string  `json:"tools"`
 }
 
+// ToolCall names a declared mock tool and its JSON arguments.
 type ToolCall struct {
 	Name      string          `json:"name"`
 	Arguments json.RawMessage `json:"arguments"`
 }
 
+// Response is the JSON object read from the agent process on stdout.
 type Response struct {
 	Assistant string     `json:"assistant"`
 	ToolCalls []ToolCall `json:"tool_calls"`
 	CostUSD   *float64   `json:"cost_usd"`
 }
 
+// TurnResult records the observed answer and the turn's assertion result.
 type TurnResult struct {
 	User      string `json:"user"`
 	Assistant string `json:"assistant"`
@@ -61,6 +68,7 @@ type TurnResult struct {
 	Reason    string `json:"reason,omitempty"`
 }
 
+// Result records the outcome and agent-reported cost of a scenario run.
 type Result struct {
 	Name            string       `json:"name"`
 	Passed          bool         `json:"passed"`
@@ -91,6 +99,7 @@ func (s *Spec) defaultsAndValidate() error {
 	return nil
 }
 
+// Validate applies default limits and rejects incomplete or invalid specs.
 func (s *Spec) Validate() error { return s.defaultsAndValidate() }
 
 // Run invokes a fresh process for each step with the full conversation on

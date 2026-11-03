@@ -10,8 +10,10 @@ import (
 )
 
 func TestExperimentJUnitReportsRegressionAndPass(t *testing.T) {
-	result := store.ExperimentComparison{DatasetID: "data", ScoreName: "quality", Items: 2,
-		Baseline: 0.8, Candidate: 0.6, Delta: -0.2}
+	result := store.ExperimentComparison{
+		DatasetID: "data", ScoreName: "quality", Items: 2,
+		Baseline: 0.8, Candidate: 0.6, Delta: -0.2,
+	}
 	for _, trial := range []struct {
 		threshold float64
 		failures  string

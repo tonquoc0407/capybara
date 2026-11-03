@@ -28,9 +28,13 @@ func TestOperationsCannotOverrideTokenProject(t *testing.T) {
 		if project == "beta" {
 			cost = 99
 		}
-		err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{{ID: project + "-span", RunID: project,
-			Kind: store.KindAgent, Name: "agent", Status: "ok", StartedAt: at, EndedAt: at.Add(time.Second), CostUSD: &cost}},
-			RunContexts: map[string]store.RunContext{project: {Project: project, Release: project + "-release"}}})
+		err := st.WriteBatch(ctx, store.Batch{
+			Source: "test", Spans: []store.Span{{
+				ID: project + "-span", RunID: project,
+				Kind: store.KindAgent, Name: "agent", Status: "ok", StartedAt: at, EndedAt: at.Add(time.Second), CostUSD: &cost,
+			}},
+			RunContexts: map[string]store.RunContext{project: {Project: project, Release: project + "-release"}},
+		})
 		if err != nil {
 			t.Fatal(err)
 		}

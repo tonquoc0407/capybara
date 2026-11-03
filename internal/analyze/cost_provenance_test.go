@@ -16,9 +16,11 @@ func TestSweepRecordsPricingProvenance(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	sp := store.Span{ID: "llm", RunID: "run", Kind: store.KindLLM, Name: "chat",
+	sp := store.Span{
+		ID: "llm", RunID: "run", Kind: store.KindLLM, Name: "chat",
 		StartedAt: time.Now(), EndedAt: time.Now(), Status: "ok",
-		TokensIn: 1000, TokensOut: 100, Attrs: store.Attrs{Model: "gpt-4o"}}
+		TokensIn: 1000, TokensOut: 100, Attrs: store.Attrs{Model: "gpt-4o"},
+	}
 	if err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{sp}}); err != nil {
 		t.Fatal(err)
 	}
@@ -40,8 +42,10 @@ func TestAutomaticPricingPreservesExplicitAmountsAndRefreshesLateUsage(t *testin
 	st := openTemp(t)
 	spans := []store.Span{}
 	for _, id := range []string{"automatic", "provider", "proxy", "legacy"} {
-		sp := store.Span{ID: id, RunID: id + "-run", Kind: store.KindLLM, Name: "chat", Status: "ok",
-			StartedAt: t0, EndedAt: t0.Add(time.Second), TokensIn: 1000, TokensOut: 100, Attrs: store.Attrs{Model: "gpt-4o-mini"}}
+		sp := store.Span{
+			ID: id, RunID: id + "-run", Kind: store.KindLLM, Name: "chat", Status: "ok",
+			StartedAt: t0, EndedAt: t0.Add(time.Second), TokensIn: 1000, TokensOut: 100, Attrs: store.Attrs{Model: "gpt-4o-mini"},
+		}
 		if id == "legacy" {
 			cost := 5.0
 			sp.CostUSD = &cost

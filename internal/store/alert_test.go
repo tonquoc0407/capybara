@@ -16,18 +16,22 @@ func TestRunAlertWindowCountsErrorsCostAndNearestRankLatency(t *testing.T) {
 		if i == 2 {
 			status = "error"
 		}
-		sp := Span{ID: "s" + name, RunID: "r" + name, Kind: KindAgent,
+		sp := Span{
+			ID: "s" + name, RunID: "r" + name, Kind: KindAgent,
 			Name: "agent", StartedAt: t0.Add(time.Duration(i) * time.Minute),
 			EndedAt: t0.Add(time.Duration(i)*time.Minute + d), Status: status,
-			CostUSD: &cost}
+			CostUSD: &cost,
+		}
 		if err := s.WriteBatch(ctx, Batch{Source: "test", Spans: []Span{sp}}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if err := s.WriteBatch(ctx, Batch{Source: "test", Spans: []Span{
 		{ID: "running-root", RunID: "running", Kind: KindAgent, Name: "agent", StartedAt: t0, Status: "running"},
-		{ID: "running-child", RunID: "running", ParentID: "running-root", Kind: KindOther,
-			Name: "closed child", StartedAt: t0, EndedAt: t0.Add(time.Hour), Status: "ok"},
+		{
+			ID: "running-child", RunID: "running", ParentID: "running-root", Kind: KindOther,
+			Name: "closed child", StartedAt: t0, EndedAt: t0.Add(time.Hour), Status: "ok",
+		},
 	}}); err != nil {
 		t.Fatal(err)
 	}

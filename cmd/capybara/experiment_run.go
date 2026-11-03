@@ -129,13 +129,17 @@ func experimentRunCmd(ctx context.Context, st *store.Store, capture bool, args [
 		} else if reason == "" {
 			reason = "answer differs from expected output"
 		}
-		span := store.Span{ID: spanID, RunID: runID, Kind: store.KindAgent, Name: *name,
-			StartedAt: started, EndedAt: ended, Status: status}
+		span := store.Span{
+			ID: spanID, RunID: runID, Kind: store.KindAgent, Name: *name,
+			StartedAt: started, EndedAt: ended, Status: status,
+		}
 		if outcome.CostReported {
 			span.CostUSD = &outcome.ReportedCostUSD
 		}
-		batch := store.Batch{Source: "experiment", Spans: []store.Span{span},
-			RunContexts: map[string]store.RunContext{runID: {Project: dataset.Project, Environment: "evaluation"}}}
+		batch := store.Batch{
+			Source: "experiment", Spans: []store.Span{span},
+			RunContexts: map[string]store.RunContext{runID: {Project: dataset.Project, Environment: "evaluation"}},
+		}
 		if capture {
 			batch.Contents = []store.Content{
 				{SpanID: spanID, Role: "user", Seq: 0, Body: tc.input, MediaType: "text/plain"},

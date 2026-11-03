@@ -24,6 +24,7 @@ type AlertConfig struct {
 	MaxCostUSD    float64
 }
 
+// AlertEvent is the payload sent when an alert threshold becomes active.
 type AlertEvent struct {
 	Summary    store.AlertWindow `json:"summary"`
 	Violations []string          `json:"violations"`

@@ -24,9 +24,11 @@ func TestHubQualityWritesRespectRoleProjectAndWriteHeader(t *testing.T) {
 	_, viewer, _ := st.CreateHubToken(ctx, "alpha", "viewer")
 	_, beta, _ := st.CreateHubToken(ctx, "beta", "editor")
 	now := time.Now().UTC()
-	err = st.WriteBatch(ctx, store.Batch{Source: "test", HubProject: "alpha",
+	err = st.WriteBatch(ctx, store.Batch{
+		Source: "test", HubProject: "alpha",
 		Spans:    []store.Span{{ID: "s", RunID: "r", Kind: store.KindAgent, Name: "agent", StartedAt: now, EndedAt: now.Add(time.Second), Status: "ok"}},
-		Contents: []store.Content{{SpanID: "s", Role: "user", Body: "question"}, {SpanID: "s", Role: "assistant", Seq: 1, Body: "answer"}}})
+		Contents: []store.Content{{SpanID: "s", Role: "user", Body: "question"}, {SpanID: "s", Role: "assistant", Seq: 1, Body: "answer"}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

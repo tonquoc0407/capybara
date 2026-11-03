@@ -31,6 +31,7 @@ h1,h2{color:#d78700}section{border-top:1px solid #454545;padding:1rem 0}pre{whit
 {{if .Fixture}}<section><h2>Regression fixture</h2><pre>{{.Fixture}}</pre></section>{{end}}
 </body></html>`))
 
+// PacketHTML renders escaped incident evidence as a standalone HTML page.
 func PacketHTML(packet Packet) ([]byte, error) {
 	fixture := ""
 	if packet.Fixture != nil {
@@ -48,6 +49,7 @@ func PacketHTML(packet Packet) ([]byte, error) {
 	return out.Bytes(), err
 }
 
+// WritePacketHTML creates a new incident file without overwriting an existing one.
 func WritePacketHTML(ctx context.Context, st *store.Store, runID, path string) error {
 	packet, err := BuildPacket(ctx, st, runID)
 	if err != nil {

@@ -213,8 +213,10 @@ func TestHubRetentionPrunesOldUnpinnedRuns(t *testing.T) {
 	}
 	defer st.Close()
 	old := time.Now().UTC().Add(-72 * time.Hour)
-	sp := store.Span{ID: "old-span", RunID: "old-run", Kind: store.KindAgent,
-		Name: "old", StartedAt: old, EndedAt: old.Add(time.Second), Status: "ok"}
+	sp := store.Span{
+		ID: "old-span", RunID: "old-run", Kind: store.KindAgent,
+		Name: "old", StartedAt: old, EndedAt: old.Add(time.Second), Status: "ok",
+	}
 	if err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{sp}}); err != nil {
 		t.Fatal(err)
 	}

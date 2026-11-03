@@ -22,17 +22,24 @@ func sampleCmd(ctx context.Context, dbPath string, capture bool, args []string, 
 	defer st.Close()
 	const runID = "capybara-sample-v1"
 	start := time.Now().UTC()
-	b := store.Batch{Source: "sample", DropContent: !capture,
+	b := store.Batch{
+		Source: "sample", DropContent: !capture,
 		RunContexts: map[string]store.RunContext{runID: {Environment: "demo", Release: "sample-v1"}},
 		Spans: []store.Span{
-			{ID: "capybara-sample-root", RunID: runID, Kind: store.KindAgent, Name: "answer product price",
-				StartedAt: start, EndedAt: start.Add(3 * time.Second), Status: "error"},
-			{ID: "capybara-sample-tool", RunID: runID, ParentID: "capybara-sample-root", Kind: store.KindTool,
+			{
+				ID: "capybara-sample-root", RunID: runID, Kind: store.KindAgent, Name: "answer product price",
+				StartedAt: start, EndedAt: start.Add(3 * time.Second), Status: "error",
+			},
+			{
+				ID: "capybara-sample-tool", RunID: runID, ParentID: "capybara-sample-root", Kind: store.KindTool,
 				Name: "lookup_price", StartedAt: start.Add(time.Second), EndedAt: start.Add(2 * time.Second), Status: "error",
-				Attrs: store.Attrs{ToolName: "lookup_price"}},
-			{ID: "capybara-sample-answer", RunID: runID, ParentID: "capybara-sample-root", Kind: store.KindLLM,
+				Attrs: store.Attrs{ToolName: "lookup_price"},
+			},
+			{
+				ID: "capybara-sample-answer", RunID: runID, ParentID: "capybara-sample-root", Kind: store.KindLLM,
 				Name: "answer", StartedAt: start.Add(2 * time.Second), EndedAt: start.Add(3 * time.Second), Status: "ok",
-				Attrs: store.Attrs{Model: "sample-model"}},
+				Attrs: store.Attrs{Model: "sample-model"},
+			},
 		},
 		Contents: []store.Content{
 			{SpanID: "capybara-sample-tool", Role: "input", Body: `{"sku":"ABC"}`, MediaType: "application/json"},

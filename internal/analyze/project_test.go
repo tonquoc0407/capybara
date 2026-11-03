@@ -19,11 +19,15 @@ func TestLearnedToolSchemasStayWithinProject(t *testing.T) {
 		{"alpha-2", "alpha", `{"alpha_private":2}`},
 	} {
 		at := t0.Add(time.Duration(i) * time.Minute)
-		sp := store.Span{ID: sample.id + "-tool", RunID: sample.id, Kind: store.KindTool, Name: "fetch",
-			Status: "ok", StartedAt: at, EndedAt: at.Add(time.Second), Attrs: store.Attrs{ToolName: "fetch"}}
-		if err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{sp},
+		sp := store.Span{
+			ID: sample.id + "-tool", RunID: sample.id, Kind: store.KindTool, Name: "fetch",
+			Status: "ok", StartedAt: at, EndedAt: at.Add(time.Second), Attrs: store.Attrs{ToolName: "fetch"},
+		}
+		if err := st.WriteBatch(ctx, store.Batch{
+			Source: "test", Spans: []store.Span{sp},
 			RunContexts: map[string]store.RunContext{sample.id: {Project: sample.project}},
-			Contents:    []store.Content{{SpanID: sp.ID, Role: "output", Body: sample.output}}}); err != nil {
+			Contents:    []store.Content{{SpanID: sp.ID, Role: "output", Body: sample.output}},
+		}); err != nil {
 			t.Fatal(err)
 		}
 		if err := a.Sweep(ctx); err != nil {
@@ -44,11 +48,15 @@ func TestLearnedToolSchemasStayWithinProject(t *testing.T) {
 	}
 	// A restart must recover the project's version rather than a global counter.
 	a = newAnalyzer(t, st)
-	sp := store.Span{ID: "beta-2-tool", RunID: "beta-2", Kind: store.KindTool, Name: "fetch", Status: "ok",
-		StartedAt: t0.Add(4 * time.Minute), EndedAt: t0.Add(4*time.Minute + time.Second), Attrs: store.Attrs{ToolName: "fetch"}}
-	if err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{sp},
+	sp := store.Span{
+		ID: "beta-2-tool", RunID: "beta-2", Kind: store.KindTool, Name: "fetch", Status: "ok",
+		StartedAt: t0.Add(4 * time.Minute), EndedAt: t0.Add(4*time.Minute + time.Second), Attrs: store.Attrs{ToolName: "fetch"},
+	}
+	if err := st.WriteBatch(ctx, store.Batch{
+		Source: "test", Spans: []store.Span{sp},
 		RunContexts: map[string]store.RunContext{sp.RunID: {Project: "beta"}},
-		Contents:    []store.Content{{SpanID: sp.ID, Role: "output", Body: `{"new_field":true}`}}}); err != nil {
+		Contents:    []store.Content{{SpanID: sp.ID, Role: "output", Body: `{"new_field":true}`}},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := a.Sweep(ctx); err != nil {

@@ -15,8 +15,10 @@ func ServeOperations(w http.ResponseWriter, r *http.Request, st *store.Store, fo
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	f := store.OperationsFilter{Project: search.Project, Environment: search.Environment,
-		Release: search.Release, From: search.From, To: search.To}
+	f := store.OperationsFilter{
+		Project: search.Project, Environment: search.Environment,
+		Release: search.Release, From: search.From, To: search.To,
+	}
 	if f.Project == "" {
 		f.Project = "default"
 	}

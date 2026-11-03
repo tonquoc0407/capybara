@@ -17,7 +17,7 @@ func (s *Store) ReplaceAnalysis(ctx context.Context, runID string, snapshot, fre
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	want := make(map[string]int64, len(snapshot))
 	for _, sp := range snapshot {
 		if sp.RunID != runID {
@@ -110,7 +110,7 @@ func (s *Store) ReconcileOrphans(ctx context.Context, current []Finding) ([]stri
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	rows, err := tx.QueryContext(ctx,
 		`SELECT id, run_id, coalesce(span_id, ''), severity, detail_json
 		 FROM findings WHERE origin = 'analyzer_orphan'`)

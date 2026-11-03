@@ -41,10 +41,12 @@ func WriteSpanJSONL(ctx context.Context, st *store.Store, runID string, out io.W
 				Role string `json:"role"`
 				Body string `json:"body"`
 			} `json:"contents,omitempty"`
-		}{Run: runID, Span: sp.ID, Parent: sp.ParentID, Kind: string(sp.Kind), Name: sp.Name,
+		}{
+			Run: runID, Span: sp.ID, Parent: sp.ParentID, Kind: string(sp.Kind), Name: sp.Name,
 			Start: sp.StartedAt, End: sp.EndedAt, TokensIn: sp.TokensIn, TokensOut: sp.TokensOut,
 			Status: sp.Status, Model: sp.Attrs.Model, Provider: sp.Attrs.Provider,
-			Tool: sp.Attrs.ToolName, Attrs: sp.Attrs.Raw}
+			Tool: sp.Attrs.ToolName, Attrs: sp.Attrs.Raw,
+		}
 		for _, c := range contents[sp.ID] {
 			line.Contents = append(line.Contents, struct {
 				Role string `json:"role"`

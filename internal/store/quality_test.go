@@ -22,11 +22,13 @@ func TestDatasetScoreExperimentComparison(t *testing.T) {
 			project = "other"
 		}
 		sp := Span{ID: id + "-span", RunID: id, Kind: KindAgent, Name: "answer", Status: "ok", StartedAt: at, EndedAt: at.Add(time.Second)}
-		if err := st.WriteBatch(ctx, Batch{Source: "test", RunContexts: map[string]RunContext{id: {Project: project}},
+		if err := st.WriteBatch(ctx, Batch{
+			Source: "test", RunContexts: map[string]RunContext{id: {Project: project}},
 			Spans: []Span{sp}, Contents: []Content{
 				{SpanID: sp.ID, Role: "user", Seq: 0, Body: "question", MediaType: "text/plain"},
 				{SpanID: sp.ID, Role: "assistant", Seq: 1, Body: "answer", MediaType: "text/plain"},
-			}}); err != nil {
+			},
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}

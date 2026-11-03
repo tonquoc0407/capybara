@@ -16,7 +16,7 @@ import (
 
 func hubCmd(ctx context.Context, dbPath string, allowContent bool, args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: capybara hub serve|token|audit|backup|restore ...")
+		return errors.New("usage: capybara hub <serve|token|audit|backup|restore>")
 	}
 	if args[0] == "serve" {
 		fs := flag.NewFlagSet("hub serve", flag.ContinueOnError)
@@ -53,9 +53,11 @@ func hubCmd(ctx context.Context, dbPath string, allowContent bool, args []string
 		defer st.Close()
 		var alerts *hub.AlertConfig
 		if *alertWebhook != "" {
-			alerts = &hub.AlertConfig{Project: *alertProject, WebhookURL: *alertWebhook,
+			alerts = &hub.AlertConfig{
+				Project: *alertProject, WebhookURL: *alertWebhook,
 				Window: *alertWindow, Interval: *alertInterval, MinErrors: *alertErrors,
-				MaxP95Latency: *alertP95, MaxCostUSD: *alertCost}
+				MaxP95Latency: *alertP95, MaxCostUSD: *alertCost,
+			}
 		}
 		return (hub.Server{Store: st, CaptureContent: *capture && allowContent, Retention: *retention, RedactPattern: pattern, Alerts: alerts}).Serve(ctx, *addr, out)
 	}
@@ -104,7 +106,7 @@ func hubCmd(ctx context.Context, dbPath string, allowContent bool, args []string
 		return json.NewEncoder(out).Encode(events)
 	}
 	if args[0] != "token" || len(args) < 2 {
-		return errors.New("usage: capybara hub token create|list|revoke ...")
+		return errors.New("usage: capybara hub token <create|list|revoke>")
 	}
 	switch args[1] {
 	case "create":
@@ -145,5 +147,5 @@ func hubCmd(ctx context.Context, dbPath string, allowContent bool, args []string
 		}
 		return st.RevokeHubToken(ctx, args[2])
 	}
-	return errors.New("usage: capybara hub token create|list|revoke ...")
+	return errors.New("usage: capybara hub token <create|list|revoke>")
 }

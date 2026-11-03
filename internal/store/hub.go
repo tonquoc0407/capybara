@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// HubToken contains token metadata; the secret is never returned from storage.
 type HubToken struct {
 	ID        string     `json:"id"`
 	Project   string     `json:"project"`
@@ -19,6 +20,7 @@ type HubToken struct {
 	RevokedAt *time.Time `json:"revoked_at,omitempty"`
 }
 
+// AuditEvent records a project-scoped hub action without storing a token secret.
 type AuditEvent struct {
 	ID           int64     `json:"id"`
 	At           time.Time `json:"at"`
@@ -49,7 +51,7 @@ func (s *Store) CreateHubToken(ctx context.Context, project, role string) (HubTo
 	if err != nil {
 		return HubToken{}, "", err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.ExecContext(ctx, `INSERT INTO hub_tokens (id, token_hash, project, role, created_at)
 		VALUES (?, ?, ?, ?, ?)`, id, hex.EncodeToString(hash[:]), project, role, at.UnixNano()); err != nil {
 		return HubToken{}, "", err
@@ -64,6 +66,7 @@ func (s *Store) CreateHubToken(ctx context.Context, project, role string) (HubTo
 	return HubToken{ID: id, Project: project, Role: role, CreatedAt: at}, secret, nil
 }
 
+// AuthenticateHubToken resolves an active token from its secret.
 func (s *Store) AuthenticateHubToken(ctx context.Context, secret string) (HubToken, error) {
 	if len(secret) != 64 {
 		return HubToken{}, errors.New("invalid token")
@@ -84,12 +87,13 @@ func (s *Store) AuthenticateHubToken(ctx context.Context, secret string) (HubTok
 	return t, nil
 }
 
+// RevokeHubToken disables a token and records the revocation in the audit log.
 func (s *Store) RevokeHubToken(ctx context.Context, id string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var project string
 	if err := tx.QueryRowContext(ctx, `SELECT project FROM hub_tokens WHERE id = ? AND revoked_at IS NULL`, id).Scan(&project); err != nil {
 		return err
@@ -105,6 +109,7 @@ func (s *Store) RevokeHubToken(ctx context.Context, id string) error {
 	return tx.Commit()
 }
 
+// ListHubTokens returns metadata for a project's active and revoked tokens.
 func (s *Store) ListHubTokens(ctx context.Context, project string) ([]HubToken, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, project, role, created_at, revoked_at
 		FROM hub_tokens WHERE project = ? ORDER BY created_at DESC`, project)
@@ -130,6 +135,7 @@ func (s *Store) ListHubTokens(ctx context.Context, project string) ([]HubToken, 
 	return out, rows.Err()
 }
 
+// AuditEvents includes project actions and global actions, newest first.
 func (s *Store) AuditEvents(ctx context.Context, project string, limit int) ([]AuditEvent, error) {
 	if limit < 1 || limit > 1000 {
 		return nil, fmt.Errorf("limit must be 1-1000")
@@ -155,6 +161,7 @@ func (s *Store) AuditEvents(ctx context.Context, project string, limit int) ([]A
 	return out, rows.Err()
 }
 
+// RecordAudit appends a hub action without modifying the affected resource.
 func (s *Store) RecordAudit(ctx context.Context, actorTokenID, action, project, detail string) error {
 	_, err := s.db.ExecContext(ctx, `INSERT INTO audit_events (at, actor_token_id, action, project, detail)
 		VALUES (?, ?, ?, ?, ?)`, time.Now().UTC().UnixNano(), actorTokenID, action, project, detail)

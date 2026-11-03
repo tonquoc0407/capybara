@@ -77,6 +77,7 @@ type CostProvenance struct {
 	UsageSource      string     `json:"usage_source"`
 }
 
+// SpanEstimate binds an automatic cost and its provenance to a span revision.
 type SpanEstimate struct {
 	CostUSD    float64
 	Provenance CostProvenance

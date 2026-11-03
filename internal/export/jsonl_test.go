@@ -19,10 +19,14 @@ func TestSpanJSONLRoundTripPreservesSpansAndContent(t *testing.T) {
 	}
 	defer source.Close()
 	at := time.Now().UTC()
-	err = source.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{{ID: "s", RunID: "r", Kind: store.KindLLM,
-		Name: "chat", StartedAt: at, EndedAt: at.Add(time.Second), Status: "ok", TokensIn: 3,
-		Attrs: store.Attrs{Model: "model-x", Raw: map[string]any{"key": "value"}}}},
-		Contents: []store.Content{{SpanID: "s", Role: "user", Body: "hello"}, {SpanID: "s", Role: "assistant", Seq: 1, Body: "world"}}})
+	err = source.WriteBatch(ctx, store.Batch{
+		Source: "test", Spans: []store.Span{{
+			ID: "s", RunID: "r", Kind: store.KindLLM,
+			Name: "chat", StartedAt: at, EndedAt: at.Add(time.Second), Status: "ok", TokensIn: 3,
+			Attrs: store.Attrs{Model: "model-x", Raw: map[string]any{"key": "value"}},
+		}},
+		Contents: []store.Content{{SpanID: "s", Role: "user", Body: "hello"}, {SpanID: "s", Role: "assistant", Seq: 1, Body: "world"}},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

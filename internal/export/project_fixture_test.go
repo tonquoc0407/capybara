@@ -17,8 +17,10 @@ func TestFixtureDoesNotUseAnotherProjectsToolSchema(t *testing.T) {
 	}
 	defer st.Close()
 	sp := store.Span{ID: "beta-tool", RunID: "beta-run", Kind: store.KindTool, Name: "fetch", Status: "ok"}
-	if err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{sp},
-		RunContexts: map[string]store.RunContext{sp.RunID: {Project: "beta"}}}); err != nil {
+	if err := st.WriteBatch(ctx, store.Batch{
+		Source: "test", Spans: []store.Span{sp},
+		RunContexts: map[string]store.RunContext{sp.RunID: {Project: "beta"}},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	for _, schema := range []store.ToolSchema{

@@ -13,6 +13,7 @@ import (
 	"time"
 )
 
+// Dataset groups captured cases within one project.
 type Dataset struct {
 	ID        string    `json:"id"`
 	Project   string    `json:"project"`
@@ -21,8 +22,10 @@ type Dataset struct {
 	Frozen    bool      `json:"frozen"`
 }
 
+// ErrDatasetFrozen means an experiment has fixed the dataset's case contents.
 var ErrDatasetFrozen = errors.New("dataset has experiments and is frozen; clone it to change cases or expected outputs")
 
+// DatasetItem stores the captured input and reviewed expected output for a case.
 type DatasetItem struct {
 	ID           string    `json:"id"`
 	DatasetID    string    `json:"dataset_id"`
@@ -32,6 +35,7 @@ type DatasetItem struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+// Score is one human or automated observation for a run and optional case.
 type Score struct {
 	ID        int64     `json:"id"`
 	RunID     string    `json:"run_id"`
@@ -43,6 +47,7 @@ type Score struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// Experiment names a set of scored runs against a frozen dataset.
 type Experiment struct {
 	ID        string    `json:"id"`
 	DatasetID string    `json:"dataset_id"`
@@ -50,6 +55,7 @@ type Experiment struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// ExperimentComparison reports paired score averages over one dataset.
 type ExperimentComparison struct {
 	DatasetID string  `json:"dataset_id"`
 	ScoreName string  `json:"score_name"`
@@ -59,12 +65,14 @@ type ExperimentComparison struct {
 	Delta     float64 `json:"delta"`
 }
 
+// DatasetBelongsToProject checks the project boundary for a dataset.
 func (s *Store) DatasetBelongsToProject(ctx context.Context, datasetID, project string) bool {
 	var found int
 	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM datasets WHERE id = ? AND project = ?`, datasetID, project).Scan(&found)
 	return err == nil
 }
 
+// GetDataset returns a dataset with its current frozen state.
 func (s *Store) GetDataset(ctx context.Context, id string) (Dataset, error) {
 	var d Dataset
 	var at int64
@@ -78,6 +86,7 @@ func (s *Store) GetDataset(ctx context.Context, id string) (Dataset, error) {
 	return d, nil
 }
 
+// ExperimentBelongsToProject checks the project boundary through its dataset.
 func (s *Store) ExperimentBelongsToProject(ctx context.Context, experimentID, project string) bool {
 	var found int
 	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM experiments e JOIN datasets d ON d.id = e.dataset_id
@@ -93,6 +102,7 @@ func newID() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
+// CreateDataset adds an editable case collection to one project.
 func (s *Store) CreateDataset(ctx context.Context, project, name string) (Dataset, error) {
 	if project == "" {
 		project = "default"
@@ -114,6 +124,7 @@ func (s *Store) CreateDataset(ctx context.Context, project, name string) (Datase
 	return d, err
 }
 
+// ListDatasets returns the datasets visible within one project.
 func (s *Store) ListDatasets(ctx context.Context, project string) ([]Dataset, error) {
 	query := `SELECT d.id, d.project, d.name, d.created_at,
 		EXISTS(SELECT 1 FROM experiments e WHERE e.dataset_id = d.id) FROM datasets d`
@@ -185,8 +196,10 @@ func (s *Store) AddDatasetItem(ctx context.Context, datasetID, runID string) (Da
 	if err != nil {
 		return DatasetItem{}, err
 	}
-	item := DatasetItem{ID: id, DatasetID: datasetID, SourceRunID: runID,
-		InputJSON: string(in), ExpectedJSON: string(out), CreatedAt: time.Now().UTC()}
+	item := DatasetItem{
+		ID: id, DatasetID: datasetID, SourceRunID: runID,
+		InputJSON: string(in), ExpectedJSON: string(out), CreatedAt: time.Now().UTC(),
+	}
 	res, err := s.db.ExecContext(ctx, `INSERT INTO dataset_items
 		(id, dataset_id, source_run_id, input_json, expected_json, created_at)
 		SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM experiments WHERE dataset_id = ?)`,
@@ -247,7 +260,7 @@ func (s *Store) CloneDataset(ctx context.Context, datasetID, name string) (Datas
 	if err != nil {
 		return Dataset{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	d := Dataset{ID: id, Name: name, CreatedAt: time.Now().UTC()}
 	if err := tx.QueryRowContext(ctx, `SELECT project FROM datasets WHERE id = ?`, datasetID).Scan(&d.Project); err != nil {
 		return Dataset{}, err
@@ -267,6 +280,7 @@ func (s *Store) CloneDataset(ctx context.Context, datasetID, name string) (Datas
 	return d, nil
 }
 
+// ListDatasetItems returns the recorded cases in a dataset.
 func (s *Store) ListDatasetItems(ctx context.Context, datasetID string) ([]DatasetItem, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, dataset_id, source_run_id, input_json, expected_json, created_at
 		FROM dataset_items WHERE dataset_id = ? ORDER BY created_at, id`, datasetID)
@@ -287,6 +301,7 @@ func (s *Store) ListDatasetItems(ctx context.Context, datasetID string) ([]Datas
 	return out, rows.Err()
 }
 
+// AddScore stores one named, finite score for a run and optional dataset item.
 func (s *Store) AddScore(ctx context.Context, runID, itemID, name string, value float64, source, comment string) (Score, error) {
 	if name == "" || math.IsNaN(value) || math.IsInf(value, 0) || value < 0 || value > 1 {
 		return Score{}, errors.New("score needs a name and a finite value between 0 and 1")
@@ -317,10 +332,13 @@ func (s *Store) AddScore(ctx context.Context, runID, itemID, name string, value 
 		return Score{}, err
 	}
 	s.notify()
-	return Score{ID: id, RunID: runID, ItemID: itemID, Name: name,
-		Value: value, Source: source, Comment: comment, CreatedAt: at}, nil
+	return Score{
+		ID: id, RunID: runID, ItemID: itemID, Name: name,
+		Value: value, Source: source, Comment: comment, CreatedAt: at,
+	}, nil
 }
 
+// CreateExperiment freezes its dataset before recording result runs.
 func (s *Store) CreateExperiment(ctx context.Context, datasetID, name string) (Experiment, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -346,6 +364,7 @@ func (s *Store) CreateExperiment(ctx context.Context, datasetID, name string) (E
 	return e, nil
 }
 
+// ListExperiments returns the experiments attached to one dataset.
 func (s *Store) ListExperiments(ctx context.Context, datasetID string) ([]Experiment, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, dataset_id, name, created_at
 		FROM experiments WHERE dataset_id = ? ORDER BY created_at DESC, id DESC`, datasetID)
@@ -366,6 +385,7 @@ func (s *Store) ListExperiments(ctx context.Context, datasetID string) ([]Experi
 	return out, rows.Err()
 }
 
+// ListScores returns all recorded scores for a run.
 func (s *Store) ListScores(ctx context.Context, runID string) ([]Score, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id, run_id, item_id, name, value, source, comment, created_at
 		FROM scores WHERE run_id = ? ORDER BY created_at, id`, runID)
@@ -458,6 +478,8 @@ func (s *Store) CompareExperiments(ctx context.Context, baselineID, candidateID,
 		return ExperimentComparison{}, fmt.Errorf("incomplete comparison: %d of %d items have paired scores", paired, total)
 	}
 	left, right := leftSum.Float64/float64(total), rightSum.Float64/float64(total)
-	return ExperimentComparison{DatasetID: leftDataset, ScoreName: scoreName,
-		Items: total, Baseline: left, Candidate: right, Delta: right - left}, nil
+	return ExperimentComparison{
+		DatasetID: leftDataset, ScoreName: scoreName,
+		Items: total, Baseline: left, Candidate: right, Delta: right - left,
+	}, nil
 }

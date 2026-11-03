@@ -7,6 +7,7 @@ type Diagnostics struct {
 	Runs, Spans, Logs, Unmapped, MissingUsage, MissingCost int64
 }
 
+// Diagnostics counts stored runs, spans, logs, and missing usage or cost.
 func (s *Store) Diagnostics(ctx context.Context) (Diagnostics, error) {
 	var d Diagnostics
 	err := s.db.QueryRowContext(ctx, `SELECT

@@ -61,8 +61,10 @@ func Handler(st *store.Store) http.Handler {
 		writeJSON(w, runs, err)
 	})
 	mux.HandleFunc("GET /api/v1/capabilities", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, map[string]any{"mode": "local", "write": false, "ingest": false,
-			"content_capture": "configured by receiver"}, nil)
+		writeJSON(w, map[string]any{
+			"mode": "local", "write": false, "ingest": false,
+			"content_capture": "configured by receiver",
+		}, nil)
 	})
 	mux.HandleFunc("GET /api/v1/projects", func(w http.ResponseWriter, r *http.Request) {
 		projects, err := st.ListProjects(r.Context())

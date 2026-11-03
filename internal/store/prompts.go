@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// PromptVersion is a stored content snapshot identified by its SHA-256.
 type PromptVersion struct {
 	ID         string    `json:"id"`
 	Project    string    `json:"project"`
@@ -22,6 +23,7 @@ type PromptVersion struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+// PromptReference links a span hash to a registered prompt when one exists.
 type PromptReference struct {
 	SpanID string         `json:"span_id"`
 	SHA256 string         `json:"sha256"`
@@ -46,7 +48,7 @@ func (s *Store) RegisterPrompt(ctx context.Context, project, name, content, sour
 	if err != nil {
 		return PromptVersion{}, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var p PromptVersion
 	var at int64
 	err = tx.QueryRowContext(ctx, `SELECT id, project, name, version, sha256, content, source_path, created_at
@@ -64,8 +66,10 @@ func (s *Store) RegisterPrompt(ctx context.Context, project, name, content, sour
 		WHERE project = ? AND name = ?`, project, name).Scan(&version); err != nil {
 		return PromptVersion{}, err
 	}
-	p = PromptVersion{ID: id, Project: project, Name: name, Version: version,
-		SHA256: sha, Content: content, SourcePath: sourcePath, CreatedAt: time.Now().UTC()}
+	p = PromptVersion{
+		ID: id, Project: project, Name: name, Version: version,
+		SHA256: sha, Content: content, SourcePath: sourcePath, CreatedAt: time.Now().UTC(),
+	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO prompt_versions
 		(id, project, name, version, sha256, content, source_path, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, p.ID, p.Project, p.Name, p.Version,
@@ -107,6 +111,7 @@ func (s *Store) ListPromptVersions(ctx context.Context, project, name string) ([
 	return out, rows.Err()
 }
 
+// PromptVersion returns the full content of a specific registered version.
 func (s *Store) PromptVersion(ctx context.Context, id string) (PromptVersion, error) {
 	var p PromptVersion
 	var at int64

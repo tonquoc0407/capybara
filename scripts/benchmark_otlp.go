@@ -100,10 +100,12 @@ func main() {
 	if err := db.QueryRow("SELECT COUNT(*) FROM spans").Scan(&stored); err != nil {
 		panic(err)
 	}
-	result := map[string]any{"expected_spans": requests * *batch, "stored_spans": stored,
+	result := map[string]any{
+		"expected_spans": requests * *batch, "stored_spans": stored,
 		"elapsed_seconds": elapsed, "achieved_spans_per_second": float64(stored) / elapsed,
 		"retry_responses": retries, "gomaxprocs": runtime.GOMAXPROCS(0), "cpu_count": runtime.NumCPU(),
-		"rss_bytes": rss(), "db_bytes": dbSize(*path)}
+		"rss_bytes": rss(), "db_bytes": dbSize(*path),
+	}
 	if err := json.NewEncoder(os.Stdout).Encode(result); err != nil {
 		panic(err)
 	}

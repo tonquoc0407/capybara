@@ -29,6 +29,7 @@ import (
 
 const maxBody = 64 << 20
 
+// Server serves an authenticated workspace backed by one local store.
 type Server struct {
 	Store          *store.Store
 	CaptureContent bool
@@ -37,6 +38,7 @@ type Server struct {
 	Alerts         *AlertConfig
 }
 
+// Serve listens on a loopback address until the context is cancelled.
 func (s Server) Serve(ctx context.Context, addr string, out io.Writer) error {
 	if s.Retention < 0 {
 		return errors.New("retention must be non-negative")
@@ -77,8 +79,10 @@ func (s Server) Serve(ctx context.Context, addr string, out io.Writer) error {
 	runCtx, cancelRun := context.WithCancel(ctx)
 	var workers sync.WaitGroup
 	defer func() { cancelRun(); workers.Wait() }()
-	srv := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 5 * time.Second,
-		BaseContext: func(net.Listener) context.Context { return runCtx }}
+	srv := &http.Server{
+		Handler: s.Handler(), ReadHeaderTimeout: 5 * time.Second,
+		BaseContext: func(net.Listener) context.Context { return runCtx },
+	}
 	analysisDone := make(chan error, 1)
 	workers.Add(1)
 	go func() { defer workers.Done(); analysisDone <- analyzer.Watch(runCtx) }()
@@ -158,7 +162,7 @@ func (s Server) applyRetention(ctx context.Context) error {
 func (s Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	ingestSlots := make(chan struct{}, 8)
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
 		body, err := web.Page(nil)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -210,9 +214,11 @@ func (s Server) Handler() http.Handler {
 		web.ServeOperations(w, r, s.Store, principal(r).Project)
 	})
 	mux.HandleFunc("GET /api/v1/capabilities", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, map[string]any{"mode": "hub", "project": principal(r).Project, "ingest": true,
+		writeJSON(w, map[string]any{
+			"mode": "hub", "project": principal(r).Project, "ingest": true,
 			"role": principal(r).Role, "write": principal(r).Role != "viewer",
-			"content_capture": s.CaptureContent, "retention_hours": s.Retention.Hours()}, nil)
+			"content_capture": s.CaptureContent, "retention_hours": s.Retention.Hours(),
+		}, nil)
 	})
 	mux.HandleFunc("GET /api/v1/runs", func(w http.ResponseWriter, r *http.Request) {
 		filter, err := web.ParseRunSearch(r, principal(r).Project)

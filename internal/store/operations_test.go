@@ -16,8 +16,10 @@ func TestOperationsMigrationAndLateLogs(t *testing.T) {
 	}
 	defer st.Close()
 	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
-	log := TraceLog{ID: "log-1", RunID: "trace-1", SpanID: "span-1", ObservedAt: at,
-		Severity: "ERROR", Body: "failed", AttrsJSON: `{}`}
+	log := TraceLog{
+		ID: "log-1", RunID: "trace-1", SpanID: "span-1", ObservedAt: at,
+		Severity: "ERROR", Body: "failed", AttrsJSON: `{}`,
+	}
 	for range 2 {
 		if err := st.PutTraceLogs(ctx, "otlp", []TraceLog{log}); err != nil {
 			t.Fatal(err)
@@ -25,8 +27,10 @@ func TestOperationsMigrationAndLateLogs(t *testing.T) {
 	}
 	if err := st.WriteBatch(ctx, Batch{Source: "otlp", RunContexts: map[string]RunContext{
 		"trace-1": {Project: "payments", Environment: "prod", Release: "v2", SessionID: "s1"},
-	}, Spans: []Span{{ID: "span-1", RunID: "trace-1", Kind: KindTool,
-		Name: "charge", StartedAt: at, EndedAt: at.Add(time.Second), Status: "error"}}}); err != nil {
+	}, Spans: []Span{{
+		ID: "span-1", RunID: "trace-1", Kind: KindTool,
+		Name: "charge", StartedAt: at, EndedAt: at.Add(time.Second), Status: "error",
+	}}}); err != nil {
 		t.Fatal(err)
 	}
 	logs, err := st.TraceLogs(ctx, "trace-1")

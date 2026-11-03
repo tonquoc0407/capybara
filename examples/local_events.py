@@ -8,7 +8,6 @@ import urllib.request
 import uuid
 from datetime import datetime, timezone
 
-
 endpoint = os.getenv("CAPYBARA_EVENTS_URL", "http://127.0.0.1:4318/api/v1/events")
 run_id = uuid.uuid4().hex
 span_id = uuid.uuid4().hex

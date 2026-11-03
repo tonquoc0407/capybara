@@ -18,20 +18,28 @@ func TestOperationsKeepsLatencyCostAndQualityDenominatorsCorrect(t *testing.T) {
 	base := time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
 	seed := func(id, project, environment, release, status string, at time.Time, duration time.Duration, cost *float64) {
 		t.Helper()
-		sp := Span{ID: id + "-root", RunID: id, Kind: KindAgent, Name: "agent", Status: status,
-			StartedAt: at, EndedAt: at.Add(duration), CostUSD: cost}
+		sp := Span{
+			ID: id + "-root", RunID: id, Kind: KindAgent, Name: "agent", Status: status,
+			StartedAt: at, EndedAt: at.Add(duration), CostUSD: cost,
+		}
 		spans := []Span{sp}
 		if status == "running" {
 			spans[0].EndedAt = time.Time{}
-			spans = append(spans, Span{ID: id + "-child", RunID: id, ParentID: sp.ID, Kind: KindOther,
-				Name: "closed child", Status: "ok", StartedAt: at, EndedAt: at.Add(999 * time.Second)})
+			spans = append(spans, Span{
+				ID: id + "-child", RunID: id, ParentID: sp.ID, Kind: KindOther,
+				Name: "closed child", Status: "ok", StartedAt: at, EndedAt: at.Add(999 * time.Second),
+			})
 		}
 		if id == "run-0" {
-			spans = append(spans, Span{ID: "unpriced-llm", RunID: id, ParentID: sp.ID, Kind: KindLLM,
-				Name: "unknown model", Status: "ok", StartedAt: at, EndedAt: at.Add(time.Millisecond)})
+			spans = append(spans, Span{
+				ID: "unpriced-llm", RunID: id, ParentID: sp.ID, Kind: KindLLM,
+				Name: "unknown model", Status: "ok", StartedAt: at, EndedAt: at.Add(time.Millisecond),
+			})
 		}
-		if err := st.WriteBatch(ctx, Batch{Source: "test", Spans: spans,
-			RunContexts: map[string]RunContext{id: {Project: project, Environment: environment, Release: release}}}); err != nil {
+		if err := st.WriteBatch(ctx, Batch{
+			Source: "test", Spans: spans,
+			RunContexts: map[string]RunContext{id: {Project: project, Environment: environment, Release: release}},
+		}); err != nil {
 			t.Fatal(err)
 		}
 	}

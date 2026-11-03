@@ -12,8 +12,10 @@ func TestAnalysisAcknowledgesOnlyObservedRevisionsAcrossBatches(t *testing.T) {
 	ctx := context.Background()
 	batch := Batch{Source: "test"}
 	for i := range 600 {
-		batch.Spans = append(batch.Spans, Span{ID: fmt.Sprintf("span-%d", i), RunID: "r",
-			Kind: KindLLM, Name: "chat", Status: "ok", StartedAt: t0, EndedAt: t0.Add(time.Second)})
+		batch.Spans = append(batch.Spans, Span{
+			ID: fmt.Sprintf("span-%d", i), RunID: "r",
+			Kind: KindLLM, Name: "chat", Status: "ok", StartedAt: t0, EndedAt: t0.Add(time.Second),
+		})
 	}
 	if err := s.WriteBatch(ctx, batch); err != nil {
 		t.Fatal(err)
@@ -56,9 +58,11 @@ func TestAnalysisAcknowledgesOnlyObservedRevisionsAcrossBatches(t *testing.T) {
 func TestAutomaticEstimateSkipsChangedSpan(t *testing.T) {
 	s := openTemp(t)
 	ctx := context.Background()
-	sp := Span{ID: "llm", RunID: "r", Kind: KindLLM, Name: "chat", Status: "ok",
+	sp := Span{
+		ID: "llm", RunID: "r", Kind: KindLLM, Name: "chat", Status: "ok",
 		StartedAt: t0, EndedAt: t0.Add(time.Second), TokensIn: 20,
-		Attrs: Attrs{Model: "known"}}
+		Attrs: Attrs{Model: "known"},
+	}
 	if err := s.WriteBatch(ctx, Batch{Source: "test", Spans: []Span{sp}}); err != nil {
 		t.Fatal(err)
 	}
