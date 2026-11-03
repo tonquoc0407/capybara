@@ -113,7 +113,7 @@ def lookup_price(sku: str) -> dict:
 
 `init()` reuses a `TracerProvider` you already configured, so any instrumentor you already run keeps working — capybara only adds an exporter to it.
 
-The same three calls exist for Node in [`sdk-js/`](sdk-js) (`npm install capybara-sdk`): `init`, `trace`, `schema`.
+The same three calls exist for Node in [`sdk-js/`](sdk-js): `init`, `trace`, `schema`. The Node package is currently installed from a local source build; it is not published on npm.
 
 ## Reading a trace
 
