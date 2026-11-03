@@ -80,6 +80,8 @@ The next recording uses a separate LangChain chess agent. The demo script adds t
   <img src="demo/knightvision.gif" alt="a third-party LangChain agent traced without modification" width="720">
 </p>
 
+[OpenAI Agents SDK issue #4070](demo/external/agents_issue_4070/) has a pinned reproducer, three captured runs, and a GIF of capybara's status diff and golden check.
+
 ### A session file
 
 ```sh
