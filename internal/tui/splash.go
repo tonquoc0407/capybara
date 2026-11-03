@@ -2,18 +2,11 @@ package tui
 
 import (
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/tonquoc0407/capybara/internal/theme"
 )
-
-// splashHold is how long the splash stays up before the panes replace it. Any
-// key cuts it short, so this is the pace for someone who is not looking yet.
-const splashHold = 2 * time.Second
-
-type splashDoneMsg struct{}
 
 func (m appModel) splashView() string {
 	lines := []string{

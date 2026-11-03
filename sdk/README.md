@@ -39,8 +39,8 @@ the first violating call.
 
 Sync and async functions are both supported.
 
-`capybara.replay` is invoked by the binary, not by you: pressing `r` in the TUI
-re-executes the recorded process, serving the recorded model responses and tool
-outputs so nothing touches the network. A call that is not in the recording
-stops the replay instead of running live; only model calls made after an edited
-value has been served are allowed to diverge.
+`capybara.replay` is invoked by the binary: pressing `r` in the TUI re-executes
+the recorded process and serves model responses and tool outputs that were
+recorded. An unrecorded model call stops by default. To permit a provider call
+after an edited tool output, use `capybara replay --allow-live <run>`; that call
+may cost money. The replayed application can also perform its own network I/O.

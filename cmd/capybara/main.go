@@ -27,7 +27,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx, os.Args[1:], os.Stdout); err != nil {
-		if !errors.Is(err, errDiverged) && !errors.Is(err, errFindings) && !errors.Is(err, errBelowThreshold) {
+		if !errors.Is(err, errDiverged) && !errors.Is(err, errFindings) && !errors.Is(err, errBelowThreshold) && !errors.Is(err, errScenarioFailed) {
 			fmt.Fprintf(os.Stderr, "capybara: %v\n", err)
 		}
 		os.Exit(1)
@@ -39,6 +39,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	fs.SetOutput(io.Discard)
 	dbPath := fs.String("db", "capybara.db", "database file")
 	noContent := fs.Bool("no-content", false, "drop prompt, completion and tool content")
+	noClaude := fs.Bool("no-claude", false, "do not auto-watch Claude Code sessions in the TUI")
 	otlpAddr := fs.String("otlp", "", "OTLP http address to listen on (default 127.0.0.1:4318)")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	if err := fs.Parse(args); err != nil {
@@ -54,11 +55,15 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	capture := !*noContent
 	args = fs.Args()
 	if len(args) == 0 {
-		return receive(ctx, *dbPath, *otlpAddr, capture)
+		return receive(ctx, *dbPath, *otlpAddr, capture, !*noClaude)
 	}
 	switch args[0] {
+	case "listen":
+		return listenCmd(ctx, *dbPath, *otlpAddr, capture, args[1:], out)
 	case "import":
 		return importFile(ctx, *dbPath, capture, args[1:])
+	case "sample":
+		return sampleCmd(ctx, *dbPath, capture, args[1:], out)
 	case "watch":
 		return watch(ctx, *dbPath, capture, args[1:])
 	case "diff":
@@ -75,6 +80,26 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return evalCmd(ctx, *dbPath, args[1:], out)
 	case "coverage":
 		return coverageCmd(ctx, *dbPath, args[1:], out)
+	case "doctor":
+		return doctorCmd(ctx, *dbPath, args[1:], out)
+	case "incidents":
+		return incidentsCmd(ctx, *dbPath, args[1:], out)
+	case "dataset":
+		return datasetCmd(ctx, *dbPath, args[1:], out)
+	case "score":
+		return scoreCmd(ctx, *dbPath, args[1:], out)
+	case "experiment":
+		return experimentCmd(ctx, *dbPath, capture, args[1:], out)
+	case "usage":
+		return usageCmd(ctx, *dbPath, args[1:], out)
+	case "prompt":
+		return promptCmd(ctx, *dbPath, args[1:], out)
+	case "scenario":
+		return scenarioCmd(ctx, args[1:], out)
+	case "proxy":
+		return proxyCmd(ctx, *dbPath, capture, args[1:], out)
+	case "hub":
+		return hubCmd(ctx, *dbPath, capture, args[1:], out)
 	case "runs":
 		return runsCmd(ctx, *dbPath, args[1:], out)
 	case "findings":
@@ -101,7 +126,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 
 // receive runs the OTLP receiver, the claude watcher when its log directory
 // exists, and the TUI, until any of them quits.
-func receive(ctx context.Context, dbPath, otlpAddr string, capture bool) error {
+func receive(ctx context.Context, dbPath, otlpAddr string, capture, watchClaude bool) error {
 	if ctx.Err() != nil {
 		return nil
 	}
@@ -121,7 +146,10 @@ func receive(ctx context.Context, dbPath, otlpAddr string, capture bool) error {
 	// A port already taken costs that transport, not the session: the database
 	// is still worth reading, and the TUI says what is missing.
 	listenErr := rcv.Listen()
-	claudeRoot := claude.DefaultRoot()
+	claudeRoot := ""
+	if watchClaude {
+		claudeRoot = claude.DefaultRoot()
+	}
 	if claudeRoot != "" {
 		claudeNoticeOnce(claudeRoot)
 	}
@@ -197,15 +225,35 @@ func watch(ctx context.Context, dbPath string, capture bool, args []string) erro
 }
 
 func importFile(ctx context.Context, dbPath string, capture bool, args []string) error {
-	if len(args) != 1 {
-		return errors.New("usage: capybara import <file>")
+	fs := flag.NewFlagSet("import", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	format := fs.String("format", "", "trace file format (span-jsonl, otlp-jsonl, claude-jsonl)")
+	if err := fs.Parse(args); err != nil {
+		return err
 	}
-	path := args[0]
+	if fs.NArg() != 1 {
+		return errors.New("usage: capybara import [--format span-jsonl|otlp-jsonl|claude-jsonl] <file>")
+	}
+	path := fs.Arg(0)
 	var importer func(context.Context, *store.Store, io.Reader, bool) error
 	switch filepath.Ext(path) {
 	case ".jsonl":
-		importer = intake.ImportJSONL
+		switch *format {
+		case "", "span-jsonl":
+			importer = intake.ImportJSONL
+		case "otlp-jsonl":
+			importer = intake.ImportOTLPJSONL
+		case "claude-jsonl":
+			importer = func(ctx context.Context, st *store.Store, r io.Reader, capture bool) error {
+				return claude.ImportJSONL(ctx, st, r, path, capture)
+			}
+		default:
+			return fmt.Errorf("unsupported JSONL format %q", *format)
+		}
 	case ".json":
+		if *format != "" {
+			return fmt.Errorf("--format %s requires a .jsonl file", *format)
+		}
 		importer = intake.ImportReplay
 	default:
 		return fmt.Errorf("%s: expected .json (agent-replay) or .jsonl (span per line)", path)
@@ -240,9 +288,11 @@ Without a command, starts the TUI, the OTLP receiver, and the claude
 watcher when ~/.claude/projects exists.
 
   watch    tail an external session source (claude)
-  import   import a trace file (agent-replay json, span-per-line jsonl)
+  listen   receive local HTTP events and OTLP without the TUI
+  import   import a trace file (--format span-jsonl|otlp-jsonl|claude-jsonl)
+  sample   load a clearly labelled synthetic trace for onboarding
   diff     compare two runs
-  replay   re-run a recorded run, optionally with an edited tool output
+  replay   re-run a recorded run, optionally with an edited tool output (--allow-live)
   blame    walk a run's final output back to its tainted source
   serve    serve the read-only web view
   mcp      proxy and trace an MCP (Model Context Protocol) server
@@ -253,6 +303,16 @@ watcher when ~/.claude/projects exists.
   eval     score detectors against a labelled corpus (--fail-under gates CI)
   runs     list runs, filtered by finding, model, status, source or cost
   coverage report typed-span coverage and unmapped ingest namespaces
+  doctor   check local database and report missing trace data
+  incidents group recent failures; "incidents packet <run>" emits evidence JSON
+  dataset  capture cases, correct expected outputs, clone and export datasets
+  score    record normalized human or custom feedback on a run
+  experiment run a dataset with a scenario command, or compare paired results
+  usage    summarize cost; "usage window" reports errors, latency and release quality
+  prompt   register a prompt file by content hash and list versions
+  scenario run a bounded multi-turn agent simulation with mock tools
+  proxy    optional loopback OpenAI chat-completions proxy with soft budget
+  hub      one-node shared server, project tokens, audit, backup and restore
   findings list findings (--sarif, --fail-on, --baseline for a CI gate)
   faithfulness  grade retrieval runs with an opt-in llm judge (sends data out)
   toolcheck     grade tool selection with an opt-in llm judge (sends data out)
@@ -262,7 +322,8 @@ watcher when ~/.claude/projects exists.
 Flags, before the command:
 
   -db path      database file (default capybara.db)
-  -no-content   drop prompt, completion and tool content
+  -no-content   drop prompt, completion, tool content and raw text attributes
+  -no-claude    do not auto-watch Claude Code sessions in the TUI
   -otlp addr    OTLP http address to listen on (default 127.0.0.1:4318)
   -version      print the version and exit
 `)

@@ -52,10 +52,14 @@ func printDiff(out io.Writer, d *analyze.RunDiff) error {
 		case step.B == nil:
 			w.printf("%s %-32s only in %s\n", mark, truncate(step.StepName(), 32), shortID(d.RunA))
 		default:
-			w.printf("%s %-32s %8s -> %-8s tok %-7s %s\n",
+			w.printf("%s %-32s %8s -> %-8s tok %-7s %s",
 				mark, truncate(step.StepName(), 32),
 				durOrDash(step.A), durOrDash(step.B),
 				signedInt(step.DTokens()), signedCost(step.DCost()))
+			if change := step.StatusChange(); change != "" {
+				w.printf(" status %s", change)
+			}
+			w.printf("\n")
 		}
 		if i == d.FirstDivergence {
 			w.printf("  ^ first divergence\n")
@@ -75,10 +79,12 @@ func sideContent(sp *store.Span, contents map[string][]store.Content) string {
 		return "(no step)\n"
 	}
 	rows := contents[sp.ID]
+	prefix := "status: " + sp.Status + "\n"
 	if len(rows) == 0 {
-		return "(no content recorded)\n"
+		return prefix + "(no content recorded)\n"
 	}
 	var b strings.Builder
+	b.WriteString(prefix)
 	for _, c := range rows {
 		body := c.Body
 		if len(body) > diffBodyLimit {

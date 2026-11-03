@@ -1,16 +1,17 @@
 # Detector corpus
 
-Labelled traces that pin what each detector fires on. Every trace is one run in
+Labelled traces for 15 detector types. Every trace is one run in
 span-per-line jsonl; `labels.json` records the finding types each run should
 carry. `capybara eval` re-analyses the imported runs and scores precision,
 recall and F1 per type, with a run as the unit.
 
-The corpus is adversarial by design: alongside a positive for each type it
+Alongside positives for the scored types, the corpus
 carries near-miss negatives — a hedged answer after a failed tool, a document
 that discusses prompt injection without carrying one, a loop of one tool over
 distinct arguments, a widened schema that did not break. Those are what keep the
 score honest; a detector that reaches for recall by tripping them loses
-precision here before it does in the field.
+precision here. The corpus does not measure field performance; `orphaned_span`
+and the three opt-in judges are not scored here.
 
 The numbers are a regression gate, not a claim about live traffic: the inputs
 are curated, so a perfect score means the detectors meet their spec on these

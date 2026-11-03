@@ -64,6 +64,11 @@ class Session:
                 f"model call to {model} is not in the recording and no edit has "
                 "been applied yet"
             )
+        if not self.manifest.get("allow_live", False):
+            raise ReplayError(
+                f"model call to {model} needs a live API call after the edit; "
+                "replay again with --allow-live to permit it"
+            )
         return None
 
     def install(self) -> None:

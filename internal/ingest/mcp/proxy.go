@@ -406,9 +406,10 @@ func (p *StreamProxy) recordCompletedCall(ctx context.Context, call *inFlightCal
 	}
 
 	batch := store.Batch{
-		Source:   p.source,
-		Spans:    []store.Span{sp},
-		Contents: contents,
+		Source:      p.source,
+		Spans:       []store.Span{sp},
+		Contents:    contents,
+		DropContent: !p.capture,
 	}
 	_ = p.st.WriteBatch(ctx, batch)
 }
@@ -453,9 +454,10 @@ func (p *StreamProxy) recordDirectError(ctx context.Context, spanID, toolName, i
 		})
 	}
 	_ = p.st.WriteBatch(ctx, store.Batch{
-		Source:   p.source,
-		Spans:    []store.Span{sp},
-		Contents: contents,
+		Source:      p.source,
+		Spans:       []store.Span{sp},
+		Contents:    contents,
+		DropContent: !p.capture,
 	})
 }
 

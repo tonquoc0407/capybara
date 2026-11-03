@@ -62,7 +62,7 @@ func ImportReplay(ctx context.Context, st *store.Store, r io.Reader, captureCont
 		}
 		traces = []replayTrace{one}
 	}
-	batch := store.Batch{Source: "agent-replay"}
+	batch := store.Batch{Source: "agent-replay", DropContent: !captureContent}
 	labels := make(map[string]string)
 	for i, tr := range traces {
 		if tr.AgentName == "" {

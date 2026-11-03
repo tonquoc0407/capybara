@@ -16,15 +16,25 @@ func ToBatch(td ptrace.Traces, captureContent bool) store.Batch {
 }
 
 func toBatch(td ptrace.Traces, captureContent bool, cfg *Mapping) store.Batch {
-	b := store.Batch{Source: "otlp"}
+	b := store.Batch{Source: "otlp", DropContent: !captureContent}
 	resources := td.ResourceSpans()
+	b.RunContexts = make(map[string]store.RunContext)
 	for i := 0; i < resources.Len(); i++ {
+		resource := resources.At(i).Resource().Attributes()
 		scopes := resources.At(i).ScopeSpans()
 		for j := 0; j < scopes.Len(); j++ {
 			spans := scopes.At(j).Spans()
 			for k := 0; k < spans.Len(); k++ {
 				span := spans.At(k)
 				b.Spans = append(b.Spans, toSpan(span, cfg))
+				runID := span.TraceID().String()
+				meta := b.RunContexts[runID]
+				meta.Project = firstAttr(meta.Project, span.Attributes(), resource, "capybara.project", "project.name")
+				meta.Environment = firstAttr(meta.Environment, span.Attributes(), resource, "deployment.environment.name", "deployment.environment")
+				meta.Release = firstAttr(meta.Release, span.Attributes(), resource, "service.version", "capybara.release")
+				meta.SessionID = firstAttr(meta.SessionID, span.Attributes(), resource, "session.id", "gen_ai.conversation.id")
+				meta.UserID = firstAttr(meta.UserID, span.Attributes(), resource, "enduser.id", "user.id")
+				b.RunContexts[runID] = meta
 				if captureContent {
 					b.Contents = append(b.Contents, spanContents(span, cfg)...)
 				}
@@ -32,6 +42,20 @@ func toBatch(td ptrace.Traces, captureContent bool, cfg *Mapping) store.Batch {
 		}
 	}
 	return b
+}
+
+func firstAttr(current string, span, resource pcommon.Map, keys ...string) string {
+	if current != "" {
+		return current
+	}
+	for _, attrs := range []pcommon.Map{span, resource} {
+		for _, key := range keys {
+			if v, ok := attrs.Get(key); ok && v.Str() != "" {
+				return v.AsString()
+			}
+		}
+	}
+	return ""
 }
 
 func toSpan(span ptrace.Span, cfg *Mapping) store.Span {

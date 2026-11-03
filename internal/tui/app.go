@@ -44,7 +44,8 @@ type (
 		runs     []store.Run
 		orphaned map[string]bool
 	}
-	spansMsg struct {
+	eventCountMsg struct{ count int }
+	spansMsg      struct {
 		runID    string
 		spans    []store.Span
 		findings map[string][]store.Finding
@@ -85,6 +86,8 @@ type keyMap struct {
 	Edit     key.Binding
 	Rerun    key.Binding
 	Attrs    key.Binding
+	Palette  key.Binding
+	Connect  key.Binding
 	Yank     key.Binding
 	YankCurl key.Binding
 	Help     key.Binding
@@ -105,6 +108,8 @@ func defaultKeys() keyMap {
 		Edit:     key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit output")),
 		Rerun:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "re-run")),
 		Attrs:    key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "attrs")),
+		Palette:  key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "commands")),
+		Connect:  key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "connect")),
 		Yank:     key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "yank")),
 		YankCurl: key.NewBinding(key.WithKeys("Y"), key.WithHelp("Y", "curl")),
 		Help:     key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
@@ -113,12 +118,13 @@ func defaultKeys() keyMap {
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Nav, k.Expand, k.Search, k.Filter, k.Views, k.Diff, k.Blame, k.Rerun, k.Help, k.Quit}
+	return []key.Binding{k.Nav, k.Expand, k.Connect, k.Search, k.Filter, k.Palette, k.Views, k.Diff, k.Blame, k.Rerun, k.Help, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Nav, k.Expand, k.Panes},
+		{k.Palette, k.Connect},
 		{k.Search, k.Filter, k.Attrs},
 		{k.Views, k.Diff, k.Blame},
 		{k.Test, k.Edit, k.Rerun, k.Yank, k.YankCurl},
@@ -127,39 +133,46 @@ func (k keyMap) FullHelp() [][]key.Binding {
 }
 
 type appModel struct {
-	st          *store.Store
-	th          theme.Theme
-	events      <-chan struct{}
-	keys        keyMap
-	help        help.Model
-	runs        *runsModel
-	tree        treeModel
-	waterfall   waterfallModel
-	contextv    contextModel
-	diffv       diffModel
-	monitorv    monitorModel
-	blamev      blameModel
-	detail      detailModel
-	mode        viewMode
-	focus       focusArea
-	width       int
-	height      int
-	selectedRun string
-	diffMark    string
-	edit        edit
-	capture     bool
-	replaying   bool
-	splash      bool
-	version     string
-	dbPath      string
-	about       About
-	spans       []store.Span
-	findings    map[string][]store.Finding
-	runFindings []store.Finding
-	samples     map[string]store.ResourceSample
-	notice      string
-	lastErr     error
-	hintSeen    bool
+	st            *store.Store
+	th            theme.Theme
+	events        <-chan struct{}
+	keys          keyMap
+	help          help.Model
+	runs          *runsModel
+	tree          treeModel
+	waterfall     waterfallModel
+	contextv      contextModel
+	diffv         diffModel
+	monitorv      monitorModel
+	blamev        blameModel
+	detail        detailModel
+	mode          viewMode
+	focus         focusArea
+	width         int
+	height        int
+	selectedRun   string
+	diffMark      string
+	edit          edit
+	capture       bool
+	replaying     bool
+	paletteOpen   bool
+	connectOpen   bool
+	connectIndex  int
+	connectRuns   int
+	connectDemoAt time.Time
+	paletteQuery  string
+	paletteIndex  int
+	detailFull    bool
+	version       string
+	dbPath        string
+	about         About
+	spans         []store.Span
+	findings      map[string][]store.Finding
+	runFindings   []store.Finding
+	samples       map[string]store.ResourceSample
+	notice        string
+	lastErr       error
+	hintSeen      bool
 }
 
 func newApp(st *store.Store, th theme.Theme, events <-chan struct{}, captureContent bool) appModel {
@@ -186,13 +199,11 @@ func newApp(st *store.Store, th theme.Theme, events <-chan struct{}, captureCont
 		detail:    newDetail(th),
 		focus:     focusTree,
 		capture:   captureContent,
-		splash:    true,
 	}
 }
 
 func (m appModel) Init() tea.Cmd {
-	hold := tea.Tick(splashHold, func(time.Time) tea.Msg { return splashDoneMsg{} })
-	return tea.Batch(m.loadRuns(), m.listen(), hold)
+	return tea.Batch(m.loadRuns(), m.listen())
 }
 
 func (m appModel) listen() tea.Cmd {
@@ -217,6 +228,17 @@ func (m appModel) loadRuns() tea.Cmd {
 			return errMsg{err}
 		}
 		return runsMsg{runs: runs, orphaned: orphaned}
+	}
+}
+
+func (m appModel) loadEventCount() tea.Cmd {
+	st := m.st
+	return func() tea.Msg {
+		count, err := st.EventRunCount(context.Background())
+		if err != nil {
+			return errMsg{err}
+		}
+		return eventCountMsg{count: count}
 	}
 }
 
@@ -290,11 +312,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		m.layout()
 		return m, nil
-	case splashDoneMsg:
-		m.splash = false
-		return m, nil
 	case refreshMsg:
 		cmds := []tea.Cmd{m.loadRuns(), m.listen()}
+		if m.connectOpen {
+			cmds = append(cmds, m.loadEventCount())
+		}
 		if m.selectedRun != "" {
 			cmds = append(cmds, m.loadSpans(m.selectedRun))
 		}
@@ -306,6 +328,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selectedRun = sel
 			return m, m.loadSpans(sel)
 		}
+		return m, nil
+	case eventCountMsg:
+		m.connectRuns = msg.count
 		return m, nil
 	case spansMsg:
 		if msg.runID != m.selectedRun {
@@ -375,16 +400,35 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lastErr = msg.err
 		return m, nil
 	case tea.KeyMsg:
-		if m.splash && !key.Matches(msg, m.keys.Quit) {
-			m.splash = false
-			return m, nil
-		}
 		return m.handleKey(msg)
 	}
 	return m, nil
 }
 
 func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.connectOpen {
+		return m.handleConnectKey(msg)
+	}
+	if m.paletteOpen {
+		return m.handlePaletteKey(msg)
+	}
+	if key.Matches(msg, m.keys.Palette) {
+		m.paletteOpen, m.paletteQuery, m.paletteIndex = true, "", 0
+		return m, nil
+	}
+	if m.detailFull {
+		if msg.String() == "esc" || msg.String() == " " {
+			m.detailFull = false
+			m.layout()
+			return m, nil
+		}
+		return m, m.detail.update(msg)
+	}
+	if m.focus == focusDetail && msg.String() == " " {
+		m.detailFull = true
+		m.layout()
+		return m, nil
+	}
 	typing := (m.focus == focusTree && m.mode == viewTree && m.tree.typing()) ||
 		(m.focus == focusRuns && m.runs.typing())
 	if !typing {
@@ -393,6 +437,10 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.hintSeen = true
 		}
 		switch {
+		case key.Matches(msg, m.keys.Connect):
+			m.connectOpen = true
+			m.connectDemoAt = time.Now().UTC()
+			return m, m.loadEventCount()
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
 		case key.Matches(msg, m.keys.Help):
@@ -654,6 +702,18 @@ func (m appModel) paneWidths() (runs, middle, detail int) {
 	return runs, middle, avail - runs - middle
 }
 
+func (m appModel) displayPaneWidths() (runs, middle, detail int) {
+	if m.width < 72 {
+		return m.width, m.width, m.width
+	}
+	if m.width < 100 {
+		runs = min(32, max(24, m.width/3))
+		middle = m.width - runs - paneGap
+		return runs, middle, middle
+	}
+	return m.paneWidths()
+}
+
 // paneChrome is what a pane spends on itself: two border columns and a column
 // of padding on each side, so text never touches the frame.
 const paneChrome = 4
@@ -687,7 +747,7 @@ func (m *appModel) layout() {
 	m.help.Width = m.width
 	statusH := lipgloss.Height(m.statusView())
 	paneH := max(3, m.height-1-statusH)
-	runsW, middleW, detailW := m.paneWidths()
+	runsW, middleW, detailW := m.displayPaneWidths()
 	listH, _ := m.paneHeights(paneH)
 	// -2 borders, -1 pane title line
 	m.runs.setSize(runsW-paneChrome, listH-3)
@@ -698,18 +758,27 @@ func (m *appModel) layout() {
 	m.diffv.setSize(middleW-paneChrome, paneH-3)
 	m.blamev.setSize(middleW-paneChrome, paneH-3)
 	m.detail.setSize(detailW-paneChrome, paneH-3)
+	if m.detailFull {
+		m.detail.setSize(m.width-paneChrome, paneH-3)
+	}
 }
 
 func (m appModel) View() string {
 	if m.width <= 0 {
 		return ""
 	}
-	if m.splash {
-		return m.splashView()
+	if m.paletteOpen {
+		return m.paletteView()
+	}
+	if m.connectOpen {
+		return m.connectView()
 	}
 	statusView := m.statusView()
 	paneH := max(3, m.height-1-lipgloss.Height(statusView))
-	runsW, middleW, detailW := m.paneWidths()
+	if m.detailFull {
+		return m.headerView() + "\n" + m.pane("detail  (Esc to close)", m.detail.view(), m.width, paneH, true) + "\n" + statusView
+	}
+	runsW, middleW, detailW := m.displayPaneWidths()
 	listH, summaryH := m.paneHeights(paneH)
 	middleTitle, middleView := "span tree", m.tree.view()
 	if len(m.runs.list.Items()) == 0 {
@@ -738,6 +807,27 @@ func (m appModel) View() string {
 			m.pane("run", m.summaryView(runsW-paneChrome), runsW, summaryH, false))
 	}
 	gapCol := lipgloss.NewStyle().Width(paneGap).Height(paneH).Render("")
+	if m.width < 72 {
+		var one string
+		switch m.focus {
+		case focusRuns:
+			one = m.pane("runs", m.runs.view(), m.width, paneH, true)
+		case focusDetail:
+			one = m.pane("detail", m.detail.view(), m.width, paneH, true)
+		default:
+			one = m.pane(middleTitle, middleView, m.width, paneH, true)
+		}
+		return m.headerView() + "\n" + one + "\n" + statusView
+	}
+	if m.width < 100 {
+		bodyTitle, bodyView := middleTitle, middleView
+		if m.focus == focusDetail {
+			bodyTitle, bodyView = "detail", m.detail.view()
+		}
+		panes := lipgloss.JoinHorizontal(lipgloss.Top, left, gapCol,
+			m.pane(bodyTitle, bodyView, middleW, paneH, m.focus != focusRuns))
+		return m.headerView() + "\n" + panes + "\n" + statusView
+	}
 	panes := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		left,

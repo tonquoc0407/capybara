@@ -154,6 +154,134 @@ func TestHandlerServesPageAndData(t *testing.T) {
 	}
 }
 
+func TestV1RunsPaginateAndLoadContentOnDemand(t *testing.T) {
+	st := seeded(t)
+	if err := st.PutTraceLogs(context.Background(), "otlp", []store.TraceLog{{
+		ID: "log-1", RunID: "run-one", SpanID: "t1", Body: "private-log", AttrsJSON: `{}`,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	h := Handler(st)
+	request := func(path string) *httptest.ResponseRecorder {
+		r := httptest.NewRecorder()
+		h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, path, nil))
+		return r
+	}
+	page := request("/api/v1/runs?project=default&limit=1")
+	if page.Code != http.StatusOK || !strings.Contains(page.Body.String(), `"id":"run-one"`) {
+		t.Fatalf("page = %d %s", page.Code, page.Body.String())
+	}
+	if got := request("/api/v1/runs?limit=101"); got.Code != http.StatusBadRequest {
+		t.Fatalf("invalid limit = %d", got.Code)
+	}
+	detail := request("/api/v1/runs/run-one")
+	if detail.Code != http.StatusOK || strings.Contains(detail.Body.String(), `price`) || strings.Contains(detail.Body.String(), `private-log`) {
+		t.Fatalf("eager content = %d %s", detail.Code, detail.Body.String())
+	}
+	logs := request("/api/v1/runs/run-one/logs")
+	if logs.Code != http.StatusOK || !strings.Contains(logs.Body.String(), `private-log`) {
+		t.Fatalf("logs = %d %s", logs.Code, logs.Body.String())
+	}
+	content := request("/api/v1/runs/run-one/spans/t1/contents")
+	if content.Code != http.StatusOK || !strings.Contains(content.Body.String(), `price`) {
+		t.Fatalf("content = %d %s", content.Code, content.Body.String())
+	}
+	var contentRows []map[string]any
+	if err := json.Unmarshal(content.Body.Bytes(), &contentRows); err != nil || len(contentRows) != 1 || contentRows[0]["role"] != "output" || contentRows[0]["body"] != `{"price":42}` {
+		t.Fatalf("lazy content differs from RunDetail's JSON shape: %+v, %v", contentRows, err)
+	}
+	if got := request("/api/v1/runs/run-one/spans/other/contents"); got.Code != http.StatusNotFound {
+		t.Fatalf("foreign span = %d", got.Code)
+	}
+}
+
+func TestV1RunSearchFiltersBeforePagingAndRejectsBadTime(t *testing.T) {
+	st := seeded(t)
+	h := Handler(st)
+	request := func(path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		return w
+	}
+	if got := request("/api/v1/runs?q=run-one&status=ok&from=2026-07-22T09%3A00%3A00Z"); got.Code != 200 || !strings.Contains(got.Body.String(), "run-one") {
+		t.Fatalf("search missed run: %d %s", got.Code, got.Body.String())
+	}
+	if got := request("/api/v1/runs?q=run-one&status=error"); got.Code != 200 || strings.Contains(got.Body.String(), `"id":"run-one"`) {
+		t.Fatalf("status filter failed: %d %s", got.Code, got.Body.String())
+	}
+	if got := request("/api/v1/runs?from=yesterday"); got.Code != 400 {
+		t.Fatalf("invalid time accepted: %d", got.Code)
+	}
+}
+
+func TestOperationsAndIncidentsShareTimeAndReleaseFilters(t *testing.T) {
+	h := Handler(seeded(t))
+	request := func(path string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		return w
+	}
+	query := "?project=default&from=2026-07-22T09:00:00Z&to=2026-07-22T11:00:00Z"
+	w := request("/api/v1/operations" + query)
+	var report store.OperationsReport
+	if err := json.Unmarshal(w.Body.Bytes(), &report); err != nil {
+		t.Fatalf("%d: %s: %v", w.Code, w.Body.String(), err)
+	}
+	if report.Total.Runs != 1 || report.Total.P95LatencyMS == nil || *report.Total.P95LatencyMS != 10000 {
+		t.Fatalf("report: %+v", report)
+	}
+	for _, path := range []string{"/api/v1/operations", "/api/v1/incidents"} {
+		w := request(path + query + "&release=missing")
+		if w.Code != 200 || strings.Contains(w.Body.String(), "run-one") {
+			t.Fatalf("release filter %s: %d %s", path, w.Code, w.Body.String())
+		}
+		if path == "/api/v1/operations" {
+			if err := json.Unmarshal(w.Body.Bytes(), &report); err != nil || report.Total.Runs != 0 {
+				t.Fatalf("release totals: %+v, %v", report, err)
+			}
+		}
+		if w := request(path + "?from=invalid"); w.Code != 400 {
+			t.Fatalf("invalid time %s: %d", path, w.Code)
+		}
+	}
+}
+
+func TestIncidentPacketHTMLRouteContainsEvidence(t *testing.T) {
+	h := Handler(seeded(t))
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/runs/run-one/incident-packet.html", nil))
+	if w.Code != 200 || !strings.Contains(w.Header().Get("Content-Type"), "text/html") ||
+		!strings.Contains(w.Body.String(), "Detector hypotheses") || !strings.Contains(w.Body.String(), "fetch") {
+		t.Fatalf("HTML packet: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestV1QualityReadEndpoints(t *testing.T) {
+	st := seeded(t)
+	d, err := st.CreateDataset(context.Background(), "default", "regressions")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddScore(context.Background(), "run-one", "", "quality", 0.8, "human", "reviewed"); err != nil {
+		t.Fatal(err)
+	}
+	h := Handler(st)
+	request := func(path string) *httptest.ResponseRecorder {
+		r := httptest.NewRecorder()
+		h.ServeHTTP(r, httptest.NewRequest(http.MethodGet, path, nil))
+		return r
+	}
+	if got := request("/api/v1/datasets?project=default"); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), d.ID) {
+		t.Fatalf("datasets: %d %s", got.Code, got.Body.String())
+	}
+	if got := request("/api/v1/runs/run-one/scores"); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), `"value":0.8`) {
+		t.Fatalf("scores: %d %s", got.Code, got.Body.String())
+	}
+	if got := request("/api/v1/experiments/compare"); got.Code != http.StatusBadRequest {
+		t.Fatalf("incomplete compare: %d", got.Code)
+	}
+}
+
 func getBody(t *testing.T, url string) string {
 	t.Helper()
 	resp, err := http.Get(url)

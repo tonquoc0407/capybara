@@ -1,5 +1,5 @@
 // OTel bootstrap: a provider plus an OTLP exporter to a local capybara.
-import { trace as traceApi, isSpanContextValid, type Context } from '@opentelemetry/api';
+import { trace as traceApi, isSpanContextValid, ProxyTracerProvider, type Context } from '@opentelemetry/api';
 import { NodeTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
 import type { Span, SpanProcessor, ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
@@ -64,6 +64,12 @@ export function init(opts: InitOptions = {}): NodeTracerProvider {
   if (provider !== undefined) {
     return provider;
   }
+  const current = traceApi.getTracerProvider();
+  const unregistered = current instanceof ProxyTracerProvider &&
+    current.getDelegate() === new ProxyTracerProvider().getDelegate();
+  if (!unregistered) {
+    throw new Error('OpenTelemetry tracer provider is already registered. Initialize capybara first, or configure your existing provider to export OTLP traces to capybara.');
+  }
   const url = resolveEndpoint(opts.endpoint);
   const enableMetrics = opts.metrics ?? (url === DEFAULT_ENDPOINT);
 
@@ -91,4 +97,5 @@ export function init(opts: InitOptions = {}): NodeTracerProvider {
 
 export function _resetForTests(): void {
   provider = undefined;
+  traceApi.disable();
 }

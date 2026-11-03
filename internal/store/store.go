@@ -26,7 +26,7 @@ type Store struct {
 // Open opens or creates the database at path and applies pending migrations.
 func Open(path string) (*Store, error) {
 	dsn := "file:" + url.PathEscape(path) +
-		"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+		"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_txlock=immediate"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open db: %w", err)

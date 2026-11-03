@@ -1,0 +1,12 @@
+{
+  "name": "weather across turns",
+  "command": ["node", "examples/scenario/node_agent.mjs"],
+  "timeout_ms": 30000,
+  "max_steps": 5,
+  "max_cost_usd": 0.1,
+  "tool_mocks": {"weather": {"forecast": "sunny"}},
+  "turns": [
+    {"user": "What is the weather?", "expect_contains": "sunny"},
+    {"user": "Thanks", "expect_contains": "Acknowledged"}
+  ]
+}

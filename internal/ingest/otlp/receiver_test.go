@@ -15,8 +15,10 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	gzipenc "google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/grpc/status"
 
 	"github.com/tonquoc0407/capybara/internal/store"
 )
@@ -310,5 +312,21 @@ func TestUnknownRoleFallsBackToTheAttributeDirection(t *testing.T) {
 		if got := normalizeRole(c.role, c.fallback); got != c.want {
 			t.Errorf("normalizeRole(%q, %q) = %q, want %q", c.role, c.fallback, got, c.want)
 		}
+	}
+}
+
+func TestReceiverReturnsExplicitBackpressureWithoutReadingBody(t *testing.T) {
+	r := New(openTemp(t), true)
+	for range cap(r.slots) {
+		r.slots <- struct{}{}
+	}
+	w := httptest.NewRecorder()
+	r.handler().ServeHTTP(w, httptest.NewRequest("POST", "/v1/traces", strings.NewReader("not OTLP")))
+	if w.Code != http.StatusServiceUnavailable || w.Header().Get("Retry-After") != "1" {
+		t.Fatalf("HTTP backpressure: %d %s", w.Code, w.Body.String())
+	}
+	_, err := (&exportServer{recv: r}).Export(context.Background(), ptraceotlp.NewExportRequest())
+	if status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("gRPC backpressure: %v", err)
 	}
 }

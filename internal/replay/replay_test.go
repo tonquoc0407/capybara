@@ -233,3 +233,22 @@ func TestReplayCommandRouting(t *testing.T) {
 		t.Errorf("node command = %v", cmdNode.Args)
 	}
 }
+
+func TestNodeReplayRequiresAllowLive(t *testing.T) {
+	st := openTemp(t)
+	m := Manifest{
+		RunID: "node-replay", ParentRunID: "recorded",
+		Entrypoint: []string{"node", "index.js"},
+	}
+	err := Run(context.Background(), st, m, false)
+	if err == nil || !strings.Contains(err.Error(), "--allow-live") {
+		t.Fatalf("Run error = %v, want --allow-live guard", err)
+	}
+	runs, err := st.ListRuns(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 0 {
+		t.Fatalf("guard created %d runs", len(runs))
+	}
+}

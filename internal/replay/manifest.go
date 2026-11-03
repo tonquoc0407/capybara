@@ -26,6 +26,7 @@ type Manifest struct {
 	Endpoint    string      `json:"endpoint"`
 	Entrypoint  []string    `json:"entrypoint"`
 	Cwd         string      `json:"cwd"`
+	AllowLive   bool        `json:"allow_live,omitempty"`
 	LLM         []LLMEntry  `json:"llm"`
 	Tools       []ToolEntry `json:"tools"`
 }

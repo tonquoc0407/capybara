@@ -1,12 +1,13 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { trace as traceApi } from '@opentelemetry/api';
+import { trace as traceApi, SpanStatusCode } from '@opentelemetry/api';
 import {
   NodeTracerProvider,
   SimpleSpanProcessor,
   InMemorySpanExporter,
 } from '@opentelemetry/sdk-trace-node';
 import { trace, schema } from '../dist/index.js';
+import { setToolServer } from '../dist/trace.js';
 import { EntrypointSpanProcessor, ENTRYPOINT_ATTR, CWD_ATTR } from '../dist/otel.js';
 import { SchemaSpanProcessor, SCHEMA_ATTR } from '../dist/schema.js';
 
@@ -20,7 +21,7 @@ const provider = new NodeTracerProvider({
 });
 provider.register();
 
-beforeEach(() => exporter.reset());
+beforeEach(() => { exporter.reset(); setToolServer(undefined); });
 
 function only() {
   const spans = exporter.getFinishedSpans();
@@ -85,5 +86,18 @@ test('a throwing tool still ends its span and rethrows', () => {
     { tool: 'boom' },
   );
   assert.throws(() => boom(), /boom/);
-  assert.equal(exporter.getFinishedSpans().length, 1);
+  assert.equal(only().status.code, SpanStatusCode.ERROR);
+});
+
+test('an async tool rejection is recorded as an error', async () => {
+  const boom = trace(async () => { throw new Error('async boom'); }, { tool: 'boom' });
+  await assert.rejects(boom(), /async boom/);
+  assert.equal(only().status.code, SpanStatusCode.ERROR);
+});
+
+test('a replay tool server failure ends the span as an error', () => {
+  setToolServer(() => { throw new Error('replay boom'); });
+  const boom = trace(() => 'unused', { tool: 'boom' });
+  assert.throws(() => boom(), /replay boom/);
+  assert.equal(only().status.code, SpanStatusCode.ERROR);
 });

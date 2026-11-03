@@ -24,17 +24,22 @@ var page = template.Must(template.New("index").Parse(asset("assets/index.html"))
 
 // RunSummary is one row of the run list.
 type RunSummary struct {
-	ID        string   `json:"id"`
-	Source    string   `json:"source"`
-	Label     string   `json:"label"`
-	Model     string   `json:"model"`
-	Status    string   `json:"status"`
-	Started   string   `json:"started"`
-	Duration  float64  `json:"duration"`
-	TokensIn  int64    `json:"tokens_in"`
-	TokensOut int64    `json:"tokens_out"`
-	Cost      *float64 `json:"cost,omitempty"`
-	Findings  int64    `json:"findings"`
+	ID          string   `json:"id"`
+	Project     string   `json:"project"`
+	Environment string   `json:"environment,omitempty"`
+	Release     string   `json:"release,omitempty"`
+	SessionID   string   `json:"session_id,omitempty"`
+	UserID      string   `json:"user_id,omitempty"`
+	Source      string   `json:"source"`
+	Label       string   `json:"label"`
+	Model       string   `json:"model"`
+	Status      string   `json:"status"`
+	Started     string   `json:"started"`
+	Duration    float64  `json:"duration"`
+	TokensIn    int64    `json:"tokens_in"`
+	TokensOut   int64    `json:"tokens_out"`
+	Cost        *float64 `json:"cost,omitempty"`
+	Findings    int64    `json:"findings"`
 }
 
 // RunDetail is everything the page draws for one run.
@@ -43,6 +48,17 @@ type RunDetail struct {
 	Spans    []SpanView           `json:"spans"`
 	Findings []FindingView        `json:"findings"`
 	Contents map[string][]Content `json:"contents"`
+	Logs     []LogView            `json:"logs,omitempty"`
+}
+
+// LogView is one linked log rendered with optional body and attributes.
+type LogView struct {
+	ID        string `json:"id"`
+	SpanID    string `json:"span_id"`
+	At        string `json:"at"`
+	Severity  string `json:"severity"`
+	Body      string `json:"body,omitempty"`
+	AttrsJSON string `json:"attrs_json,omitempty"`
 }
 
 // SpanView is one node of the trace tree.
@@ -77,6 +93,19 @@ type Content struct {
 	Media string `json:"media,omitempty"`
 }
 
+// SpanContents uses the same JSON content shape as eager RunDetail responses.
+func SpanContents(ctx context.Context, st *store.Store, spanID string) ([]Content, error) {
+	rows, err := st.Contents(ctx, spanID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Content, 0, len(rows))
+	for _, c := range rows {
+		out = append(out, Content{Role: c.Role, Body: c.Body, Media: c.MediaType})
+	}
+	return out, nil
+}
+
 // Runs lists every run, newest first, as the page shows them.
 func Runs(ctx context.Context, st *store.Store) ([]RunSummary, error) {
 	runs, err := st.ListRuns(ctx)
@@ -85,19 +114,52 @@ func Runs(ctx context.Context, st *store.Store) ([]RunSummary, error) {
 	}
 	out := make([]RunSummary, 0, len(runs))
 	for _, r := range runs {
-		out = append(out, RunSummary{
-			ID: r.ID, Source: r.Source, Label: r.Label, Model: r.ModelMain,
-			Status: r.Status, Started: stamp(r.StartedAt),
-			Duration: seconds(r.StartedAt, r.EndedAt),
-			TokensIn: r.TokensIn, TokensOut: r.TokensOut,
-			Cost: r.CostUSD, Findings: r.Findings,
-		})
+		out = append(out, summary(r))
 	}
 	return out, nil
 }
 
+// RunsForProject returns one project page without loading span content.
+func RunsForProject(ctx context.Context, st *store.Store, project string, limit, offset int) ([]RunSummary, error) {
+	return RunsForSearch(ctx, st, store.RunSearch{Project: project, Limit: limit, Offset: offset})
+}
+
+// RunsForSearch maps a filtered run page into Web summaries.
+func RunsForSearch(ctx context.Context, st *store.Store, filter store.RunSearch) ([]RunSummary, error) {
+	runs, err := st.SearchRuns(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RunSummary, 0, len(runs))
+	for _, r := range runs {
+		out = append(out, summary(r))
+	}
+	return out, nil
+}
+
+func summary(r store.Run) RunSummary {
+	return RunSummary{
+		ID: r.ID, Project: r.Project, Environment: r.Environment,
+		Release: r.Release, SessionID: r.SessionID, UserID: r.UserID,
+		Source: r.Source, Label: r.Label, Model: r.ModelMain,
+		Status: r.Status, Started: stamp(r.StartedAt),
+		Duration: seconds(r.StartedAt, r.EndedAt),
+		TokensIn: r.TokensIn, TokensOut: r.TokensOut,
+		Cost: r.CostUSD, Findings: r.Findings,
+	}
+}
+
 // Run gathers one run's spans, findings and content.
 func Run(ctx context.Context, st *store.Store, runID string) (RunDetail, error) {
+	return run(ctx, st, runID, true)
+}
+
+// RunMetadata loads spans and findings while leaving recorded bodies unread.
+func RunMetadata(ctx context.Context, st *store.Store, runID string) (RunDetail, error) {
+	return run(ctx, st, runID, false)
+}
+
+func run(ctx context.Context, st *store.Store, runID string, withContent bool) (RunDetail, error) {
 	spans, err := st.Spans(ctx, runID)
 	if err != nil {
 		return RunDetail{}, err
@@ -106,7 +168,19 @@ func Run(ctx context.Context, st *store.Store, runID string) (RunDetail, error) 
 	if err != nil {
 		return RunDetail{}, err
 	}
-	contents, err := st.ContentsForRun(ctx, runID)
+	contents := map[string][]store.Content{}
+	if withContent {
+		contents, err = st.ContentsForRun(ctx, runID)
+		if err != nil {
+			return RunDetail{}, err
+		}
+	}
+	var logs []store.TraceLog
+	if withContent {
+		logs, err = st.TraceLogs(ctx, runID)
+	} else {
+		logs, err = st.TraceLogHeaders(ctx, runID)
+	}
 	if err != nil {
 		return RunDetail{}, err
 	}
@@ -131,6 +205,12 @@ func Run(ctx context.Context, st *store.Store, runID string) (RunDetail, error) 
 				Role: c.Role, Body: c.Body, Media: c.MediaType,
 			})
 		}
+	}
+	for _, l := range logs {
+		d.Logs = append(d.Logs, LogView{
+			ID: l.ID, SpanID: l.SpanID,
+			At: stamp(l.ObservedAt), Severity: l.Severity, Body: l.Body, AttrsJSON: l.AttrsJSON,
+		})
 	}
 	return d, nil
 }

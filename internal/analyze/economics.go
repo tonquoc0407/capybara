@@ -105,10 +105,10 @@ func spikeFindings(spans []store.Span) []store.Finding {
 		start := max(0, i-spikeWindow)
 		var sum int64
 		for _, prev := range llms[start:i] {
-			sum += prev.TokensIn + prev.TokensOut
+			sum += newTokens(prev)
 		}
 		baseline := float64(sum) / float64(i-start)
-		tokens := float64(sp.TokensIn + sp.TokensOut)
+		tokens := float64(newTokens(sp))
 		if baseline <= 0 || tokens < spikeFloor || tokens < spikeFactor*baseline {
 			continue
 		}
@@ -121,6 +121,20 @@ func spikeFindings(spans []store.Span) []store.Finding {
 		})
 	}
 	return findings
+}
+
+// Cached reads occupy context but are not charged as fresh input. Claude Code
+// already excludes them from TokensIn; OTLP includes them by convention.
+func newTokens(sp store.Span) int64 {
+	in := sp.TokensIn
+	if raw := sp.Attrs.Raw; raw != nil {
+		if value, ok := raw["gen_ai.usage.cache_read.input_tokens"]; ok {
+			if read, valid := tokenCount(value); valid && read < 0x1p63 && read <= float64(in) {
+				in -= int64(read)
+			}
+		}
+	}
+	return in + sp.TokensOut
 }
 
 func sortSpansByEnd(spans []store.Span) {

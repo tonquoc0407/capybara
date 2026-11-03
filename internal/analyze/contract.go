@@ -47,7 +47,12 @@ func (a *Analyzer) checkTool(ctx context.Context, sp store.Span) ([]store.Findin
 	if output == nil {
 		return argFindings, nil
 	}
-	current, declared, err := a.currentSchema(ctx, sp, tool)
+	run, err := a.st.GetRun(ctx, sp.RunID)
+	if err != nil {
+		return nil, err
+	}
+	scope := schemaScope{Project: run.Project, Tool: tool}
+	current, declared, err := a.currentSchema(ctx, sp, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -57,21 +62,21 @@ func (a *Analyzer) checkTool(ctx context.Context, sp store.Span) ([]store.Findin
 	}
 	var value any
 	if err := json.Unmarshal([]byte(output.Body), &value); err != nil {
-		fs, err := a.nonJSONOutput(ctx, sp, tool, output.Body, current, declared)
+		fs, err := a.nonJSONOutput(ctx, sp, scope, output.Body, current, declared)
 		return append(argFindings, fs...), err
 	}
 	reported := append(argFindings, reportedError(sp, tool, value)...)
 	obs := infer(value, 0)
 	if current == nil {
-		return reported, a.learn(ctx, sp, tool, obs)
+		return reported, a.learn(ctx, sp, scope, obs)
 	}
 	d := diffSchemas(current, obs, "")
 	if d.breaking() {
 		if !declared && rootEncodingFlip(current, obs, d) {
-			return reported, a.touch(ctx, sp, tool, mergeSchemas(current, obs))
+			return reported, a.touch(ctx, sp, scope, mergeSchemas(current, obs))
 		}
 		if !declared {
-			if err := a.adopt(ctx, sp, tool, obs); err != nil {
+			if err := a.adopt(ctx, sp, scope, obs); err != nil {
 				return nil, err
 			}
 		}
@@ -86,7 +91,7 @@ func (a *Analyzer) checkTool(ctx context.Context, sp store.Span) ([]store.Findin
 	if d.widened {
 		merged = mergeSchemas(current, obs)
 	}
-	return reported, a.touch(ctx, sp, tool, merged)
+	return reported, a.touch(ctx, sp, scope, merged)
 }
 
 // reportedError catches the output that announces its own failure. Agent
@@ -147,12 +152,13 @@ func httpFailure(v any) bool {
 // nonJSONOutput handles unparseable bodies: malformed only when the contract
 // says JSON and has never accepted text; plain-text tools learn a string schema
 // and never drift.
-func (a *Analyzer) nonJSONOutput(ctx context.Context, sp store.Span, tool, body string,
+func (a *Analyzer) nonJSONOutput(ctx context.Context, sp store.Span, scope schemaScope, body string,
 	current *jsonSchema, declared bool,
 ) ([]store.Finding, error) {
+	tool := scope.Tool
 	reported := textError(sp, tool, body)
 	if current == nil {
-		return reported, a.learn(ctx, sp, tool, infer(body, 0))
+		return reported, a.learn(ctx, sp, scope, infer(body, 0))
 	}
 	if !current.Types.has("string") && hasContainer(current.Types) {
 		return []store.Finding{finding(sp, "malformed", "warning", map[string]any{
@@ -162,7 +168,7 @@ func (a *Analyzer) nonJSONOutput(ctx context.Context, sp store.Span, tool, body 
 	if declared {
 		return reported, nil
 	}
-	return reported, a.touch(ctx, sp, tool, current)
+	return reported, a.touch(ctx, sp, scope, current)
 }
 
 // errorPrefixes are how a tool that returns text rather than raising announces
@@ -193,48 +199,48 @@ func textError(sp store.Span, tool, body string) []store.Finding {
 
 // currentSchema returns the schema to validate against and whether it was
 // declared on the span rather than learned.
-func (a *Analyzer) currentSchema(ctx context.Context, sp store.Span, tool string) (*jsonSchema, bool, error) {
+func (a *Analyzer) currentSchema(ctx context.Context, sp store.Span, scope schemaScope) (*jsonSchema, bool, error) {
 	if raw, ok := sp.Attrs.Raw[declaredSchemaAttr].(string); ok && raw != "" {
 		var s jsonSchema
 		if err := json.Unmarshal([]byte(raw), &s); err == nil {
 			return &s, true, nil
 		}
 	}
-	ts, err := a.st.LatestToolSchema(ctx, tool)
+	ts, err := a.st.LatestProjectToolSchema(ctx, scope.Project, scope.Tool)
 	if err != nil || ts == nil {
 		return nil, false, err
 	}
 	var s jsonSchema
 	if err := json.Unmarshal([]byte(ts.Schema), &s); err != nil {
-		return nil, false, fmt.Errorf("stored schema of %s: %w", tool, err)
+		return nil, false, fmt.Errorf("stored schema of %s: %w", scope.Tool, err)
 	}
-	a.versions[tool] = ts.Version
+	a.versions[scope] = ts.Version
 	return &s, false, nil
 }
 
-func (a *Analyzer) learn(ctx context.Context, sp store.Span, tool string, obs *jsonSchema) error {
+func (a *Analyzer) learn(ctx context.Context, sp store.Span, scope schemaScope, obs *jsonSchema) error {
 	raw, err := json.Marshal(obs)
 	if err != nil {
-		return fmt.Errorf("marshal schema of %s: %w", tool, err)
+		return fmt.Errorf("marshal schema of %s: %w", scope.Tool, err)
 	}
-	a.versions[tool]++
+	a.versions[scope]++
 	return a.st.InsertToolSchema(ctx, store.ToolSchema{
-		ToolName: tool, Version: a.versions[tool], Schema: string(raw),
+		Project: scope.Project, ToolName: scope.Tool, Version: a.versions[scope], Schema: string(raw),
 		LearnedFromRun: sp.RunID, FirstSeen: sp.EndedAt, LastSeen: sp.EndedAt,
 	})
 }
 
 // adopt records the post-drift shape as the new current version.
-func (a *Analyzer) adopt(ctx context.Context, sp store.Span, tool string, obs *jsonSchema) error {
-	return a.learn(ctx, sp, tool, obs)
+func (a *Analyzer) adopt(ctx context.Context, sp store.Span, scope schemaScope, obs *jsonSchema) error {
+	return a.learn(ctx, sp, scope, obs)
 }
 
-func (a *Analyzer) touch(ctx context.Context, sp store.Span, tool string, s *jsonSchema) error {
+func (a *Analyzer) touch(ctx context.Context, sp store.Span, scope schemaScope, s *jsonSchema) error {
 	raw, err := json.Marshal(s)
 	if err != nil {
-		return fmt.Errorf("marshal schema of %s: %w", tool, err)
+		return fmt.Errorf("marshal schema of %s: %w", scope.Tool, err)
 	}
-	return a.st.TouchToolSchema(ctx, tool, a.versions[tool], string(raw), sp.EndedAt)
+	return a.st.TouchProjectToolSchema(ctx, scope.Project, scope.Tool, a.versions[scope], string(raw), sp.EndedAt)
 }
 
 func finding(sp store.Span, typ, severity string, detail map[string]any) store.Finding {

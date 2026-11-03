@@ -12,6 +12,7 @@ import (
 // ToolSchema is one row of tool_schemas: one learned or declared version of a
 // tool's output shape.
 type ToolSchema struct {
+	Project        string
 	ToolName       string
 	Version        int64
 	Schema         string
@@ -22,13 +23,18 @@ type ToolSchema struct {
 
 // LatestToolSchema returns the current schema version for a tool, or nil.
 func (s *Store) LatestToolSchema(ctx context.Context, tool string) (*ToolSchema, error) {
+	return s.LatestProjectToolSchema(ctx, "default", tool)
+}
+
+// LatestProjectToolSchema returns the newest output schema within one project.
+func (s *Store) LatestProjectToolSchema(ctx context.Context, project, tool string) (*ToolSchema, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT tool_name, version, schema_json, learned_from_run, first_seen, last_seen
-		 FROM tool_schemas WHERE tool_name = ? ORDER BY version DESC LIMIT 1`, tool)
+		`SELECT project, tool_name, version, schema_json, learned_from_run, first_seen, last_seen
+		 FROM tool_schemas WHERE project = ? AND tool_name = ? ORDER BY version DESC LIMIT 1`, project, tool)
 	var ts ToolSchema
 	var learned sql.NullString
 	var first, last sql.NullInt64
-	err := row.Scan(&ts.ToolName, &ts.Version, &ts.Schema, &learned, &first, &last)
+	err := row.Scan(&ts.Project, &ts.ToolName, &ts.Version, &ts.Schema, &learned, &first, &last)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -43,11 +49,14 @@ func (s *Store) LatestToolSchema(ctx context.Context, tool string) (*ToolSchema,
 
 // InsertToolSchema records a new schema version.
 func (s *Store) InsertToolSchema(ctx context.Context, ts ToolSchema) error {
+	if ts.Project == "" {
+		ts.Project = "default"
+	}
 	if _, err := s.db.ExecContext(ctx,
-		`INSERT INTO tool_schemas (tool_name, version, schema_json, learned_from_run,
+		`INSERT INTO tool_schemas (project, tool_name, version, schema_json, learned_from_run,
 		                           first_seen, last_seen)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		ts.ToolName, ts.Version, ts.Schema, nullString(ts.LearnedFromRun),
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		ts.Project, ts.ToolName, ts.Version, ts.Schema, nullString(ts.LearnedFromRun),
 		nullNanos(ts.FirstSeen), nullNanos(ts.LastSeen)); err != nil {
 		return fmt.Errorf("insert schema %s v%d: %w", ts.ToolName, ts.Version, err)
 	}
@@ -56,10 +65,15 @@ func (s *Store) InsertToolSchema(ctx context.Context, ts ToolSchema) error {
 
 // TouchToolSchema widens a schema version in place and bumps last_seen.
 func (s *Store) TouchToolSchema(ctx context.Context, tool string, version int64, schema string, lastSeen time.Time) error {
+	return s.TouchProjectToolSchema(ctx, "default", tool, version, schema, lastSeen)
+}
+
+// TouchProjectToolSchema updates a version's learned shape and last-seen time.
+func (s *Store) TouchProjectToolSchema(ctx context.Context, project, tool string, version int64, schema string, lastSeen time.Time) error {
 	if _, err := s.db.ExecContext(ctx,
 		`UPDATE tool_schemas SET schema_json = ?, last_seen = ?
-		 WHERE tool_name = ? AND version = ?`,
-		schema, nullNanos(lastSeen), tool, version); err != nil {
+		 WHERE project = ? AND tool_name = ? AND version = ?`,
+		schema, nullNanos(lastSeen), project, tool, version); err != nil {
 		return fmt.Errorf("touch schema %s v%d: %w", tool, version, err)
 	}
 	return nil
@@ -70,7 +84,7 @@ func (s *Store) TouchToolSchema(ctx context.Context, tool string, version int64,
 func (s *Store) UnanalyzedSpans(ctx context.Context) ([]Span, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, run_id, parent_id, kind, name, started_at, ended_at,
-		        tokens_in, tokens_out, cost_usd, status, attrs_json
+		        tokens_in, tokens_out, cost_usd, status, attrs_json, revision
 		 FROM spans WHERE analyzed = 0 AND ended_at IS NOT NULL
 		 ORDER BY ended_at, id`)
 	if err != nil {
@@ -100,21 +114,28 @@ func (s *Store) ResetAnalysis(ctx context.Context) error {
 	return nil
 }
 
-// MarkAnalyzed flags spans as processed by the analyzer.
-func (s *Store) MarkAnalyzed(ctx context.Context, ids []string) error {
-	if len(ids) == 0 {
+// MarkAnalyzed acknowledges only the revision that was actually analyzed. A
+// late write during a sweep stays pending for the next pass.
+func (s *Store) MarkAnalyzed(ctx context.Context, spans []Span) error {
+	if len(spans) == 0 {
 		return nil
 	}
-	args := make([]any, len(ids))
-	ph := make([]string, len(ids))
-	for i, id := range ids {
-		args[i] = id
-		ph[i] = "?"
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
 	}
-	if _, err := s.db.ExecContext(ctx,
-		`UPDATE spans SET analyzed = 1 WHERE id IN (`+strings.Join(ph, ",")+`)`,
-		args...); err != nil {
-		return fmt.Errorf("mark analyzed: %w", err)
+	defer func() { _ = tx.Rollback() }()
+	for first := 0; first < len(spans); first += 256 {
+		batch := spans[first:min(first+256, len(spans))]
+		args, placeholders := make([]any, 0, 2*len(batch)), make([]string, 0, len(batch))
+		for _, sp := range batch {
+			args = append(args, sp.ID, sp.Revision)
+			placeholders = append(placeholders, "(?, ?)")
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE spans SET analyzed = 1
+			WHERE (id, revision) IN (VALUES `+strings.Join(placeholders, ",")+`)`, args...); err != nil {
+			return fmt.Errorf("mark analyzed: %w", err)
+		}
 	}
-	return nil
+	return tx.Commit()
 }

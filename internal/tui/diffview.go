@@ -145,6 +145,9 @@ func (m *diffModel) renderRow(i int) string {
 		right = fmt.Sprintf("tok %-7s %-9s %s",
 			signedTokens(step.DTokens()), signedDelta(step.DCost()),
 			signedDur(step.DLatency()))
+		if change := step.StatusChange(); change != "" {
+			right += " status " + change
+		}
 	}
 	line := fmt.Sprintf("%s %-*s %s", mark, nameW, truncate(step.StepName(), nameW), right)
 	switch {

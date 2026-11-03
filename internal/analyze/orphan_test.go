@@ -48,6 +48,32 @@ func TestOrphanFlagsASpanThatStoppedReporting(t *testing.T) {
 	}
 }
 
+func TestLateCompletedSpanClearsOrphanFinding(t *testing.T) {
+	st := openTemp(t)
+	ctx := context.Background()
+	now := time.Now()
+	sampled(st, t, "late", now.Add(-30*time.Second))
+	a := analyzerOn(t, st)
+	if err := a.Sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if fs := runFindings(t, st, "r1"); !hasFinding(fs, "orphaned_span") {
+		t.Fatalf("missing first orphan finding: %+v", fs)
+	}
+	if err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{{
+		ID: "late", RunID: "r1", Kind: store.KindTool, Name: "lookup",
+		StartedAt: now.Add(-40 * time.Second), EndedAt: now.Add(-20 * time.Second), Status: "ok",
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Sweep(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if fs := runFindings(t, st, "r1"); len(fs) != 0 {
+		t.Fatalf("stale orphan finding: %+v", fs)
+	}
+}
+
 // Sampling stops when the process stops, so a run still ticking is alive even
 // if the span has been open for a long time.
 func TestOrphanIgnoresARunStillReporting(t *testing.T) {

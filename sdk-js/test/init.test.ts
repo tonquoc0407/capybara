@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { trace as traceApi } from '@opentelemetry/api';
+import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { init } from '../dist/index.js';
-import { resolveEndpoint, DEFAULT_ENDPOINT } from '../dist/otel.js';
+import { resolveEndpoint, DEFAULT_ENDPOINT, _resetForTests } from '../dist/otel.js';
 
 test('resolveEndpoint prefers an explicit endpoint', () => {
   assert.equal(resolveEndpoint('http://host:1234/v1/traces'), 'http://host:1234/v1/traces');
@@ -26,4 +28,18 @@ test('init installs one provider and reuses it', async () => {
   const provider = init();
   assert.equal(init(), provider);
   await provider.shutdown();
+});
+
+test('init fails clearly when an app already registered a provider', async () => {
+  traceApi.disable();
+  _resetForTests();
+  const existing = new NodeTracerProvider();
+  existing.register();
+  try {
+    assert.throws(() => init({ metrics: false }), /already registered.*OTLP traces to capybara/);
+  } finally {
+    await existing.shutdown();
+    traceApi.disable();
+    _resetForTests();
+  }
 });

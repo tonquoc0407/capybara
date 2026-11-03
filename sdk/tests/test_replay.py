@@ -80,7 +80,7 @@ def test_unrecorded_model_call_stops_before_the_edit() -> None:
         session.serve_llm("claude-sonnet-5", [("user", "hi")])
 
 
-def test_model_call_goes_live_after_the_edit() -> None:
+def test_model_call_after_edit_requires_opt_in() -> None:
     edited = hash_tool_call("lookup", "{}")
     session = Session(
         manifest(
@@ -96,6 +96,9 @@ def test_model_call_goes_live_after_the_edit() -> None:
         )
     )
     session.serve_tool("lookup", "{}")
+    with pytest.raises(ReplayError, match="--allow-live"):
+        session.serve_llm("claude-sonnet-5", [("user", "hi")])
+    session.manifest["allow_live"] = True
     assert session.serve_llm("claude-sonnet-5", [("user", "hi")]) is None
 
 

@@ -164,7 +164,7 @@ func (t *tailer) consume(ctx context.Context, st *store.Store) error {
 	}
 	t.offset += int64(len(data))
 	data = append(t.partial, data...)
-	batch := store.Batch{Source: "claude"}
+	batch := store.Batch{Source: "claude", DropContent: !t.capture}
 	label := ""
 	for {
 		nl := bytes.IndexByte(data, '\n')
@@ -186,7 +186,11 @@ func (t *tailer) consume(ctx context.Context, st *store.Store) error {
 	if err := st.WriteBatch(ctx, batch); err != nil {
 		return fmt.Errorf("claude tail %s: %w", t.path, err)
 	}
-	if label != "" {
+	if !t.capture && len(batch.Spans) > 0 {
+		if err := st.SetRunLabel(ctx, t.m.runID, "claude", ""); err != nil {
+			return fmt.Errorf("claude tail %s: %w", t.path, err)
+		}
+	} else if label != "" {
 		if err := st.SetRunLabel(ctx, t.m.runID, "claude", label); err != nil {
 			return fmt.Errorf("claude tail %s: %w", t.path, err)
 		}

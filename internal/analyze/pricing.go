@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -121,11 +122,40 @@ func (p pricing) spanCost(sp store.Span) *float64 {
 		cacheRead = *r.CacheRead
 	}
 	if u, ok := sp.Attrs.Raw["usage"].(map[string]any); ok {
-		cost := num(u["input_tokens"])*perTok(r.Input) +
-			num(u["output_tokens"])*perTok(r.Output) +
-			num(u["cache_creation_input_tokens"])*perTok(cacheWrite) +
-			num(u["cache_read_input_tokens"])*perTok(cacheRead)
+		if _, ok := u["input_tokens"]; !ok {
+			return nil
+		}
+		if _, ok := u["output_tokens"]; !ok {
+			return nil
+		}
+		input, inputOK := optionalCount(u, "input_tokens")
+		output, outputOK := optionalCount(u, "output_tokens")
+		write, writeOK := optionalCount(u, "cache_creation_input_tokens")
+		read, readOK := optionalCount(u, "cache_read_input_tokens")
+		if !inputOK || !outputOK || !writeOK || !readOK {
+			return nil
+		}
+		cost := input*perTok(r.Input) + output*perTok(r.Output) +
+			write*perTok(cacheWrite) + read*perTok(cacheRead)
 		return &cost
+	}
+	// OpenTelemetry's input_tokens is the total, including cache reads and
+	// writes. Pricing it all as fresh input overstates cached requests.
+	if raw := sp.Attrs.Raw; raw != nil {
+		_, hasRead := raw["gen_ai.usage.cache_read.input_tokens"]
+		_, hasWrite := raw["gen_ai.usage.cache_creation.input_tokens"]
+		if hasRead || hasWrite {
+			read, readOK := optionalCount(raw, "gen_ai.usage.cache_read.input_tokens")
+			write, writeOK := optionalCount(raw, "gen_ai.usage.cache_creation.input_tokens")
+			total := float64(sp.TokensIn)
+			if !readOK || !writeOK || total <= 0 || read+write > total {
+				return nil // incomplete or contradictory usage is not a price
+			}
+			cost := (total-read-write)*perTok(r.Input) +
+				read*perTok(cacheRead) + write*perTok(cacheWrite) +
+				float64(sp.TokensOut)*perTok(r.Output)
+			return &cost
+		}
 	}
 	if sp.TokensIn == 0 && sp.TokensOut == 0 {
 		return nil
@@ -134,7 +164,32 @@ func (p pricing) spanCost(sp store.Span) *float64 {
 	return &cost
 }
 
-func num(v any) float64 {
-	f, _ := v.(float64)
-	return f
+func optionalCount(fields map[string]any, key string) (float64, bool) {
+	v, ok := fields[key]
+	if !ok {
+		return 0, true
+	}
+	return tokenCount(v)
+}
+
+func tokenCount(v any) (float64, bool) {
+	var value float64
+	switch n := v.(type) {
+	case float64:
+		value = n
+	case int64:
+		value = float64(n)
+	case int:
+		value = float64(n)
+	case json.Number:
+		f, err := n.Float64()
+		if err != nil {
+			return 0, false
+		}
+		value = f
+	default:
+		return 0, false
+	}
+	return value, !math.IsNaN(value) && !math.IsInf(value, 0) &&
+		value >= 0 && math.Trunc(value) == value
 }
