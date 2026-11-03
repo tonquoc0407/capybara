@@ -39,6 +39,11 @@ a JSON Schema to that tool's spans — the `{type, properties, required, items}`
 subset capybara understands, so no schema library is pulled in — and capybara
 then reports contract drift on the first violating call.
 
+When a wrapped tool fails, the span records the exception and an `ERROR` status.
+Run [the example](examples/error-span.mjs) after `npm run build` to see it:
+
+![A failed tool recorded as an ERROR span](../demo/sdk-error.gif)
+
 Node replay re-runs the recorded entrypoint and can substitute recorded tool
 outputs. It does not intercept model calls. Use `capybara replay --allow-live <run>`
 only when provider calls and their cost are acceptable; the TUI replay action
