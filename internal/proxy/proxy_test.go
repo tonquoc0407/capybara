@@ -33,7 +33,8 @@ func TestProxyRecordsEstimatedCostAndBlocksLaterBudgetCall(t *testing.T) {
 	}
 	defer st.Close()
 	calls := 0
-	s := &Server{Store: st, UpstreamURL: "https://example.test/v1/chat/completions", APIKey: "upstream-secret",
+	s := &Server{
+		Store: st, UpstreamURL: "https://example.test/v1/chat/completions", APIKey: "upstream-secret",
 		MaxCostUSD: 4, InputPerM: 1000000, OutputPerM: 1000000,
 		Client: &http.Client{Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
 			calls++
@@ -41,7 +42,8 @@ func TestProxyRecordsEstimatedCostAndBlocksLaterBudgetCall(t *testing.T) {
 				t.Error("API key was not forwarded")
 			}
 			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"choices":[],"usage":{"prompt_tokens":2,"completion_tokens":3}}`))}, nil
-		})}}
+		})},
+	}
 	body := `{"model":"test-model","messages":[{"role":"user","content":"hello"}]}`
 	first := makeRequest(s.Handler(), body)
 	if first.Code != 200 || first.Header().Get("X-Capybara-Trace-ID") == "" {
@@ -73,12 +75,14 @@ func TestProxyGuardrailAndUnknownUsage(t *testing.T) {
 	}
 	defer st.Close()
 	calls := 0
-	s := &Server{Store: st, UpstreamURL: "https://example.test/v1/chat/completions",
+	s := &Server{
+		Store: st, UpstreamURL: "https://example.test/v1/chat/completions",
 		DenyPattern: regexp.MustCompile("blocked"), MaxCostUSD: 1, InputPerM: 1, OutputPerM: 1,
-		Client: &http.Client{Transport: transportFunc(func(req *http.Request) (*http.Response, error) {
+		Client: &http.Client{Transport: transportFunc(func(_ *http.Request) (*http.Response, error) {
 			calls++
 			return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"choices":[]}`))}, nil
-		})}}
+		})},
+	}
 	if got := makeRequest(s.Handler(), `{"model":"m","messages":[{"content":"blocked"}]}`); got.Code != http.StatusUnprocessableEntity || calls != 0 {
 		t.Fatalf("request guardrail: %d calls %d", got.Code, calls)
 	}
@@ -88,5 +92,36 @@ func TestProxyGuardrailAndUnknownUsage(t *testing.T) {
 	}
 	if got := makeRequest(s.Handler(), body); got.Code != http.StatusPaymentRequired || calls != 1 {
 		t.Fatalf("unknown usage did not close budget: %d calls %d", got.Code, calls)
+	}
+}
+
+func TestProxyEmptyUsageCannotBypassBudget(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "proxy.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	calls := 0
+	s := &Server{
+		Store: st, UpstreamURL: "https://example.test/v1/chat/completions",
+		MaxCostUSD: 1, InputPerM: 1, OutputPerM: 1,
+		Client: &http.Client{Transport: transportFunc(func(_ *http.Request) (*http.Response, error) {
+			calls++
+			return &http.Response{
+				StatusCode: 200, Header: make(http.Header),
+				Body: io.NopCloser(strings.NewReader(`{"choices":[],"usage":{}}`)),
+			}, nil
+		})},
+	}
+	body := `{"model":"m","messages":[{"content":"safe"}]}`
+	if got := makeRequest(s.Handler(), body); got.Code != http.StatusOK {
+		t.Fatalf("first response: %d", got.Code)
+	}
+	if got := makeRequest(s.Handler(), body); got.Code != http.StatusPaymentRequired || calls != 1 {
+		t.Fatalf("empty usage bypassed budget: %d calls %d", got.Code, calls)
+	}
+	runs, err := st.ListRuns(context.Background())
+	if err != nil || len(runs) != 1 || runs[0].CostUSD != nil {
+		t.Fatalf("empty usage produced a cost: %+v, %v", runs, err)
 	}
 }

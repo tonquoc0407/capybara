@@ -24,6 +24,7 @@ import (
 
 const maxRequest = 1 << 20
 
+// Server forwards a local chat-completions subset and records each call.
 type Server struct {
 	Store          *store.Store
 	UpstreamURL    string
@@ -63,6 +64,7 @@ func (s *Server) validate() error {
 	return nil
 }
 
+// Serve starts the loopback proxy and stops it when the context is cancelled.
 func (s *Server) Serve(ctx context.Context, addr string, out io.Writer) error {
 	if err := s.validate(); err != nil {
 		return err
@@ -99,6 +101,7 @@ func (s *Server) Serve(ctx context.Context, addr string, out io.Writer) error {
 	}
 }
 
+// Handler returns the chat-completions HTTP route for local use or tests.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/chat/completions", s.chat)
@@ -191,41 +194,53 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	}
 	ended := time.Now().UTC()
 	var usage struct {
-		Prompt     int64 `json:"prompt_tokens"`
-		Completion int64 `json:"completion_tokens"`
+		Prompt     *int64 `json:"prompt_tokens"`
+		Completion *int64 `json:"completion_tokens"`
 	}
 	var envelope struct {
 		Usage json.RawMessage `json:"usage"`
 	}
+	var tokensIn, tokensOut int64
+	hasUsage := false
 	if callErr == nil && status >= 200 && status < 300 {
 		_ = json.Unmarshal(reply, &envelope)
-		if len(envelope.Usage) > 0 && string(envelope.Usage) != "null" && json.Unmarshal(envelope.Usage, &usage) == nil && usage.Prompt >= 0 && usage.Completion >= 0 {
-			// The provider's usage is the basis for the configured estimate.
+		if len(envelope.Usage) > 0 && string(envelope.Usage) != "null" &&
+			json.Unmarshal(envelope.Usage, &usage) == nil && usage.Prompt != nil &&
+			usage.Completion != nil && *usage.Prompt >= 0 && *usage.Completion >= 0 {
+			tokensIn, tokensOut = *usage.Prompt, *usage.Completion
+			hasUsage = true
 		} else if s.MaxCostUSD > 0 {
 			s.unknownUsage = true
-			envelope.Usage = nil
 		}
 	}
 	spanStatus := "ok"
 	if callErr != nil || status < 200 || status >= 300 {
 		spanStatus = "error"
 	}
-	batch := store.Batch{Source: "proxy", DropContent: !s.CaptureContent,
-		Spans: []store.Span{{ID: spanID, RunID: traceID, Kind: store.KindLLM, Name: "chat.completions",
+	batch := store.Batch{
+		Source: "proxy", DropContent: !s.CaptureContent,
+		Spans: []store.Span{{
+			ID: spanID, RunID: traceID, Kind: store.KindLLM, Name: "chat.completions",
 			StartedAt: started, EndedAt: ended, Status: spanStatus,
-			TokensIn: usage.Prompt, TokensOut: usage.Completion,
-			Attrs: store.Attrs{Model: request.Model, Provider: "openai-compatible"}}}}
+			TokensIn: tokensIn, TokensOut: tokensOut,
+			Attrs: store.Attrs{Model: request.Model, Provider: "openai-compatible"},
+		}},
+	}
 	if s.CaptureContent {
-		batch.Contents = []store.Content{{SpanID: spanID, Role: "input", Body: string(raw), MediaType: "application/json"},
-			{SpanID: spanID, Role: "output", Seq: 1, Body: string(reply), MediaType: "application/json"}}
+		batch.Contents = []store.Content{
+			{SpanID: spanID, Role: "input", Body: string(raw), MediaType: "application/json"},
+			{SpanID: spanID, Role: "output", Seq: 1, Body: string(reply), MediaType: "application/json"},
+		}
 	}
 	storageErr := s.Store.WriteBatch(r.Context(), batch)
-	if storageErr == nil && len(envelope.Usage) > 0 && spanStatus == "ok" && usage.Prompt >= 0 && usage.Completion >= 0 {
-		cost := (float64(usage.Prompt)*s.InputPerM + float64(usage.Completion)*s.OutputPerM) / 1e6
+	if storageErr == nil && hasUsage && spanStatus == "ok" {
+		cost := (float64(tokensIn)*s.InputPerM + float64(tokensOut)*s.OutputPerM) / 1e6
 		if cost > 0 {
 			storageErr = s.Store.SetSpanEstimates(r.Context(), map[string]store.SpanEstimate{spanID: {
-				CostUSD: cost, Provenance: store.CostProvenance{Kind: "estimate", PriceSource: "proxy configuration",
-					PriceVersion: s.priceVersion(), UsageSource: "provider response", CheckedAt: ended},
+				CostUSD: cost, Provenance: store.CostProvenance{
+					Kind: "estimate", PriceSource: "proxy configuration",
+					PriceVersion: s.priceVersion(), UsageSource: "provider response", CheckedAt: ended,
+				},
 			}})
 			s.spent += cost
 		}
