@@ -17,10 +17,17 @@ Notes on capybara's own attack surface:
   `--url`/`--model` or `CAPYBARA_JUDGE_*` env vars are set.
 - `capybara.db` and replay manifests may contain full request/response bodies from
   your agent, including anything sensitive it saw. Treat them like logs.
+- `-no-content` drops bodies and unrecognized raw attributes for newly ingested
+  spans, but does not erase earlier runs. Span names, IDs, model names and other
+  metadata can still contain sensitive text. Use a fresh database if you need
+  a database that has never held captured content.
 - `capybara replay` executes the entrypoint recorded in the manifest. That
   manifest is data, not something capybara chose, so replaying a `capybara.db`
   or manifest file you did not produce yourself runs a binary someone else
   named. The command prints the resolved entrypoint before it runs.
+  Python replay stops unrecorded model calls by default; `--allow-live` permits
+  post-edit provider calls. Node replay requires that flag because it does not
+  intercept model calls. The entrypoint may perform other I/O in either mode.
 - The `secret_leak` finding matches a fixed set of provider key formats (AWS,
   GitHub, OpenAI, and similar prefixes) plus a card-number check; it does not
   catch generic high-entropy strings, custom internal key formats, or bare

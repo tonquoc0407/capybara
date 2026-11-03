@@ -15,6 +15,7 @@ func (m appModel) waitingView(width int) string {
 		out = append(out, "")
 	}
 	out = append(out, m.th.Text.Render("no traces yet"), "")
+	step("connect an application", "press i for HTTP events, OTLP, SDKs and file import")
 	if m.about.OTLP != "" {
 		out = append(out, m.th.Dim.Render("listening on"),
 			"  "+m.th.Accent.Render(truncate(m.about.OTLP, width-2)), "")
@@ -28,6 +29,7 @@ func (m appModel) waitingView(width int) string {
 		step("tailing claude sessions in", m.about.Watching)
 	}
 	step("or read a file you already have", "capybara import trace.jsonl")
+	step("try a labelled sample trace", "capybara -db "+m.dbPath+" sample")
 	step("recording to", m.dbPath)
 	return strings.Join(out, "\n")
 }

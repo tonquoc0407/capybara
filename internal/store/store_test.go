@@ -163,6 +163,102 @@ func TestRunStatusFollowsRootSpan(t *testing.T) {
 	}
 }
 
+func TestRunStatusSurfacesTerminalModelFailureAndRecovery(t *testing.T) {
+	s := openTemp(t)
+	ctx := context.Background()
+	b := Batch{Source: "test", Spans: []Span{
+		{ID: "task", RunID: "r1", Kind: KindOther, Name: "task",
+			StartedAt: t0, EndedAt: t0.Add(5 * time.Second), Status: "ok"},
+		{ID: "agent", RunID: "r1", ParentID: "task", Kind: KindAgent, Name: "agent",
+			StartedAt: t0, EndedAt: t0.Add(4 * time.Second), Status: "ok"},
+		{ID: "llm1", RunID: "r1", ParentID: "agent", Kind: KindLLM, Name: "chat",
+			StartedAt: t0, EndedAt: t0.Add(3 * time.Second), Status: "error"},
+	}}
+	if err := s.WriteBatch(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	runs, err := s.ListRuns(ctx)
+	if err != nil || len(runs) != 1 || runs[0].Status != "error" {
+		t.Fatalf("terminal model failure = %+v, %v", runs, err)
+	}
+	b.Spans = []Span{{ID: "llm2", RunID: "r1", ParentID: "agent",
+		Kind: KindLLM, Name: "chat", StartedAt: t0.Add(3 * time.Second),
+		EndedAt: t0.Add(4 * time.Second), Status: "ok"}}
+	if err := s.WriteBatch(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	runs, err = s.ListRuns(ctx)
+	if err != nil || runs[0].Status != "ok" {
+		t.Fatalf("recovered model failure = %+v, %v", runs, err)
+	}
+}
+
+func TestDropContentRedactsRawAndPreviousBodies(t *testing.T) {
+	s := openTemp(t)
+	ctx := context.Background()
+	b := Batch{Source: "test", Spans: []Span{{
+		ID: "s1", RunID: "r1", Kind: KindLLM, Name: "chat",
+		EndedAt: t0, Status: "ok",
+		Attrs: Attrs{Raw: map[string]any{
+			"gen_ai.input.messages":          "DEMO_SECRET",
+			"gen_ai.usage.input_tokens":      100,
+			"gen_ai.response.finish_reasons": []any{"MAX_OUTPUT_TOKENS"},
+			"error.type":                     "DEMO_SECRET",
+			"finish_reason":                  "DEMO_SECRET",
+			"usage":                          map[string]any{"input_tokens": 100, "prompt": "DEMO_SECRET"},
+		}},
+	}}, Contents: []Content{{SpanID: "s1", Body: "DEMO_SECRET"}}}
+	if err := s.WriteBatch(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	b.DropContent = true
+	if err := s.WriteBatch(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := s.Contents(ctx, "s1")
+	if err != nil || len(contents) != 0 {
+		t.Fatalf("contents after no-content reimport = %+v, %v", contents, err)
+	}
+	spans, err := s.Spans(ctx, "r1")
+	if err != nil || len(spans) != 1 {
+		t.Fatalf("spans = %+v, %v", spans, err)
+	}
+	raw := spans[0].Attrs.Raw
+	if raw["gen_ai.input.messages"] != nil || raw["error.type"] != nil ||
+		raw["finish_reason"] != nil || raw["gen_ai.usage.input_tokens"] != float64(100) {
+		t.Fatalf("redacted attrs = %+v", raw)
+	}
+	if reasons, ok := raw["gen_ai.response.finish_reasons"].([]any); !ok ||
+		len(reasons) != 1 || reasons[0] != "max_output_tokens" {
+		t.Fatalf("finish reasons = %+v", raw["gen_ai.response.finish_reasons"])
+	}
+	usage, ok := raw["usage"].(map[string]any)
+	if !ok || usage["prompt"] != nil || usage["input_tokens"] != float64(100) {
+		t.Fatalf("redacted usage = %+v", raw["usage"])
+	}
+}
+
+func TestDropContentKeepsInvalidCacheCountAsMissingPriceSignal(t *testing.T) {
+	s := openTemp(t)
+	sp := Span{ID: "s1", RunID: "r1", Kind: KindLLM, Name: "chat",
+		EndedAt: t0, Status: "ok", Attrs: Attrs{Raw: map[string]any{
+			"gen_ai.usage.cache_read.input_tokens": "DEMO_SECRET",
+		}}}
+	if err := s.WriteBatch(context.Background(), Batch{
+		Source: "test", Spans: []Span{sp}, DropContent: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	spans, err := s.Spans(context.Background(), "r1")
+	if err != nil || len(spans) != 1 {
+		t.Fatalf("spans = %+v, %v", spans, err)
+	}
+	raw := spans[0].Attrs.Raw
+	if value, present := raw["gen_ai.usage.cache_read.input_tokens"]; !present || value != nil {
+		t.Fatalf("invalid count marker = %+v", raw)
+	}
+}
+
 func TestRunWithoutFinishedRootIsRunning(t *testing.T) {
 	s := openTemp(t)
 	ctx := context.Background()
@@ -349,7 +445,11 @@ func TestResetAnalysisForgetsLearnedSchemas(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("InsertToolSchema: %v", err)
 	}
-	if err := s.MarkAnalyzed(ctx, []string{"root", "llm1", "tool1"}); err != nil {
+	pending, err := s.UnanalyzedSpans(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkAnalyzed(ctx, pending); err != nil {
 		t.Fatalf("MarkAnalyzed: %v", err)
 	}
 	if err := s.ResetAnalysis(ctx); err != nil {
@@ -383,8 +483,7 @@ func TestUnanalyzedSpansLifecycle(t *testing.T) {
 	if !spans[0].EndedAt.Before(spans[2].EndedAt) {
 		t.Errorf("not ordered by end time: %v, %v", spans[0].EndedAt, spans[2].EndedAt)
 	}
-	ids := []string{spans[0].ID, spans[1].ID, spans[2].ID}
-	if err := s.MarkAnalyzed(ctx, ids); err != nil {
+	if err := s.MarkAnalyzed(ctx, spans); err != nil {
 		t.Fatalf("MarkAnalyzed: %v", err)
 	}
 	spans, err = s.UnanalyzedSpans(ctx)

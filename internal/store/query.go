@@ -5,27 +5,121 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
 // ListRuns returns all runs, most recently started first.
 func (s *Store) ListRuns(ctx context.Context) ([]Run, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT r.id, r.source, r.started_at, r.ended_at, r.model_main, r.tokens_in,
+		`SELECT r.id, r.project, r.environment, r.release, r.session_id, r.user_id,
+		        r.source, r.started_at, r.ended_at, r.model_main, r.tokens_in,
 		        r.tokens_out, r.cost_usd, r.status, r.label, r.parent_run_id,
 		        (SELECT COUNT(*) FROM findings f WHERE f.run_id = r.id)
-		 FROM runs r ORDER BY r.started_at DESC`)
+		 FROM runs r ORDER BY r.started_at DESC, r.id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list runs: %w", err)
 	}
 	defer rows.Close()
+	return scanRuns(rows)
+}
+
+func (s *Store) GetRun(ctx context.Context, id string) (Run, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT r.id, r.project, r.environment, r.release, r.session_id, r.user_id,
+		r.source, r.started_at, r.ended_at, r.model_main, r.tokens_in, r.tokens_out,
+		r.cost_usd, r.status, r.label, r.parent_run_id,
+		(SELECT COUNT(*) FROM findings f WHERE f.run_id = r.id)
+		FROM runs r WHERE r.id = ?`, id)
+	if err != nil {
+		return Run{}, err
+	}
+	defer rows.Close()
+	runs, err := scanRuns(rows)
+	if err != nil {
+		return Run{}, err
+	}
+	if len(runs) == 0 {
+		return Run{}, sql.ErrNoRows
+	}
+	return runs[0], nil
+}
+
+// ListRunsPage returns a bounded page without loading span bodies. The limit is
+// capped so callers cannot accidentally turn an API request into a full scan.
+func (s *Store) ListRunsPage(ctx context.Context, project string, limit, offset int) ([]Run, error) {
+	return s.SearchRuns(ctx, RunSearch{Project: project, Limit: limit, Offset: offset})
+}
+
+type RunSearch struct {
+	Project, Environment, Release, Status, Query string
+	From, To                                     time.Time
+	Limit, Offset                                int
+	OnlyIncidents                                bool
+}
+
+// SearchRuns filters before pagination. Time bounds include From and exclude
+// To, matching operations reports and adjacent investigation time windows.
+func (s *Store) SearchRuns(ctx context.Context, filter RunSearch) ([]Run, error) {
+	if filter.Limit < 1 || filter.Limit > 100 {
+		return nil, fmt.Errorf("limit must be between 1 and 100")
+	}
+	if filter.Offset < 0 {
+		return nil, fmt.Errorf("offset must be non-negative")
+	}
+	query := `SELECT r.id, r.project, r.environment, r.release, r.session_id, r.user_id,
+		        r.source, r.started_at, r.ended_at, r.model_main, r.tokens_in,
+		        r.tokens_out, r.cost_usd, r.status, r.label, r.parent_run_id,
+		        (SELECT COUNT(*) FROM findings f WHERE f.run_id = r.id)
+		 FROM runs r`
+	args := []any{}
+	var conditions []string
+	for _, field := range []struct{ column, value string }{
+		{"project", filter.Project}, {"environment", filter.Environment},
+		{"release", filter.Release}, {"status", filter.Status},
+	} {
+		if field.value != "" {
+			conditions = append(conditions, "r."+field.column+" = ?")
+			args = append(args, field.value)
+		}
+	}
+	if filter.Query != "" {
+		conditions = append(conditions, `(r.id LIKE ? ESCAPE '\' OR r.label LIKE ? ESCAPE '\' OR r.model_main LIKE ? ESCAPE '\' OR r.source LIKE ? ESCAPE '\')`)
+		pattern := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(filter.Query) + "%"
+		args = append(args, pattern, pattern, pattern, pattern)
+	}
+	if filter.OnlyIncidents {
+		conditions = append(conditions, `(r.status = 'error' OR EXISTS (SELECT 1 FROM findings f WHERE f.run_id = r.id))`)
+	}
+	if !filter.From.IsZero() {
+		conditions = append(conditions, "r.started_at >= ?")
+		args = append(args, filter.From.UnixNano())
+	}
+	if !filter.To.IsZero() {
+		conditions = append(conditions, "r.started_at < ?")
+		args = append(args, filter.To.UnixNano())
+	}
+	if len(conditions) > 0 {
+		query += ` WHERE ` + strings.Join(conditions, ` AND `)
+	}
+	query += ` ORDER BY r.started_at DESC, r.id DESC LIMIT ? OFFSET ?`
+	args = append(args, filter.Limit, filter.Offset)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list runs page: %w", err)
+	}
+	defer rows.Close()
+	return scanRuns(rows)
+}
+
+func scanRuns(rows *sql.Rows) ([]Run, error) {
 	var runs []Run
 	for rows.Next() {
 		var r Run
 		var started, ended sql.NullInt64
 		var cost sql.NullFloat64
 		var parent sql.NullString
-		if err := rows.Scan(&r.ID, &r.Source, &started, &ended, &r.ModelMain,
+		if err := rows.Scan(&r.ID, &r.Project, &r.Environment, &r.Release, &r.SessionID, &r.UserID,
+			&r.Source, &started, &ended, &r.ModelMain,
 			&r.TokensIn, &r.TokensOut, &cost, &r.Status, &r.Label, &parent,
 			&r.Findings); err != nil {
 			return nil, fmt.Errorf("scan run: %w", err)
@@ -46,7 +140,7 @@ func (s *Store) ListRuns(ctx context.Context) ([]Run, error) {
 func (s *Store) Spans(ctx context.Context, runID string) ([]Span, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, run_id, parent_id, kind, name, started_at, ended_at,
-		        tokens_in, tokens_out, cost_usd, status, attrs_json
+		        tokens_in, tokens_out, cost_usd, status, attrs_json, revision
 		 FROM spans WHERE run_id = ? ORDER BY started_at, id`, runID)
 	if err != nil {
 		return nil, fmt.Errorf("list spans of %s: %w", runID, err)
@@ -63,7 +157,7 @@ func (s *Store) Spans(ctx context.Context, runID string) ([]Span, error) {
 func (s *Store) AllSpans(ctx context.Context) ([]Span, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, run_id, parent_id, kind, name, started_at, ended_at,
-		        tokens_in, tokens_out, cost_usd, status, attrs_json
+		        tokens_in, tokens_out, cost_usd, status, attrs_json, revision
 		 FROM spans ORDER BY started_at, id`)
 	if err != nil {
 		return nil, fmt.Errorf("list spans: %w", err)
@@ -86,7 +180,7 @@ func scanSpans(rows *sql.Rows) ([]Span, error) {
 		var cost sql.NullFloat64
 		var attrs string
 		if err := rows.Scan(&sp.ID, &sp.RunID, &parent, &kind, &sp.Name, &started, &ended,
-			&sp.TokensIn, &sp.TokensOut, &cost, &sp.Status, &attrs); err != nil {
+			&sp.TokensIn, &sp.TokensOut, &cost, &sp.Status, &attrs, &sp.Revision); err != nil {
 			return nil, fmt.Errorf("scan span: %w", err)
 		}
 		sp.ParentID = parent.String
@@ -128,10 +222,22 @@ func (s *Store) Contents(ctx context.Context, spanID string) ([]Content, error) 
 	return contents, nil
 }
 
+func (s *Store) SpanBelongsToRun(ctx context.Context, spanID, runID string) bool {
+	var found int
+	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM spans WHERE id = ? AND run_id = ?`, spanID, runID).Scan(&found)
+	return err == nil
+}
+
+func (s *Store) RunBelongsToProject(ctx context.Context, runID, project string) bool {
+	var found int
+	err := s.db.QueryRowContext(ctx, `SELECT 1 FROM runs WHERE id = ? AND project = ?`, runID, project).Scan(&found)
+	return err == nil
+}
+
 // Findings returns a run's findings in insertion order.
 func (s *Store) Findings(ctx context.Context, runID string) ([]Finding, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, run_id, span_id, type, severity, detail_json
+		`SELECT id, run_id, span_id, type, severity, detail_json, origin
 		 FROM findings WHERE run_id = ? ORDER BY id`, runID)
 	if err != nil {
 		return nil, fmt.Errorf("list findings of %s: %w", runID, err)
@@ -141,7 +247,7 @@ func (s *Store) Findings(ctx context.Context, runID string) ([]Finding, error) {
 	for rows.Next() {
 		var f Finding
 		var spanID sql.NullString
-		if err := rows.Scan(&f.ID, &f.RunID, &spanID, &f.Type, &f.Severity, &f.Detail); err != nil {
+		if err := rows.Scan(&f.ID, &f.RunID, &spanID, &f.Type, &f.Severity, &f.Detail, &f.Origin); err != nil {
 			return nil, fmt.Errorf("scan finding: %w", err)
 		}
 		f.SpanID = spanID.String
@@ -157,7 +263,7 @@ func (s *Store) Findings(ctx context.Context, runID string) ([]Finding, error) {
 // across a whole ingested corpus.
 func (s *Store) AllFindings(ctx context.Context) ([]Finding, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, run_id, span_id, type, severity, detail_json
+		`SELECT id, run_id, span_id, type, severity, detail_json, origin
 		 FROM findings ORDER BY id`)
 	if err != nil {
 		return nil, fmt.Errorf("list findings: %w", err)
@@ -167,7 +273,7 @@ func (s *Store) AllFindings(ctx context.Context) ([]Finding, error) {
 	for rows.Next() {
 		var f Finding
 		var spanID sql.NullString
-		if err := rows.Scan(&f.ID, &f.RunID, &spanID, &f.Type, &f.Severity, &f.Detail); err != nil {
+		if err := rows.Scan(&f.ID, &f.RunID, &spanID, &f.Type, &f.Severity, &f.Detail, &f.Origin); err != nil {
 			return nil, fmt.Errorf("scan finding: %w", err)
 		}
 		f.SpanID = spanID.String
@@ -251,6 +357,35 @@ func (s *Store) ResolveRunID(ctx context.Context, prefix string) (string, error)
 		return ids[0], nil
 	}
 	return "", fmt.Errorf("run id %q is ambiguous", prefix)
+}
+
+// ResolveProjectRunID only considers runs owned by project, including when
+// resolving a short prefix. Hub callers must use this instead of ResolveRunID.
+func (s *Store) ResolveProjectRunID(ctx context.Context, project, prefix string) (string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM runs WHERE project = ? AND id LIKE ? || '%'
+		ORDER BY id LIMIT 2`, project, prefix)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return "", err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	if len(ids) == 0 {
+		return "", fmt.Errorf("run not found")
+	}
+	if len(ids) > 1 {
+		return "", fmt.Errorf("run id is ambiguous")
+	}
+	return ids[0], nil
 }
 
 // ToolCall is one completed tool invocation in run order. Recorded separates a

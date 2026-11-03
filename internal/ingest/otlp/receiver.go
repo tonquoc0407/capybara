@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/collector/pdata/plog/plogotlp"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/pmetric/pmetricotlp"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -33,6 +35,7 @@ type Receiver struct {
 	mappingErr error
 	grpcLis    net.Listener
 	httpLis    net.Listener
+	slots      chan struct{} // bounded concurrent decodes and writes
 }
 
 // New returns a receiver bound to the default localhost OTLP ports, loading the
@@ -47,6 +50,7 @@ func New(st *store.Store, captureContent bool) *Receiver {
 		capture:    captureContent,
 		mapping:    m,
 		mappingErr: err,
+		slots:      make(chan struct{}, 8),
 	}
 }
 
@@ -121,10 +125,14 @@ func (r *Receiver) close() {
 	}
 }
 
+// Close releases bound listeners when startup cannot proceed.
+func (r *Receiver) Close() { r.close() }
+
 func (r *Receiver) serve(ctx context.Context) error {
 	// Content-heavy batches blow past grpc's 4 MiB default; never drop data.
 	grpcSrv := grpc.NewServer(grpc.MaxRecvMsgSize(64 << 20))
 	ptraceotlp.RegisterGRPCServer(grpcSrv, &exportServer{recv: r})
+	plogotlp.RegisterGRPCServer(grpcSrv, &logServer{recv: r})
 	pmetricotlp.RegisterGRPCServer(grpcSrv, &metricServer{recv: r})
 	httpSrv := &http.Server{Handler: r.handler(), ReadHeaderTimeout: 10 * time.Second}
 	errc := make(chan error, 2)
@@ -175,12 +183,54 @@ func (r *Receiver) ingestMetrics(ctx context.Context, md pmetric.Metrics) error 
 	return r.store.PutResourceSamples(ctx, "otlp", ToSamples(md))
 }
 
+func (r *Receiver) ingestLogs(ctx context.Context, ld plog.Logs) error {
+	return r.store.PutTraceLogs(ctx, "otlp", ToLogs(ld, r.capture))
+}
+
+func (r *Receiver) acquire() bool {
+	if r.slots == nil {
+		return true
+	} // internal mapping tests construct a bare Receiver
+	select {
+	case r.slots <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (r *Receiver) release() {
+	if r.slots != nil {
+		<-r.slots
+	}
+}
+
+type logServer struct {
+	plogotlp.UnimplementedGRPCServer
+	recv *Receiver
+}
+
+func (s *logServer) Export(ctx context.Context, req plogotlp.ExportRequest) (plogotlp.ExportResponse, error) {
+	if !s.recv.acquire() {
+		return plogotlp.NewExportResponse(), status.Error(codes.ResourceExhausted, "ingest busy; retry")
+	}
+	defer s.recv.release()
+	if err := s.recv.ingestLogs(ctx, req.Logs()); err != nil {
+		return plogotlp.NewExportResponse(), status.Error(codes.Internal, err.Error())
+	}
+	return plogotlp.NewExportResponse(), nil
+}
+
 type exportServer struct {
 	ptraceotlp.UnimplementedGRPCServer
 	recv *Receiver
 }
 
 func (s *exportServer) Export(ctx context.Context, req ptraceotlp.ExportRequest) (ptraceotlp.ExportResponse, error) {
+	if !s.recv.acquire() {
+		return ptraceotlp.NewExportResponse(), status.Error(codes.ResourceExhausted, "ingest busy; retry")
+	}
+	defer s.recv.release()
 	if err := s.recv.ingest(ctx, req.Traces()); err != nil {
 		return ptraceotlp.NewExportResponse(), status.Error(codes.Internal, err.Error())
 	}
@@ -193,6 +243,10 @@ type metricServer struct {
 }
 
 func (s *metricServer) Export(ctx context.Context, req pmetricotlp.ExportRequest) (pmetricotlp.ExportResponse, error) {
+	if !s.recv.acquire() {
+		return pmetricotlp.NewExportResponse(), status.Error(codes.ResourceExhausted, "ingest busy; retry")
+	}
+	defer s.recv.release()
 	if err := s.recv.ingestMetrics(ctx, req.Metrics()); err != nil {
 		return pmetricotlp.NewExportResponse(), status.Error(codes.Internal, err.Error())
 	}
@@ -203,7 +257,32 @@ func (r *Receiver) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/traces", r.handleTraces)
 	mux.HandleFunc("POST /v1/metrics", r.handleMetrics)
+	mux.HandleFunc("POST /v1/logs", r.handleLogs)
+	mux.HandleFunc("POST /api/v1/events", r.handleEvent)
 	return mux
+}
+
+func (r *Receiver) handleLogs(w http.ResponseWriter, req *http.Request) {
+	if !r.acquire() {
+		w.Header().Set("Retry-After", "1")
+		http.Error(w, "ingest busy; retry", http.StatusServiceUnavailable)
+		return
+	}
+	defer r.release()
+	raw, contentType, ok := readExport(w, req)
+	if !ok {
+		return
+	}
+	exportReq := plogotlp.NewExportRequest()
+	if !unmarshalExport(w, contentType, raw, exportReq.UnmarshalProto, exportReq.UnmarshalJSON) {
+		return
+	}
+	if err := r.ingestLogs(req.Context(), exportReq.Logs()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	resp := plogotlp.NewExportResponse()
+	writeExport(w, contentType, resp.MarshalProto, resp.MarshalJSON)
 }
 
 // maxHTTPBody matches the grpc receiver's MaxRecvMsgSize: an unbounded read
@@ -212,6 +291,12 @@ func (r *Receiver) handler() http.Handler {
 const maxHTTPBody = 64 << 20
 
 func (r *Receiver) handleTraces(w http.ResponseWriter, req *http.Request) {
+	if !r.acquire() {
+		w.Header().Set("Retry-After", "1")
+		http.Error(w, "ingest busy; retry", http.StatusServiceUnavailable)
+		return
+	}
+	defer r.release()
 	raw, contentType, ok := readExport(w, req)
 	if !ok {
 		return
@@ -229,6 +314,12 @@ func (r *Receiver) handleTraces(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Receiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
+	if !r.acquire() {
+		w.Header().Set("Retry-After", "1")
+		http.Error(w, "ingest busy; retry", http.StatusServiceUnavailable)
+		return
+	}
+	defer r.release()
 	raw, contentType, ok := readExport(w, req)
 	if !ok {
 		return

@@ -95,7 +95,7 @@ func runIDForFile(path string) string {
 // process maps one raw line into a batch delta and an optional run label.
 func (m *mapper) process(raw []byte) (store.Batch, string) {
 	m.lineNo++
-	b := store.Batch{Source: "claude"}
+	b := store.Batch{Source: "claude", DropContent: !m.capture}
 	var ln line
 	if err := json.Unmarshal(raw, &ln); err != nil {
 		b.Findings = append(b.Findings, m.parseError(err, raw))
@@ -108,8 +108,14 @@ func (m *mapper) process(raw []byte) (store.Batch, string) {
 	}
 	switch ln.Type {
 	case "summary":
+		if !m.capture {
+			return b, ""
+		}
 		return b, ln.Summary
 	case "ai-title":
+		if !m.capture {
+			return b, ""
+		}
 		return b, ln.AITitle
 	case "user":
 		if err := m.userLine(&b, ln); err != nil {

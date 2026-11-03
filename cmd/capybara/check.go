@@ -36,17 +36,24 @@ func checkCmd(ctx context.Context, dbPath string, args []string, out io.Writer) 
 	if err != nil {
 		return err
 	}
-	return printCheck(out, len(golden.Tools), export.Check(golden, fx))
+	if len(golden.Tools) == 0 && len(golden.Spans) == 0 && golden.Status == "" {
+		return errors.New("empty golden: no tool calls or span outcomes to check")
+	}
+	return printCheck(out, len(golden.Spans), len(golden.Tools), export.Check(golden, fx))
 }
 
 // printCheck reports every divergence and stays silent on a clean run.
-func printCheck(out io.Writer, checked int, divs []export.Divergence) error {
+func printCheck(out io.Writer, spans, tools int, divs []export.Divergence) error {
 	if len(divs) == 0 {
 		return nil
 	}
 	w := &errWriter{w: out}
 	for _, d := range divs {
-		w.printf("tool %-12s %s\n", d.Tool, d.Reason)
+		if d.Span != "" {
+			w.printf("span %-12s %s\n", d.Span, d.Reason)
+		} else {
+			w.printf("tool %-12s %s\n", d.Tool, d.Reason)
+		}
 		if d.Golden != "" {
 			w.printf("  golden  %s\n", truncate(oneLine(d.Golden), 60))
 		}
@@ -57,7 +64,8 @@ func printCheck(out io.Writer, checked int, divs []export.Divergence) error {
 			w.printf("  drift   %s\n", d.Detail)
 		}
 	}
-	w.printf("%s checked, %s\n", plural(checked, "call"), plural(len(divs), "divergence"))
+	w.printf("%s and %s checked, %s\n",
+		plural(spans, "span"), plural(tools, "call"), plural(len(divs), "divergence"))
 	if w.err != nil {
 		return w.err
 	}

@@ -280,7 +280,7 @@ func TestNoContentDropsEvents(t *testing.T) {
 	ev := span.Events().AppendEmpty()
 	ev.SetName("gen_ai.content.prompt")
 	ev.Attributes().PutStr("gen_ai.prompt", "secret")
-	if b := ToBatch(td, false); len(b.Contents) != 0 {
-		t.Errorf("got %d contents with capture off, want 0", len(b.Contents))
+	if b := ToBatch(td, false); len(b.Contents) != 0 || !b.DropContent {
+		t.Errorf("batch with capture off = %+v, want no content and persistence redaction", b)
 	}
 }

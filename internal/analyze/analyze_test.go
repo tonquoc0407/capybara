@@ -84,6 +84,44 @@ func TestLearnsThenWidensSilently(t *testing.T) {
 	}
 }
 
+func TestReimportClearsDerivedFindingsAndTaints(t *testing.T) {
+	st := openTemp(t)
+	ctx := context.Background()
+	toolRun(t, st, "r1", "fetch", "", t0)
+	llm := store.Span{ID: "r1-llm", RunID: "r1", Kind: store.KindLLM, Name: "answer",
+		StartedAt: t0.Add(2 * time.Second), EndedAt: t0.Add(3 * time.Second), Status: "ok"}
+	if err := st.WriteBatch(ctx, store.Batch{Source: "test", Spans: []store.Span{llm},
+		Findings: []store.Finding{{RunID: "r1", Type: "parse_error", Severity: "warning", Detail: `{"line":1}`}}}); err != nil {
+		t.Fatal(err)
+	}
+	sweep(t, st)
+	if fs := runFindings(t, st, "r1"); !hasFinding(fs, "empty_payload") {
+		t.Fatalf("missing first empty payload finding: %+v", fs)
+	}
+	if edges, err := st.Taints(ctx, "r1"); err != nil || len(edges) == 0 {
+		t.Fatalf("missing first taint: %+v, %v", edges, err)
+	}
+
+	toolRun(t, st, "r1", "fetch", `{"price":42}`, t0)
+	sweep(t, st)
+	fs := runFindings(t, st, "r1")
+	if len(fs) != 1 || fs[0].Type != "parse_error" {
+		t.Fatalf("stale derived finding or lost import error: %+v", fs)
+	}
+	if edges, err := st.Taints(ctx, "r1"); err != nil || len(edges) != 0 {
+		t.Fatalf("stale taints: %+v, %v", edges, err)
+	}
+}
+
+func hasFinding(findings []store.Finding, typ string) bool {
+	for _, f := range findings {
+		if f.Type == typ {
+			return true
+		}
+	}
+	return false
+}
+
 func TestDriftOnMissingFieldAdoptsNewVersion(t *testing.T) {
 	st := openTemp(t)
 	toolRun(t, st, "r1", "fetch", `{"price":42,"currency":"USD"}`, t0)
@@ -244,6 +282,27 @@ func TestImprovisedWhenOutputMentionsFailedTool(t *testing.T) {
 	}
 	if !strings.Contains(fs[0].Detail, "search_db") || !strings.Contains(fs[0].Detail, `"cause":"error"`) {
 		t.Errorf("detail = %s", fs[0].Detail)
+	}
+}
+
+func TestReimportClearsRunFindingAfterToolRecovers(t *testing.T) {
+	st := openTemp(t)
+	ctx := context.Background()
+	failed := improviseRunBatch("r1", "", "The search_db results show the price is 42.", "error")
+	if err := st.WriteBatch(ctx, failed); err != nil {
+		t.Fatal(err)
+	}
+	sweep(t, st)
+	if fs := runFindings(t, st, "r1"); !hasFinding(fs, "improvised") {
+		t.Fatalf("missing initial finding: %+v", fs)
+	}
+	recovered := improviseRunBatch("r1", "", "The search_db results show the price is 42.", "ok")
+	if err := st.WriteBatch(ctx, recovered); err != nil {
+		t.Fatal(err)
+	}
+	sweep(t, st)
+	if fs := runFindings(t, st, "r1"); len(fs) != 0 {
+		t.Fatalf("stale run finding after recovery: %+v", fs)
 	}
 }
 

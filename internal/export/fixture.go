@@ -24,7 +24,17 @@ type Fixture struct {
 	Run    string        `json:"run"`
 	Span   string        `json:"span,omitempty"`
 	Source string        `json:"source"`
+	Status string        `json:"status,omitempty"`
+	Spans  []SpanFixture `json:"spans,omitempty"`
 	Tools  []ToolFixture `json:"tools"`
+}
+
+// SpanFixture lets CI assert the outcome of agent and model steps even when
+// no tool output was captured. IDs are intentionally excluded across runs.
+type SpanFixture struct {
+	Kind   store.Kind `json:"kind"`
+	Name   string     `json:"name"`
+	Status string     `json:"status"`
 }
 
 // ToolFixture carries the fields the replay runner needs to serve a tool
@@ -93,8 +103,14 @@ func buildFixture(ctx context.Context, st *store.Store, runID, spanID string) (F
 			bySpan[f.SpanID] = append(bySpan[f.SpanID], f)
 		}
 	}
-	fx := Fixture{Run: runID, Span: spanID, Source: runSource(ctx, st, runID)}
+	source, status := runInfo(ctx, st, runID)
+	fx := Fixture{Run: runID, Span: spanID, Source: source, Status: status}
 	for _, sp := range spans {
+		if spanID == "" || sp.ID == spanID {
+			fx.Spans = append(fx.Spans, SpanFixture{
+				Kind: sp.Kind, Name: sp.Name, Status: sp.Status,
+			})
+		}
 		if sp.Kind != store.KindTool || sp.EndedAt.IsZero() {
 			continue
 		}
@@ -147,8 +163,10 @@ func effectiveSchema(ctx context.Context, st *store.Store, sp store.Span, tool, 
 	if raw, ok := sp.Attrs.Raw["capybara.schema"].(string); ok && raw != "" {
 		return json.RawMessage(raw)
 	}
-	if ts, err := st.LatestToolSchema(ctx, tool); err == nil && ts != nil {
-		return json.RawMessage(ts.Schema)
+	if run, err := st.GetRun(ctx, sp.RunID); err == nil {
+		if ts, err := st.LatestProjectToolSchema(ctx, run.Project, tool); err == nil && ts != nil {
+			return json.RawMessage(ts.Schema)
+		}
 	}
 	return analyze.InferSchema(output)
 }
@@ -175,17 +193,12 @@ func findingFixture(f store.Finding) (FindingFixture, bool) {
 	return FindingFixture{}, false
 }
 
-func runSource(ctx context.Context, st *store.Store, runID string) string {
-	runs, err := st.ListRuns(ctx)
+func runInfo(ctx context.Context, st *store.Store, runID string) (string, string) {
+	run, err := st.GetRun(ctx, runID)
 	if err != nil {
-		return ""
+		return "", ""
 	}
-	for _, r := range runs {
-		if r.ID == runID {
-			return r.Source
-		}
-	}
-	return ""
+	return run.Source, run.Status
 }
 
 // WriteGolden snapshots a known-good run as a CI fixture and returns its path.

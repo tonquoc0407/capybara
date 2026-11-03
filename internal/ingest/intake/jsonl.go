@@ -39,7 +39,7 @@ type spanLine struct {
 func ImportJSONL(ctx context.Context, st *store.Store, r io.Reader, captureContent bool) error {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
-	batch := store.Batch{Source: "import"}
+	batch := store.Batch{Source: "import", DropContent: !captureContent}
 	for n := 1; sc.Scan(); n++ {
 		raw := bytes.TrimSpace(sc.Bytes())
 		if len(raw) == 0 {

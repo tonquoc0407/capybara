@@ -35,6 +35,11 @@ type Attrs struct {
 // Run is one row of the runs table plus its findings count.
 type Run struct {
 	ID          string
+	Project     string
+	Environment string
+	Release     string
+	SessionID   string
+	UserID      string
 	Source      string
 	StartedAt   time.Time
 	EndedAt     time.Time
@@ -48,8 +53,41 @@ type Run struct {
 	Findings    int64
 }
 
+// RunContext contains optional grouping metadata observed on a trace.
+type RunContext struct {
+	Project, Environment, Release, SessionID, UserID string
+}
+
+// TraceLog is an OTLP log linked to a trace; SpanID may name a span that has
+// not arrived yet. Body is empty when content capture is disabled.
+type TraceLog struct {
+	ID, RunID, SpanID, Severity, Body, AttrsJSON string
+	ObservedAt                                   time.Time
+}
+
+// CostProvenance describes whether a cost was provider reported or estimated.
+// PriceEffectiveAt is zero when the rate table does not publish an effective date.
+type CostProvenance struct {
+	SpanID           string     `json:"span_id"`
+	Kind             string     `json:"kind"`
+	PriceSource      string     `json:"price_source"`
+	PriceVersion     string     `json:"price_version"`
+	PriceEffectiveAt *time.Time `json:"price_effective_at,omitempty"`
+	CheckedAt        time.Time  `json:"checked_at"`
+	UsageSource      string     `json:"usage_source"`
+}
+
+type SpanEstimate struct {
+	CostUSD    float64
+	Provenance CostProvenance
+	// Revision guards automatic estimates against late changes to pricing inputs.
+	Revision int64
+}
+
 // Span is one row of the spans table.
 type Span struct {
+	// Revision is internal optimistic concurrency state, never imported/exported.
+	Revision  int64 `json:"-"`
 	ID        string
 	RunID     string
 	ParentID  string
@@ -91,6 +129,8 @@ type Finding struct {
 	Type     string
 	Severity string
 	Detail   string
+	// Origin separates imported evidence from findings that analysis may replace.
+	Origin string `json:"-"`
 }
 
 // Taint is one propagation edge: SpanID consumed content derived from

@@ -47,9 +47,15 @@ func (s *Store) pruneCandidates(ctx context.Context, opts PruneOptions) ([]strin
 	}
 	if opts.OlderThan > 0 {
 		cutoff := time.Now().UTC().Add(-opts.OlderThan).UnixNano()
-		conds = append(conds, "started_at < ?")
+		conds = append(conds, `COALESCE(started_at,
+			(SELECT MAX(observed_at) FROM trace_logs WHERE run_id = runs.id)) < ?`)
 		args = append(args, cutoff)
 	}
+	// Dataset snapshots and experiment results pin their source runs. Removing
+	// those runs would either break foreign keys or erase the evidence behind a
+	// quality decision.
+	conds = append(conds, `NOT EXISTS (SELECT 1 FROM dataset_items i WHERE i.source_run_id = runs.id)`,
+		`NOT EXISTS (SELECT 1 FROM experiment_results e WHERE e.run_id = runs.id)`)
 	query := "SELECT id FROM runs"
 	if len(conds) > 0 {
 		query += " WHERE " + strings.Join(conds, " AND ")
@@ -98,6 +104,8 @@ func (s *Store) deleteRuns(ctx context.Context, runIDs []string) error {
 		}
 		queries := []string{
 			fmt.Sprintf("DELETE FROM contents WHERE span_id IN (SELECT id FROM spans WHERE run_id IN (%s))", placeholders),
+			fmt.Sprintf("DELETE FROM trace_logs WHERE run_id IN (%s)", placeholders),
+			fmt.Sprintf("DELETE FROM scores WHERE run_id IN (%s)", placeholders),
 			fmt.Sprintf("DELETE FROM taints WHERE run_id IN (%s)", placeholders),
 			fmt.Sprintf("DELETE FROM findings WHERE run_id IN (%s)", placeholders),
 			fmt.Sprintf("DELETE FROM llm_cache WHERE run_id IN (%s)", placeholders),

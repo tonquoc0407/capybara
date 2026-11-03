@@ -20,18 +20,19 @@ func exportCmd(ctx context.Context, dbPath string, args []string, out io.Writer)
 	ts := fs.Bool("ts", false, "write a Node.js/TypeScript regression test")
 	curl := fs.Bool("curl", false, "emit a curl command to reproduce the LLM call")
 	har := fs.Bool("har", false, "export LLM calls as HTTP Archive (HAR)")
+	jsonl := fs.Bool("jsonl", false, "write generic span-per-line JSONL to stdout")
 	dir := fs.String("o", "", "output directory")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	modes := 0
-	for _, b := range []*bool{golden, html, ts, curl, har} {
+	for _, b := range []*bool{golden, html, ts, curl, har, jsonl} {
 		if *b {
 			modes++
 		}
 	}
 	if fs.NArg() != 1 || modes > 1 {
-		return errors.New("usage: capybara export [--golden | --html | --ts | --curl | --har] <run>")
+		return errors.New("usage: capybara export [--golden | --html | --ts | --curl | --har | --jsonl] <run>")
 	}
 	st, err := store.Open(dbPath)
 	if err != nil {
@@ -49,6 +50,9 @@ func exportCmd(ctx context.Context, dbPath string, args []string, out io.Writer)
 		}
 		_, err = fmt.Fprintln(out, cmdStr)
 		return err
+	}
+	if *jsonl {
+		return export.WriteSpanJSONL(ctx, st, run, out)
 	}
 	if *har {
 		path, err := export.WriteHAR(ctx, st, run, orDefault(*dir, "."))

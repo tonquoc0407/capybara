@@ -18,11 +18,12 @@ func replayCmd(ctx context.Context, dbPath string, capture bool, args []string, 
 	fs.SetOutput(io.Discard)
 	spanID := fs.String("span", "", "span whose recorded output to replace")
 	outputFile := fs.String("output", "", "file holding the replacement output")
+	allowLive := fs.Bool("allow-live", false, "allow model calls after an edited tool output")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() != 1 {
-		return errors.New("usage: capybara replay [-span id -output file] <run>")
+		return errors.New("usage: capybara replay [-span id -output file] [--allow-live] <run>")
 	}
 	override := ""
 	if *outputFile != "" {
@@ -48,6 +49,7 @@ func replayCmd(ctx context.Context, dbPath string, capture bool, args []string, 
 	if err != nil {
 		return err
 	}
+	m.AllowLive = *allowLive
 	// The entrypoint comes from whatever process recorded the run - an
 	// imported db from someone else names a binary this box did not choose,
 	// so name it before running it rather than executing it silently.

@@ -3,6 +3,7 @@ package analyze
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -220,6 +221,58 @@ func TestCachedUsagePricing(t *testing.T) {
 	// 0.001*1 + 0.002*5 + 0.1*1.25 + 1.0*0.1 = 0.236
 	if spans[0].CostUSD == nil || *spans[0].CostUSD < 0.2355 || *spans[0].CostUSD > 0.2365 {
 		t.Fatalf("cached cost = %v, want 0.236", spans[0].CostUSD)
+	}
+}
+
+func TestOTLPCachedUsagePricing(t *testing.T) {
+	p, err := loadPricing("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp := llmSpan("r1", 0, 0)
+	sp.Attrs.Model = "claude-sonnet-4-6"
+	sp.TokensIn = 100_000
+	sp.Attrs.Raw = map[string]any{
+		"gen_ai.usage.input_tokens":            float64(100_000),
+		"gen_ai.usage.cache_read.input_tokens": float64(80_000),
+	}
+	cost := p.spanCost(sp)
+	if cost == nil || *cost < 0.0839 || *cost > 0.0841 {
+		t.Fatalf("cached OTLP cost = %v, want $0.084", cost)
+	}
+	if got := newTokens(sp); got != 20_000 {
+		t.Fatalf("fresh tokens = %d, want 20,000", got)
+	}
+	sp.Attrs.Raw["gen_ai.usage.cache_read.input_tokens"] = float64(70_000)
+	sp.Attrs.Raw["gen_ai.usage.cache_creation.input_tokens"] = float64(10_000)
+	if cost := p.spanCost(sp); cost == nil || math.Abs(*cost-0.1185) > 0.00001 {
+		t.Fatalf("cache read/write cost = %v, want $0.1185", cost)
+	}
+	sp.Attrs.Raw["gen_ai.usage.cache_read.input_tokens"] = float64(120_000)
+	if cost := p.spanCost(sp); cost != nil {
+		t.Fatalf("contradictory cache usage priced as %v", *cost)
+	}
+	for _, invalid := range []any{"80000", float64(-1), float64(1.5), math.NaN()} {
+		sp.Attrs.Raw["gen_ai.usage.cache_read.input_tokens"] = invalid
+		if cost := p.spanCost(sp); cost != nil {
+			t.Errorf("invalid cache count %v priced as %v", invalid, *cost)
+		}
+		if got := newTokens(sp); got != 100_000 {
+			t.Errorf("invalid cache count %v changed fresh tokens to %d", invalid, got)
+		}
+	}
+}
+
+func TestIncompleteClaudeUsageIsUnpriced(t *testing.T) {
+	p, err := loadPricing("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sp := llmSpan("r1", 0, 0)
+	sp.Attrs.Model = "claude-haiku-4-5"
+	sp.Attrs.Raw = map[string]any{"usage": map[string]any{"input_tokens": 100}}
+	if cost := p.spanCost(sp); cost != nil {
+		t.Fatalf("incomplete Claude usage priced as %v", *cost)
 	}
 }
 

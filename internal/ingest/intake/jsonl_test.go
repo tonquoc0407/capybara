@@ -78,6 +78,22 @@ func TestImportJSONLWithoutContent(t *testing.T) {
 	}
 }
 
+func TestImportJSONLWithoutContentRedactsAttributes(t *testing.T) {
+	st := openTemp(t)
+	in := `{"run":"r1","span":"llm1","kind":"llm","name":"chat","status":"ok","attrs":{"gen_ai.input.messages":"DEMO_SECRET","gen_ai.usage.input_tokens":100},"contents":[{"role":"user","body":"DEMO_SECRET"}]}`
+	if err := ImportJSONL(context.Background(), st, strings.NewReader(in), false); err != nil {
+		t.Fatal(err)
+	}
+	spans, err := st.Spans(context.Background(), "r1")
+	if err != nil || len(spans) != 1 {
+		t.Fatalf("spans = %+v, %v", spans, err)
+	}
+	if spans[0].Attrs.Raw["gen_ai.input.messages"] != nil ||
+		spans[0].Attrs.Raw["gen_ai.usage.input_tokens"] != float64(100) {
+		t.Fatalf("raw attrs = %+v", spans[0].Attrs.Raw)
+	}
+}
+
 func TestImportJSONLReportsBadLine(t *testing.T) {
 	st := openTemp(t)
 	in := `{"run":"r1","span":"a","kind":"llm","name":"chat"}

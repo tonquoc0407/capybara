@@ -97,3 +97,47 @@ func fmtRunSpan(prefix string, i int, suffix string) string {
 	}
 	return prefix + "-" + string(rune('0'+i)) + "-" + suffix
 }
+
+func TestPruneKeepsQualityEvidenceAndDeletesLinkedLogs(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(filepath.Join(t.TempDir(), "quality-prune.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	for _, id := range []string{"pinned", "removable"} {
+		sp := Span{ID: id + "-span", RunID: id, Kind: KindAgent, Name: "answer",
+			StartedAt: time.Now(), EndedAt: time.Now(), Status: "ok"}
+		if err := st.WriteBatch(ctx, Batch{Source: "test", Spans: []Span{sp}, Contents: []Content{
+			{SpanID: sp.ID, Role: "user", Seq: 0, Body: "q", MediaType: "text/plain"},
+			{SpanID: sp.ID, Role: "assistant", Seq: 1, Body: "a", MediaType: "text/plain"},
+		}}); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.PutTraceLogs(ctx, "test", []TraceLog{{ID: id + "-log", RunID: id,
+			SpanID: sp.ID, Body: "log", AttrsJSON: `{}`}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	d, err := st.CreateDataset(ctx, "default", "cases")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddDatasetItem(ctx, d.ID, "pinned"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddScore(ctx, "removable", "", "quality", 0.5, "human", ""); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := st.Prune(ctx, PruneOptions{CleanOK: true})
+	if err != nil || deleted != 1 {
+		t.Fatalf("prune: %d, %v", deleted, err)
+	}
+	if !st.RunBelongsToProject(ctx, "pinned", "default") || st.RunBelongsToProject(ctx, "removable", "default") {
+		t.Fatal("wrong runs retained")
+	}
+	logs, err := st.TraceLogs(ctx, "removable")
+	if err != nil || len(logs) != 0 {
+		t.Fatalf("logs retained: %+v, %v", logs, err)
+	}
+}

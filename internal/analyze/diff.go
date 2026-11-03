@@ -47,6 +47,14 @@ func (s DiffStep) DLatency() time.Duration {
 	return spanLatency(s.B) - spanLatency(s.A)
 }
 
+// StatusChange describes a matched step's outcome change.
+func (s DiffStep) StatusChange() string {
+	if s.A == nil || s.B == nil || s.A.Status == s.B.Status {
+		return ""
+	}
+	return s.A.Status + " -> " + s.B.Status
+}
+
 // DiffRuns aligns two runs and marks where they diverge.
 func DiffRuns(ctx context.Context, st *store.Store, runA, runB string) (*RunDiff, error) {
 	stepsA, contentsA, err := runSteps(ctx, st, runA)

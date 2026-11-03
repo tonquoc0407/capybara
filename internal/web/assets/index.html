@@ -8,24 +8,21 @@
 </head>
 <body>
 <header>
-  <span class="brand">capybara</span>
-  <span id="run-head"></span>
+  <a class="brand" href="?view=overview">capybara</a>
+  <label>Project <input id="project" type="text" value="default" list="projects" aria-label="Project"></label><datalist id="projects"></datalist>
+  <nav aria-label="Main navigation">
+    <a href="?view=overview" data-view="overview">Overview</a>
+    <a href="?view=explore" data-view="explore">Explore</a>
+    <a href="?view=trace" data-view="trace">Trace</a>
+    <a href="?view=datasets" data-view="datasets">Datasets</a>
+    <a href="?view=prompts" data-view="prompts">Prompts</a>
+    <a href="?view=usage" data-view="usage">Usage</a>
+    <a href="?view=settings" data-view="settings">Settings</a>
+  </nav>
+  <button id="refresh" type="button">Refresh</button>
 </header>
-<main>
-  <section class="frame pane">
-    <h2>runs</h2>
-    <ul id="run-list"></ul>
-  </section>
-  <section class="frame pane">
-    <h2 id="tree-title">trace</h2>
-    <div id="span-tree"></div>
-  </section>
-  <section class="frame pane">
-    <h2>detail</h2>
-    <div id="span-detail"></div>
-  </section>
-</main>
-<footer id="status"></footer>
+<main id="workspace" tabindex="-1"></main>
+<footer id="status" role="status" aria-live="polite"></footer>
 <script>window.CAPYBARA = {{.Data}};</script>
 <script>{{.JS}}</script>
 </body>

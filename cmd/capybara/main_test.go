@@ -312,6 +312,47 @@ func TestCheckSilentWhenRunMatchesGolden(t *testing.T) {
 	}
 }
 
+func TestExternalIncidentTraceSurfacesFailureAndGoldenDivergence(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "incident.db")
+	fixture := filepath.Join("..", "..", "demo", "external", "agents_issue_4070", "trace.jsonl")
+	if err := run(context.Background(), []string{"-db", db, "import", fixture}, io.Discard); err != nil {
+		t.Fatalf("import public incident: %v", err)
+	}
+	st, err := store.Open(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs, err := st.ListRuns(context.Background())
+	_ = st.Close()
+	if err != nil || len(runs) != 3 {
+		t.Fatalf("runs = %+v, %v", runs, err)
+	}
+	for _, r := range runs {
+		if r.Status != "error" {
+			t.Errorf("run %s status = %q, want error", r.ID, r.Status)
+		}
+	}
+	regular := "trace_76d3b19e9368495f891bde852859ff26"
+	streamed := "trace_451bafc91f4e41b48de3c6b00cb62a93"
+	golden := goldenOf(t, db, dir, regular)
+	var out strings.Builder
+	if err := run(context.Background(), []string{"-db", db, "check", golden, streamed}, &out); !errors.Is(err, errDiverged) {
+		t.Fatalf("check = %v, output = %s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "quote_agent") ||
+		!strings.Contains(out.String(), "status changed") {
+		t.Errorf("check missed agent status change: %s", out.String())
+	}
+	out.Reset()
+	if err := run(context.Background(), []string{"-db", db, "diff", regular, streamed}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "status ok -> error") {
+		t.Errorf("diff missed status change: %s", out.String())
+	}
+}
+
 func TestWatchRequiresClaudeSource(t *testing.T) {
 	for _, args := range [][]string{{"watch"}, {"watch", "cursor"}} {
 		err := run(context.Background(), args, io.Discard)
