@@ -1,5 +1,5 @@
 // Span wrapper for un-instrumented agent code.
-import { trace as traceApi, type Span } from '@opentelemetry/api';
+import { trace as traceApi, SpanStatusCode, type Span } from '@opentelemetry/api';
 import { schemaFor, SCHEMA_ATTR } from './schema.js';
 
 const OPERATION: Record<string, string> = { tool: 'execute_tool', agent: 'invoke_agent', llm: 'chat' };
@@ -31,53 +31,62 @@ export function trace<A extends unknown[], R>(fn: (...a: A) => R, opts: TraceOpt
   return function (this: unknown, ...args: A): R {
     const tracer = traceApi.getTracer('capybara');
     return tracer.startActiveSpan(spanName, (span): R => {
-      span.setAttribute('gen_ai.operation.name', operation);
-      if (toolName !== undefined) {
-        span.setAttribute('gen_ai.tool.name', toolName);
-        const argStr = dump(args);
-        span.setAttribute('gen_ai.tool.call.arguments', argStr);
-        if (opts.target !== undefined) {
-          span.setAttribute('capybara.target', opts.target);
-        }
-        const declared = schemaFor(toolName);
-        if (declared !== undefined) {
-          span.setAttribute(SCHEMA_ATTR, declared);
-        }
-        if (toolServer !== undefined) {
-          const res = toolServer(toolName, argStr);
-          recordResult(span, toolName, res);
-          span.end();
-          const isAsync = fn.constructor?.name === 'AsyncFunction';
-          return (isAsync ? Promise.resolve(res) : res) as R;
-        }
-      }
-      let result: R;
       try {
-        result = fn.apply(this, args);
+        span.setAttribute('gen_ai.operation.name', operation);
+        let result: unknown;
+        if (toolName !== undefined) {
+          span.setAttribute('gen_ai.tool.name', toolName);
+          const argStr = dump(args);
+          span.setAttribute('gen_ai.tool.call.arguments', argStr);
+          if (opts.target !== undefined) {
+            span.setAttribute('capybara.target', opts.target);
+          }
+          const declared = schemaFor(toolName);
+          if (declared !== undefined) {
+            span.setAttribute(SCHEMA_ATTR, declared);
+          }
+          result = toolServer !== undefined ? toolServer(toolName, argStr) : fn.apply(this, args);
+          if (toolServer !== undefined && fn.constructor?.name === 'AsyncFunction') {
+            result = Promise.resolve(result);
+          }
+        } else {
+          result = fn.apply(this, args);
+        }
+        if (isPromise(result)) {
+          return result.then(
+            (value) => {
+              try {
+                recordResult(span, toolName, value);
+                return value;
+              } catch (err) {
+                recordFailure(span, err);
+                throw err;
+              } finally {
+                span.end();
+              }
+            },
+            (err: unknown) => {
+              recordFailure(span, err);
+              span.end();
+              throw err;
+            },
+          ) as R;
+        }
+        recordResult(span, toolName, result);
+        span.end();
+        return result as R;
       } catch (err) {
-        span.recordException(err as Error);
+        recordFailure(span, err);
         span.end();
         throw err;
       }
-      if (isPromise(result)) {
-        return result.then(
-          (value) => {
-            recordResult(span, toolName, value);
-            span.end();
-            return value;
-          },
-          (err: unknown) => {
-            span.recordException(err as Error);
-            span.end();
-            throw err;
-          },
-        ) as R;
-      }
-      recordResult(span, toolName, result);
-      span.end();
-      return result;
     });
   };
+}
+
+function recordFailure(span: Span, err: unknown): void {
+  span.recordException(err instanceof Error ? err : String(err));
+  span.setStatus({ code: SpanStatusCode.ERROR, message: err instanceof Error ? err.message : String(err) });
 }
 
 function recordResult(span: Span, toolName: string | undefined, result: unknown): void {
