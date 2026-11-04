@@ -33,7 +33,8 @@ jobs:
       - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
-          args: release --clean
+          # A release tag needs a reviewed note file with the same name.
+          args: release --clean --release-notes .github/release-notes/${{ github.ref_name }}.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Push access to the homebrew-tap repo. Absent until the tap is set up,
