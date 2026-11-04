@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <img src="demo/demo.gif" alt="capybara demo" width="720">
+  <img src="demo/local-api.gif" alt="local HTTP event arriving in the Connect screen, trace tree and cost view" width="720">
 </p>
 
 Capybara runs locally and stores traces in SQLite. Capture them with OTLP, HTTP JSON events, an SDK, a Claude Code session, or a file. Inspect failures in the TUI or read-only Web view; compare runs, export regression fixtures, and review cost provenance. The optional hub adds project tokens and a shared Web workspace.
@@ -25,6 +25,7 @@ Capybara runs locally and stores traces in SQLite. Capture them with OTLP, HTTP 
 ## Contents
 
 - [Install](#install)
+- [Showcase and interfaces](#showcase-and-interfaces)
 - [Getting a trace in](#getting-a-trace-in)
 - [Reading a trace](#reading-a-trace)
 - [What it looks for](#what-it-looks-for)
@@ -40,7 +41,58 @@ brew install tonquoc0407/tap/capybara
 
 Or `go install github.com/tonquoc0407/capybara/cmd/capybara@latest`, or grab a binary from the [releases page](https://github.com/tonquoc0407/capybara/releases). One file, no CGo, no runtime dependencies.
 
-This README describes `main`. The latest published release, `v0.6.0`, predates the local HTTP events, Connect menu and hub features below. To try those features before the next release, install the current source with `go install github.com/tonquoc0407/capybara/cmd/capybara@main`.
+This README describes `main`. Homebrew, `@latest` and release binaries use the latest published tag, which may lag the features below. To try the current source, use `go install github.com/tonquoc0407/capybara/cmd/capybara@main`.
+
+## Showcase and interfaces
+
+The recording above sends an HTTP event to a running capybara, then opens its trace and estimated cost in the TUI. These are the other recordings already in the repository:
+
+**Instrumented LangGraph agent.** A tool raises, the agent continues, and the TUI shows the failed tool and the answer built without its result. The model replies come from a local stub; the framework and tracing are real. [Runnable source](demo/frameworks/).
+
+<p align="center">
+  <img src="demo/frameworks.gif" alt="LangGraph failure arriving live in the TUI" width="720">
+</p>
+
+**Public tracing regression.** A pinned [OpenAI Agents SDK issue #4070 reproducer](demo/external/agents_issue_4070/) is imported, compared across runs, and checked against a golden fixture.
+
+<p align="center">
+  <img src="demo/external/agents_issue_4070/showcase.gif" alt="import, status diff and golden check for a public Agents SDK issue" width="720">
+</p>
+
+**Resource monitor.** CPU and memory samples remain visible when a step dies before its span completes.
+
+<p align="center">
+  <img src="demo/monitor.gif" alt="TUI resource monitor while a pipeline stops mid-step" width="720">
+</p>
+
+**Third-party LangChain agent.** Tracing is added around a chess agent; capybara reads its Gemini usage and estimates cost. [Runnable script](demo/knightvision_run.py).
+
+<p align="center">
+  <img src="demo/knightvision.gif" alt="LangChain chess agent trace and estimated token cost" width="720">
+</p>
+
+**SDK error span.** A failed Node SDK call is recorded with error status. [SDK example](sdk-js/examples/error-span.mjs).
+
+<p align="center">
+  <img src="demo/sdk-error.gif" alt="Node SDK error span recorded in capybara" width="720">
+</p>
+
+The [earlier TUI recording](demo/demo.gif) is also available.
+
+| Interface | What you can do |
+| --- | --- |
+| TUI | Connect an app with `i`, search runs and spans, inspect findings and content, compare runs, view context, cost and resources, and export or replay a trace. |
+| Local Web | Browse Overview, Explore, Trace, Datasets, Prompts and Usage from the same database. This view is read-only. |
+| Hub Web | Use project tokens to share the workspace; editors can manage dataset cases, scores, experiments and prompt versions. |
+| CLI and CI | Inspect incidents, compare runs, run scenarios and experiments, and gate regressions with findings or golden fixtures. |
+
+The current hub Web overview below uses a labelled synthetic run. It was captured by the existing [browser check](scripts/browser_check.mjs), which also checks editing, trace evidence and mobile layout. [See the mobile Trace view](demo/web-trace-mobile.png).
+
+<p align="center">
+  <img src="demo/web-overview.png" alt="hub Web overview with run, error, latency, cost and incident panels" width="960">
+</p>
+
+To open the local read-only Web UI on the same sample, run `capybara sample`, then `capybara serve`, and visit `http://127.0.0.1:7654`.
 
 ## Getting a trace in
 
@@ -70,21 +122,7 @@ Four attribute conventions are read — OpenTelemetry's own `gen_ai.*`, OpenInfe
 
 If LiteLLM is already your gateway, use the [LiteLLM OTLP setup](docs/integrations/litellm.md) to feed its traces into capybara without placing capybara in the request path.
 
-[`demo/frameworks/`](demo/frameworks) has two runnable agents that end in the same failure — a LangGraph one traced by OpenLLMetry and a plain OpenAI tool loop traced by OpenInference. Both point at a local stub of the OpenAI API, so they need no key.
-
-Below, the LangGraph one runs while the TUI is open: the quote tool raises, LangGraph hands the failure back to the model, and the model answers with a price anyway.
-
-<p align="center">
-  <img src="demo/frameworks.gif" alt="a real LangGraph agent traced into capybara" width="720">
-</p>
-
-The next recording uses a separate LangChain chess agent. The demo script adds tracing outside that agent and shows token costs estimated from Gemini's reported usage.
-
-<p align="center">
-  <img src="demo/knightvision.gif" alt="a third-party LangChain agent traced without modification" width="720">
-</p>
-
-[OpenAI Agents SDK issue #4070](demo/external/agents_issue_4070/) has a pinned reproducer, three captured runs, and a GIF of capybara's status diff and golden check.
+[`demo/frameworks/`](demo/frameworks) has two runnable agents that end in the same failure — a LangGraph one traced by OpenLLMetry and a plain OpenAI tool loop traced by OpenInference. Both use a local model stub and need no API key. Their TUI recording, a separate LangChain chess trace, and the public Agents SDK regression are in the [showcase](#showcase-and-interfaces).
 
 ### A session file
 
@@ -157,13 +195,7 @@ The TUI uses three panes on wide terminals, two on medium ones, and one on narro
 
 The waterfall sorts spans by cost, so the turn that spent the money is the first line rather than something to scroll for. The context view shows what filled each turn's window — system text, tool output, history — and marks the turns where it dropped, which is where a compaction ate something.
 
-The monitor graphs process CPU and memory, plus GPU where `nvidia-smi` finds a card, against the node that was running. It reads the sampler rather than the span tree, so it draws while a step is still going — a span only arrives once it ends, which is too late to watch. The strip under the graphs names the nodes in order, so a spike points at a step instead of a moment.
-
-<p align="center">
-  <img src="demo/monitor.gif" alt="the monitor drawing a pipeline that is killed mid-step" width="720">
-</p>
-
-The recording above ends on a kill: the graphs keep the readings, the tree never receives a span for the node that died, and the run picks up an `orphaned_span` finding naming where it stopped responding.
+The monitor graphs process CPU and memory, plus GPU where `nvidia-smi` finds a card, against the node that was running. It reads the sampler rather than the span tree, so it draws while a step is still going — a span only arrives once it ends, which is too late to watch. The strip under the graphs names the nodes in order, so a spike points at a step instead of a moment. In the [monitor recording](demo/monitor.gif), the graphs keep their readings after a kill, and the run picks up an `orphaned_span` finding naming where it stopped responding.
 
 ## What it looks for
 
@@ -192,7 +224,7 @@ Cover output that won't parse, or that arrived empty — and only for tools whos
 
 ### `malformed_arguments`
 
-Marks a tool call whose input arguments could not be parsed as valid JSON — unclosed braces, bad escapes, or markdown backticks wrapping the payload. Only inputs opening with a JSON delimiter (`{`, `[`, or markdown block) are checked, so a tool that takes a plain shell command is never flagged.
+Marks a tool call whose input arguments could not be parsed as valid JSON — unclosed braces, bad escapes, or markdown backticks wrapping the payload. It checks inputs marked as JSON and plain text that starts with a JSON-looking object or array. Plain shell commands and Python dictionary representations are left alone.
 
 ### `rate_limited`
 
