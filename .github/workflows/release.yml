@@ -24,6 +24,12 @@ jobs:
           go-version-file: go.mod
       # cosign-installer publishes no moving major tag, only exact versions.
       - uses: sigstore/cosign-installer@v4.1.2
+      # SDK tags share this repository. Keep the CLI changelog anchored to the
+      # previous CLI release instead of the most recent SDK tag.
+      - name: Select previous CLI release
+        run: |
+          previous=$(git describe --tags --match 'v[0-9]*' --abbrev=0 HEAD^)
+          echo "GORELEASER_PREVIOUS_TAG=$previous" >> "$GITHUB_ENV"
       - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
