@@ -25,7 +25,7 @@ Capybara runs locally and stores traces in SQLite. Capture them with OTLP, HTTP 
 ## Contents
 
 - [Install](#install)
-- [Showcase and interfaces](#showcase-and-interfaces)
+- [Product tour](#product-tour)
 - [Getting a trace in](#getting-a-trace-in)
 - [Reading a trace](#reading-a-trace)
 - [What it looks for](#what-it-looks-for)
@@ -43,41 +43,7 @@ Or `go install github.com/tonquoc0407/capybara/cmd/capybara@latest`, or grab a b
 
 This README describes `main`. Homebrew, `@latest` and release binaries use the latest published tag, which may lag the features below. To try the current source, use `go install github.com/tonquoc0407/capybara/cmd/capybara@main`.
 
-## Showcase and interfaces
-
-The recording above sends an HTTP event to a running capybara, then opens its trace and estimated cost in the TUI. These are the other recordings already in the repository:
-
-**Instrumented LangGraph agent.** A tool raises, the agent continues, and the TUI shows the failed tool and the answer built without its result. The model replies come from a local stub; the framework and tracing are real. [Runnable source](demo/frameworks/).
-
-<p align="center">
-  <img src="demo/frameworks.gif" alt="LangGraph failure arriving live in the TUI" width="720">
-</p>
-
-**Public tracing regression.** A pinned [OpenAI Agents SDK issue #4070 reproducer](demo/external/agents_issue_4070/) is imported, compared across runs, and checked against a golden fixture.
-
-<p align="center">
-  <img src="demo/external/agents_issue_4070/showcase.gif" alt="import, status diff and golden check for a public Agents SDK issue" width="720">
-</p>
-
-**Resource monitor.** CPU and memory samples remain visible when a step dies before its span completes.
-
-<p align="center">
-  <img src="demo/monitor.gif" alt="TUI resource monitor while a pipeline stops mid-step" width="720">
-</p>
-
-**Third-party LangChain agent.** Tracing is added around a chess agent; capybara reads its Gemini usage and estimates cost. [Runnable script](demo/knightvision_run.py).
-
-<p align="center">
-  <img src="demo/knightvision.gif" alt="LangChain chess agent trace and estimated token cost" width="720">
-</p>
-
-**SDK error span.** A failed Node SDK call is recorded with error status. [SDK example](sdk-js/examples/error-span.mjs).
-
-<p align="center">
-  <img src="demo/sdk-error.gif" alt="Node SDK error span recorded in capybara" width="720">
-</p>
-
-The [earlier TUI recording](demo/demo.gif) is also available.
+## Product tour
 
 | Interface | What you can do |
 | --- | --- |
@@ -86,13 +52,46 @@ The [earlier TUI recording](demo/demo.gif) is also available.
 | Hub Web | Use project tokens to share the workspace; editors can manage dataset cases, scores, experiments and prompt versions. |
 | CLI and CI | Inspect incidents, compare runs, run scenarios and experiments, and gate regressions with findings or golden fixtures. |
 
-The current hub Web overview below uses a labelled synthetic run. It was captured by the existing [browser check](scripts/browser_check.mjs), which also checks editing, trace evidence and mobile layout. [See the mobile Trace view](demo/web-trace-mobile.png).
+### TUI
+
+The opening recording sends a local HTTP event to capybara, then inspects its trace, findings and estimated cost. The next one follows a LangGraph agent whose tool fails and whose model answers anyway. The model replies come from a local stub; the framework and tracing are real. [Run the agent](demo/frameworks/).
+
+<p align="center">
+  <img src="demo/frameworks.gif" alt="LangGraph failure arriving live in the TUI" width="720">
+</p>
+
+The resource monitor keeps CPU and memory samples when a step dies before its span completes.
+
+<p align="center">
+  <img src="demo/monitor.gif" alt="TUI resource monitor while a pipeline stops mid-step" width="720">
+</p>
+
+A separate [LangChain chess agent](demo/knightvision_run.py) shows a trace from another codebase and cost estimated from Gemini usage.
+
+<p align="center">
+  <img src="demo/knightvision.gif" alt="LangChain chess agent trace and estimated token cost" width="720">
+</p>
+
+### Web
+
+This hub overview uses a labelled synthetic run. The existing [browser check](scripts/browser_check.mjs) captures it and checks editing, trace evidence and mobile layout. [See the mobile Trace view](demo/web-trace-mobile.png).
 
 <p align="center">
   <img src="demo/web-overview.png" alt="hub Web overview with run, error, latency, cost and incident panels" width="960">
 </p>
 
 To open the local read-only Web UI on the same sample, run `capybara sample`, then `capybara serve`, and visit `http://127.0.0.1:7654`.
+
+### Reproducible checks
+
+These short command recordings show the evidence behind two specific behaviors. Their source files are included so the checks can be rerun.
+
+| Case | What it checks | Recording and source |
+| --- | --- | --- |
+| OpenAI Agents SDK issue #4070 | Import a pinned public trace, compare the first status divergence, and run a golden check. | [Recording](demo/external/agents_issue_4070/showcase.gif) · [Reproducer](demo/external/agents_issue_4070/) |
+| Node SDK error span | Record a failed call with error status through the Node SDK. | [Recording](demo/sdk-error.gif) · [Example](sdk-js/examples/error-span.mjs) |
+
+The [earlier TUI recording](demo/demo.gif) is also available.
 
 ## Getting a trace in
 
@@ -122,7 +121,7 @@ Four attribute conventions are read — OpenTelemetry's own `gen_ai.*`, OpenInfe
 
 If LiteLLM is already your gateway, use the [LiteLLM OTLP setup](docs/integrations/litellm.md) to feed its traces into capybara without placing capybara in the request path.
 
-[`demo/frameworks/`](demo/frameworks) has two runnable agents that end in the same failure — a LangGraph one traced by OpenLLMetry and a plain OpenAI tool loop traced by OpenInference. Both use a local model stub and need no API key. Their TUI recording, a separate LangChain chess trace, and the public Agents SDK regression are in the [showcase](#showcase-and-interfaces).
+[`demo/frameworks/`](demo/frameworks) has two runnable agents that end in the same failure — a LangGraph one traced by OpenLLMetry and a plain OpenAI tool loop traced by OpenInference. Both use a local model stub and need no API key. The TUI recordings and public Agents SDK regression are in the [product tour](#product-tour).
 
 ### A session file
 
