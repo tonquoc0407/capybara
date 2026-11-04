@@ -187,8 +187,10 @@ func (m appModel) pupuConnectView() string {
 		}
 	}
 	if m.width < 72 {
-		content := append(options, "")
-		content = append(content, right...)
+		content := append([]string{}, options...)
+		content = append(content, "", m.th.Accent.Render(status), m.th.Dim.Render(policy),
+			m.th.Text.Render(connectDescriptions[m.connectIndex]), "",
+			m.th.Dim.Render("Enter copies the full setup"))
 		if len(content) > areaH-3 {
 			content = content[:areaH-3]
 		}

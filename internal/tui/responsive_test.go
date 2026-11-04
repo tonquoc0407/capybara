@@ -39,6 +39,12 @@ func TestPupuWorkspaceFitsTerminal(t *testing.T) {
 		if !strings.Contains(plain(view), "capybara") || !strings.Contains(plain(view), "CONNECT") && width >= 100 {
 			t.Fatalf("width %d missing navigation", width)
 		}
+		if width >= 100 && (!strings.Contains(plain(view), "ACTIVE RUN") || !strings.Contains(plain(view), "FINDINGS")) {
+			t.Fatalf("width %d missing workspace rail or status strip", width)
+		}
+		if got := lipgloss.Height(view); got > m.height {
+			t.Fatalf("width %d rendered %d rows into %d", width, got, m.height)
+		}
 		for _, line := range strings.Split(view, "\n") {
 			if got := lipgloss.Width(line); got > width {
 				t.Fatalf("width %d rendered line of %d cells", width, got)
@@ -46,7 +52,11 @@ func TestPupuWorkspaceFitsTerminal(t *testing.T) {
 		}
 		m.connectOpen = true
 		m.about.OTLP = "http://127.0.0.1:4318"
-		for _, line := range strings.Split(m.View(), "\n") {
+		connectView := m.View()
+		if got := lipgloss.Height(connectView); got > m.height {
+			t.Fatalf("connect width %d rendered %d rows into %d", width, got, m.height)
+		}
+		for _, line := range strings.Split(connectView, "\n") {
 			if got := lipgloss.Width(line); got > width {
 				t.Fatalf("connect width %d rendered line of %d cells", width, got)
 			}

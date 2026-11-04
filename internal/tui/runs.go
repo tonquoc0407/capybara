@@ -98,7 +98,7 @@ func runMeta(r store.Run) string {
 		parts = append(parts, humanDuration(d.Seconds()))
 	}
 	if r.CostUSD != nil {
-		parts = append(parts, fmt.Sprintf("$%.2f", *r.CostUSD))
+		parts = append(parts, fmt.Sprintf("$%.4g", *r.CostUSD))
 	}
 	// Last, because it is the first thing worth losing to truncation: two runs
 	// of the same agent almost always share a model.

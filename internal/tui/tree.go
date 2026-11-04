@@ -425,6 +425,16 @@ func (m *treeModel) renderRow(i int) string {
 		style = m.th.Match
 	case r.span.Status != "error" && !r.span.EndedAt.IsZero():
 		style = m.th.Text
+		if m.th.Name == "pupu" && len(m.findings[r.span.ID]) == 0 {
+			switch r.span.Kind {
+			case store.KindLLM:
+				style = m.th.KindLLM
+			case store.KindTool:
+				style = m.th.KindTool
+			case store.KindRetrieval:
+				style = m.th.KindRetrieval
+			}
+		}
 	}
 	return style.Render(plain)
 }

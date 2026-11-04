@@ -4,6 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 command -v vhs >/dev/null || { echo "Install VHS to record the demos" >&2; exit 1; }
+command -v ffmpeg >/dev/null || { echo "Install ffmpeg to update the README preview" >&2; exit 1; }
 command -v go >/dev/null || { echo "Install Go to build capybara for the demos" >&2; exit 1; }
 command -v node >/dev/null && command -v npm >/dev/null || { echo "Install Node.js and npm to record the SDK demos" >&2; exit 1; }
 [[ -x demo/frameworks/.venv/bin/python ]] || { echo "Set up demo/frameworks/.venv first" >&2; exit 1; }
@@ -18,3 +19,5 @@ for tape in \
   demo/sdk-error.tape; do
   vhs "$tape"
 done
+
+ffmpeg -hide_banner -loglevel error -y -i demo/pupu-tour.mp4 -frames:v 1 demo/pupu-workspace.png

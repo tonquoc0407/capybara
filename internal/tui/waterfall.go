@@ -169,6 +169,15 @@ func (m *waterfallModel) renderBar(sp store.Span, i int, maxMetric float64, name
 	if i == m.sel {
 		return m.th.Selected.Render(truncate(line, m.width))
 	}
+	if m.th.Name == "pupu" {
+		nameStyle := m.th.Dim
+		if sp.Status == "error" {
+			nameStyle = m.th.StatusErr
+		}
+		bar := m.th.KindLLM.Render(strings.Repeat("█", fill))
+		return nameStyle.Render(fmt.Sprintf("%-*s ", nameW, name)) + bar +
+			m.th.Text.Render(strings.Repeat(" ", barW-fill)+" "+value)
+	}
 	style := m.th.Text
 	if sp.Status == "error" {
 		style = m.th.StatusErr

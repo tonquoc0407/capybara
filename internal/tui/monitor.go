@@ -69,9 +69,18 @@ func (m monitorModel) renderSeries(s series, height int) string {
 	head := fmt.Sprintf("%-10s %s", s.title, s.format(s.last))
 	rows := brailleGraph(s.values, s.scale, max(1, m.width), height)
 	var b strings.Builder
-	b.WriteString(m.th.Accent.Render(head) + "\n")
+	graphStyle := m.th.Text
+	if m.th.Name == "pupu" {
+		switch s.title {
+		case "cpu", "gpu":
+			graphStyle = m.th.KindLLM
+		case "memory", "gpu mem":
+			graphStyle = m.th.KindTool
+		}
+	}
+	b.WriteString(graphStyle.Bold(true).Render(head) + "\n")
 	for _, r := range rows {
-		b.WriteString(m.th.Text.Render(r) + "\n")
+		b.WriteString(graphStyle.Render(r) + "\n")
 	}
 	return b.String()
 }

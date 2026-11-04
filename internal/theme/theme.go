@@ -13,6 +13,9 @@ type Theme struct {
 	TabActive     lipgloss.Style
 	TabIdle       lipgloss.Style
 	SelectedMeta  lipgloss.Style
+	KindLLM       lipgloss.Style
+	KindTool      lipgloss.Style
+	KindRetrieval lipgloss.Style
 	Header        lipgloss.Style
 	HeaderInfo    lipgloss.Style
 	Border        lipgloss.Style

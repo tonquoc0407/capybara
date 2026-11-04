@@ -697,6 +697,11 @@ const paneGap = 1
 
 func (m appModel) paneWidths() (runs, middle, detail int) {
 	avail := m.width - 2*paneGap
+	if m.th.Name == "pupu" {
+		runs = min(max(avail/4, 28), 34)
+		middle = (avail - runs) * 49 / 100
+		return runs, middle, avail - runs - middle
+	}
 	runs = min(max(avail/5, 18), 34)
 	middle = (avail - runs) * 52 / 100
 	return runs, middle, avail - runs - middle
@@ -740,6 +745,81 @@ func (m appModel) paneHeights(total int) (list, summary int) {
 	return list, total - list - paneGap
 }
 
+func (m appModel) pupuRailContent(width, height int) string {
+	if height < 13 {
+		return m.runs.view()
+	}
+	listH := height - 6
+	lines := strings.Split(m.runs.view(), "\n")
+	if len(lines) > listH {
+		lines = lines[:listH]
+	}
+	for len(lines) < listH {
+		lines = append(lines, "")
+	}
+	divider := m.th.BorderFocus.Render(strings.Repeat("─", max(1, width)))
+	footer := []string{divider, m.th.PaneTitle.Render("ACTIVE RUN")}
+	if run, ok := m.runs.selectedRun(); ok {
+		name := run.Label
+		if name == "" {
+			name = shortID(run.ID)
+		}
+		footer = append(footer,
+			m.th.Text.Render(truncate(name, width)),
+			m.th.Dim.Render(truncate(run.Source+"  ·  "+shortModel(run.ModelMain), width)))
+		cost := "cost —"
+		if run.CostUSD != nil {
+			cost = fmt.Sprintf("$%.4g", *run.CostUSD)
+		}
+		findingStatus := m.th.StatusOK.Render("  clear")
+		if run.Findings > 0 {
+			findingStatus = m.th.StatusWarn.Render(fmt.Sprintf("  ! %d", run.Findings))
+		}
+		footer = append(footer, m.th.KindLLM.Render(cost)+findingStatus)
+	} else {
+		footer = append(footer, m.th.Dim.Render("Waiting for traces"), "")
+	}
+	footer = append(footer, m.th.Dim.Render("/ filter  ·  d compare"))
+	return strings.Join(append(lines, footer...), "\n")
+}
+
+func (m appModel) pupuInspectorContent(width, height int) string {
+	if height < 18 {
+		return m.detail.view()
+	}
+	detailH := height - 9
+	lines := strings.Split(m.detail.view(), "\n")
+	if len(lines) > detailH {
+		lines = lines[:detailH]
+	}
+	for len(lines) < detailH {
+		lines = append(lines, "")
+	}
+	footer := []string{
+		m.th.BorderFocus.Render(strings.Repeat("─", max(1, width))),
+		m.th.PaneTitle.Render("RUN FINDINGS"),
+	}
+	findings := m.findingLines(width)
+	if len(findings) > 0 && findings[0] == "" {
+		findings = findings[1:]
+	}
+	if len(findings) > 1 {
+		findings = findings[1:]
+	}
+	footer = append(footer, findings...)
+	if run, ok := m.runs.selectedRun(); ok {
+		footer = append(footer, "", m.th.Dim.Render(truncate("source  "+run.Source, width)),
+			m.th.Dim.Render(truncate("model   "+shortModel(run.ModelMain), width)))
+	}
+	if len(footer) > 9 {
+		footer = footer[:9]
+	}
+	for len(footer) < 9 {
+		footer = append(footer, "")
+	}
+	return strings.Join(append(lines, footer...), "\n")
+}
+
 func (m *appModel) layout() {
 	if m.width <= 0 || m.height <= 0 {
 		return
@@ -750,14 +830,22 @@ func (m *appModel) layout() {
 	runsW, middleW, detailW := m.displayPaneWidths()
 	listH, _ := m.paneHeights(paneH)
 	// -2 borders, -1 pane title line
-	m.runs.setSize(runsW-paneChrome, listH-3)
+	if m.th.Name == "pupu" && m.width >= 100 && paneH >= 16 {
+		m.runs.setSize(runsW-paneChrome, paneH-9)
+	} else {
+		m.runs.setSize(runsW-paneChrome, listH-3)
+	}
 	m.tree.setSize(middleW-paneChrome, paneH-3)
 	m.waterfall.setSize(middleW-paneChrome, paneH-3)
 	m.contextv.setSize(middleW-paneChrome, paneH-3)
 	m.monitorv.setSize(middleW-paneChrome, paneH-3)
 	m.diffv.setSize(middleW-paneChrome, paneH-3)
 	m.blamev.setSize(middleW-paneChrome, paneH-3)
-	m.detail.setSize(detailW-paneChrome, paneH-3)
+	if m.th.Name == "pupu" && m.width >= 100 && paneH >= 21 && !m.detailFull {
+		m.detail.setSize(detailW-paneChrome, paneH-12)
+	} else {
+		m.detail.setSize(detailW-paneChrome, paneH-3)
+	}
 	if m.detailFull {
 		m.detail.setSize(m.width-paneChrome, paneH-3)
 	}
@@ -800,6 +888,19 @@ func (m appModel) View() string {
 	case viewBlame:
 		middleTitle = "blame " + shortID(m.selectedRun)
 		middleView = m.blamev.view()
+	}
+	if m.th.Name == "pupu" && m.width >= 100 {
+		if m.mode == viewTree && len(m.runs.list.Items()) > 0 {
+			middleTitle = fmt.Sprintf("trace  ·  %d spans", len(m.spans))
+		}
+		panes := lipgloss.JoinHorizontal(lipgloss.Top,
+			m.pane(fmt.Sprintf("runs  ·  %d", len(m.runs.list.Items())), m.pupuRailContent(runsW-paneChrome, paneH-3), runsW, paneH, m.focus == focusRuns),
+			lipgloss.NewStyle().Width(paneGap).Height(paneH).Render(""),
+			m.pane(middleTitle, middleView, middleW, paneH, m.focus == focusTree),
+			lipgloss.NewStyle().Width(paneGap).Height(paneH).Render(""),
+			m.pane("inspector", m.pupuInspectorContent(detailW-paneChrome, paneH-3), detailW, paneH, m.focus == focusDetail),
+		)
+		return m.headerView() + "\n" + panes + "\n" + statusView
 	}
 	left := m.pane("runs", m.runs.view(), runsW, listH, m.focus == focusRuns)
 	if summaryH >= 3 {
@@ -960,7 +1061,35 @@ func (m appModel) pupuHeaderView() string {
 	info = truncate(info, max(0, m.width-lipgloss.Width(left)-2))
 	fill := max(0, m.width-lipgloss.Width(left)-lipgloss.Width(info)-1)
 	top := m.th.Shell.Width(m.width).Render(left + strings.Repeat(" ", fill) + m.th.HeaderInfo.Render(info+" "))
-	return top + "\n" + m.pupuTabs()
+	header := top + "\n" + m.pupuTabs()
+	if m.width >= 100 {
+		header += "\n" + m.pupuPulse()
+	}
+	return header
+}
+
+func (m appModel) pupuPulse() string {
+	chip := func(label, value string, color lipgloss.Color) string {
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("#15110F")).Background(color).
+			Bold(true).Padding(0, 1).Render(label + " " + value)
+	}
+	runCount := len(m.runs.list.Items())
+	findings, cost := int64(0), "—"
+	if run, ok := m.runs.selectedRun(); ok {
+		findings = run.Findings
+		if run.CostUSD != nil {
+			cost = fmt.Sprintf("$%.4g", *run.CostUSD)
+		}
+	}
+	findingColor := lipgloss.Color("#A7DCBA")
+	if findings > 0 {
+		findingColor = lipgloss.Color("#FF7775")
+	}
+	line := chip("RUNS", fmt.Sprintf("%02d", runCount), lipgloss.Color("#FFB16A")) + "  " +
+		chip("SPANS", fmt.Sprintf("%02d", len(m.spans)), lipgloss.Color("#88D8D0")) + "  " +
+		chip("FINDINGS", fmt.Sprintf("%02d", findings), findingColor) + "  " +
+		chip("COST", cost, lipgloss.Color("#D1B7F0"))
+	return m.th.Shell.Width(m.width).Render(line)
 }
 
 func (m appModel) pupuTabs() string {

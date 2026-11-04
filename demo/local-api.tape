@@ -1,8 +1,8 @@
 # Record from the repository root: vhs demo/local-api.tape
 # A labelled synthetic failure is sent through the real local HTTP listener.
 # The recording uses a throwaway database and disables session watching.
-Output demo/local-api.gif
-Output demo/local-api.mp4
+Output demo/pupu-tour.gif
+Output demo/pupu-tour.mp4
 
 Set Shell bash
 Set FontSize 18
@@ -22,9 +22,10 @@ Type "CAPYBARA_EVENTS_URL=http://127.0.0.1:43218/api/v1/events node $REPO/demo/l
 Wait /SEND_READY/
 Type "kill $LISTENER_PID; wait $LISTENER_PID; clear" Enter
 Sleep 1s
-Show
 Type "capybara" Enter
-Sleep 2s
+Sleep 1s
+Show
+Sleep 1s
 Type "i"
 Sleep 2s
 Escape
@@ -35,5 +36,3 @@ Down
 Sleep 2s
 Type "w"
 Sleep 2500ms
-Type "q"
-Sleep 500ms

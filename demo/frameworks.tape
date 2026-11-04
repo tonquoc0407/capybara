@@ -31,11 +31,9 @@ Type "nohup $REPO/demo/frameworks/.venv/bin/python $REPO/demo/frameworks/fake_op
 Type "( sleep 8; $REPO/demo/frameworks/.venv/bin/python $REPO/demo/frameworks/langchain_agent.py >/dev/null 2>&1 ) &" Enter
 Sleep 1s
 Type "clear" Enter
+Type "capybara" Enter
+Sleep 1s
 Show
-
-Type "capybara"
-Sleep 400ms
-Enter
 
 # Empty at first: the pane says what it is listening on. Then the agent runs and
 # the trace arrives without anything being imported.
@@ -44,6 +42,3 @@ Sleep 14s
 # Down to the turn that answered past the failed lookup.
 Down Down Down Down Down Down Down Down Down Down Down Down Down Down
 Sleep 6s
-
-Type "q"
-Sleep 1s

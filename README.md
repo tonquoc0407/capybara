@@ -17,10 +17,10 @@
 </p>
 
 <p align="center">
-  <img src="demo/local-api.gif" alt="local HTTP event arriving in the Connect screen, trace tree and cost view" width="720">
+  <img src="demo/pupu-workspace.png" alt="pupu TUI workspace showing six spans, two findings and the run inspector" width="720">
 </p>
 
-<p align="center"><a href="demo/local-api.mp4">Watch MP4</a> · <a href="demo/local-api.tape">Recording script</a></p>
+<p align="center"><a href="demo/pupu-tour.gif">Watch GIF</a> · <a href="demo/pupu-tour.mp4">Watch MP4</a> · <a href="demo/local-api.tape">Recording script</a></p>
 
 Capybara runs locally and stores traces in SQLite. Capture them with OTLP, HTTP JSON events, an SDK, a Claude Code session, or a file. Inspect failures in the TUI or read-only Web view; compare runs, export regression fixtures, and review cost provenance. The optional hub adds project tokens and a shared Web workspace.
 
@@ -58,7 +58,13 @@ This README describes `main`. Homebrew, `@latest` and release binaries use the l
 
 ### TUI
 
-The opening recording sends a local HTTP event to capybara, then inspects its trace, findings and estimated cost. The next one follows a LangGraph agent whose tool fails and whose model answers anyway. The model replies come from a local stub; the framework and tracing are real. [Run the agent](demo/frameworks/).
+The opening recording sends a synthetic agent run through the local HTTP API, then inspects its trace, findings and estimated cost.
+
+<p align="center">
+  <img src="demo/pupu-tour.gif" alt="pupu TUI showing the Connect screen, trace inspector and cost waterfall" width="720">
+</p>
+
+The next recording follows a LangGraph agent whose tool fails and whose model answers anyway. The model replies come from a local stub; the framework and tracing are real. [Run the agent](demo/frameworks/).
 
 <p align="center">
   <img src="demo/frameworks.gif" alt="LangGraph failure arriving live in the TUI" width="720">
@@ -145,7 +151,7 @@ Takes span-per-line JSONL, or agent-replay JSON when the name ends in `.json`. U
 
 For a local app without an SDK, press `i` in the TUI and select **HTTP JSON events**. The listener accepts `POST /api/v1/events` on the same local HTTP address as OTLP (normally `http://127.0.0.1:4318`). Run [`examples/local_events.py`](examples/local_events.py) or [`examples/local_events.mjs`](examples/local_events.mjs) for a live start, update and end. Set `CAPYBARA_EVENTS_URL` if the listener was moved with `-otlp`.
 
-[Watch the local API demo](demo/local-api.gif), or follow the [event format and response codes](docs/local-events.md).
+[Watch the local API demo](demo/pupu-tour.gif), or follow the [event format and response codes](docs/local-events.md).
 
 For a long-running local service without a terminal UI, run `capybara listen`. It prints the bound HTTP events and OTLP endpoints, stores incoming spans, and runs the same analyzer. `capybara -otlp 127.0.0.1:4319 listen` moves its HTTP port.
 
@@ -386,7 +392,7 @@ Overview reports errors, running runs, completed-run p95 latency, known costs, h
 theme = "pupu"
 ```
 
-`pupu` is the default warm dark workspace theme, with a two-row navigation header and stronger pane focus. `bara` keeps the earlier compact layout; `mono` drops the accent to grey; `paper` is for a light terminal. Status text and markers remain visible without color.
+`pupu` is the default theme. Its run rail, trace, and inspector share a status strip; amber marks model work, teal marks tools, purple marks retrieval, and coral marks errors. `bara` keeps the earlier compact layout; `mono` uses grey; `paper` is for a light terminal. Status text and markers remain visible when `NO_COLOR=1` disables ANSI color.
 
 Model rates live in a table built into the binary, covering the current Claude, OpenAI, and Gemini families. Extend or override it with `~/.config/capybara/pricing.json`, which is merged over the built-in one. A model with no entry stays unpriced rather than being guessed at, and a rate that varies by context length or by date is recorded at its standard tier — the table has no conditions in it.
 

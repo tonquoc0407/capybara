@@ -27,7 +27,6 @@ Hide
 Type "unset NO_COLOR; REPO=$PWD; mkdir -p /tmp/capybara-monitor && go build -o /tmp/capybara-monitor/capybara ./cmd/capybara && export PATH=/tmp/capybara-monitor:$REPO/sdk/.venv/bin:$PATH HOME=$(mktemp -d) PS1='$ ' && cp $REPO/demo/monitor_pipeline.py $HOME/pipeline.py && cd $HOME && printf '%s%s\\n' BUILD_ READY" Enter
 Wait /BUILD_READY/
 Type "clear" Enter
-Show
 
 # The pipeline runs in the background so the tui can watch it happen.
 Type "python pipeline.py &"
@@ -35,10 +34,10 @@ Sleep 300ms
 Enter
 Sleep 600ms
 
-Type "capybara"
-Sleep 300ms
-Enter
-Sleep 2500ms
+Type "capybara" Enter
+Sleep 1s
+Show
+Sleep 1500ms
 
 # m opens the monitor. The span tree is still empty here: a span is only
 # exported once it ends, while the graphs are already drawing.
