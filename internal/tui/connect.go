@@ -9,15 +9,17 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var connectOptions = []string{"HTTP JSON events", "OTLP", "Python SDK", "Node SDK (source build)", "Claude watcher", "File import"}
-var connectDescriptions = []string{
-	"Send spans from a local app without an SDK.",
-	"Point an instrumented app at the local OTLP receiver.",
-	"Add tracing to Python code and export it locally.",
-	"Build the Node SDK from this repository, then instrument your app.",
-	"Read Claude Code sessions already stored on this machine.",
-	"Load a saved trace file into this database.",
-}
+var (
+	connectOptions      = []string{"HTTP JSON events", "OTLP", "Python SDK", "Node SDK (source build)", "Claude watcher", "File import"}
+	connectDescriptions = []string{
+		"Send spans from a local app without an SDK.",
+		"Point an instrumented app at the local OTLP receiver.",
+		"Add tracing to Python code and export it locally.",
+		"Build the Node SDK from this repository, then instrument your app.",
+		"Read Claude Code sessions already stored on this machine.",
+		"Load a saved trace file into this database.",
+	}
+)
 
 func (m appModel) handleConnectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
