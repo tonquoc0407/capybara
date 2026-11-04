@@ -151,3 +151,37 @@ func TestDetailYankText(t *testing.T) {
 		t.Errorf("yankText = %q, want span name", got)
 	}
 }
+
+func TestDetailLongPayloadCanBeReadOnEveryPage(t *testing.T) {
+	body := strings.Repeat("a", maxRenderedBody-1) + "界" + "page two marker"
+	first, pages := bodyChunk(body, 0)
+	second, _ := bodyChunk(body, 1)
+	if pages != 2 || first+second != body {
+		t.Fatalf("paging lost content: pages=%d first=%d second=%d", pages, len(first), len(second))
+	}
+	m := newDetail(theme.Bara())
+	m.setSize(60, 20)
+	m.setSpan(span("t1", "", store.KindTool, "very long output", 0, 1), []store.Content{{Role: "output", Body: body, MediaType: "application/json"}}, nil, nil)
+	if !strings.Contains(plainView(m), "payload page 1/2") {
+		t.Fatal("missing page indicator")
+	}
+	m.update(press("]"))
+	if !strings.Contains(plainView(m), "page two marker") {
+		t.Fatal("last payload page cannot be viewed")
+	}
+}
+
+func TestDetailLinkedLogsShowFullBodyAndAttributes(t *testing.T) {
+	m := newDetail(theme.Bara())
+	m.setSize(60, 20)
+	m.setLogs([]store.TraceLog{{ID: "log1", SpanID: "span1", Severity: "ERROR", Body: "failure detail", AttrsJSON: `{"code":42}`}})
+	out := plainView(m)
+	for _, want := range []string{"linked logs", "ERROR", "failure detail", `"code": 42`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("log view missing %q: %s", want, out)
+		}
+	}
+	if got := m.yankText(); got != "failure detail" {
+		t.Fatalf("yank log = %q", got)
+	}
+}

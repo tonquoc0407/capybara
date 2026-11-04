@@ -20,4 +20,4 @@ for tape in \
   vhs "$tape"
 done
 
-ffmpeg -hide_banner -loglevel error -y -i demo/pupu-tour.mp4 -frames:v 1 demo/pupu-workspace.png
+ffmpeg -hide_banner -loglevel error -y -ss 12 -i demo/pupu-tour.mp4 -frames:v 1 demo/pupu-workspace.png

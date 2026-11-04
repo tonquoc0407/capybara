@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/tonquoc0407/capybara/internal/store"
 	"github.com/tonquoc0407/capybara/internal/theme"
 )
 
@@ -32,6 +33,41 @@ func TestConnectUsesBoundAddressAndShowsLiveRun(t *testing.T) {
 	updated, _ = m.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
 	if updated.(appModel).connectOpen {
 		t.Fatal("Esc did not close Connect")
+	}
+}
+
+func TestConnectOpensNewlyReceivedTrace(t *testing.T) {
+	m := newApp(nil, theme.Bara(), nil, true)
+	m.width, m.height = 100, 32
+	m.connectOpen = true
+	m.connectSeen = map[string]bool{"old": true}
+	updated, _ := m.Update(runsMsg{runs: []store.Run{{ID: "old"}, {ID: "fresh", Label: "new trace"}}})
+	m = updated.(appModel)
+	if m.connectNewRun != "fresh" || !strings.Contains(plain(m.connectView()), "Trace received: fresh") {
+		t.Fatalf("new trace not confirmed: %q", m.connectNewRun)
+	}
+	updated, _ = m.handleConnectKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("o")})
+	m = updated.(appModel)
+	if m.connectOpen || m.selectedRun != "fresh" || m.runs.selectedID() != "fresh" {
+		t.Fatalf("open trace failed: selected=%q", m.selectedRun)
+	}
+}
+
+func TestConnectSetupIsReadableOnNarrowTerminal(t *testing.T) {
+	m := newApp(nil, theme.Pupu(), nil, true)
+	m.width, m.height = 60, 18
+	m.about.OTLP = "http://127.0.0.1:4318"
+	m.connectOpen = true
+	m.connectIndex = 3
+	m.connectSetupOpen = true
+	first := plain(m.connectView())
+	if !strings.Contains(first, "Node SDK") || !strings.Contains(first, "npm ci") {
+		t.Fatalf("setup not visible: %s", first)
+	}
+	m.connectScroll = 8
+	later := plain(m.connectView())
+	if !strings.Contains(later, "OTEL_EXPORTER_OTLP_ENDPOINT") {
+		t.Fatalf("setup did not scroll to final command: %s", later)
 	}
 }
 

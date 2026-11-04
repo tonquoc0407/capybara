@@ -38,7 +38,7 @@ func sampleCmd(ctx context.Context, dbPath string, capture bool, args []string, 
 			{
 				ID: "capybara-sample-answer", RunID: runID, ParentID: "capybara-sample-root", Kind: store.KindLLM,
 				Name: "answer", StartedAt: start.Add(2 * time.Second), EndedAt: start.Add(3 * time.Second), Status: "ok",
-				Attrs: store.Attrs{Model: "sample-model"},
+				Attrs: store.Attrs{Model: "gpt-4o-mini"}, TokensIn: 120, TokensOut: 24,
 			},
 		},
 		Contents: []store.Content{

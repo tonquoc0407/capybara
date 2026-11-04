@@ -43,7 +43,7 @@ brew install tonquoc0407/tap/capybara
 
 Or `go install github.com/tonquoc0407/capybara/cmd/capybara@latest`, or grab a binary from the [releases page](https://github.com/tonquoc0407/capybara/releases). One file, no CGo, no runtime dependencies.
 
-For a local tour, run `capybara sample && capybara`. Press `i` to see connection methods.
+For a local tour, run `capybara sample && capybara`. Press `i` to see connection methods. The [beta test guide](docs/beta-test.md) covers the first trace, three application paths, and feedback.
 
 This README describes `main`. Homebrew, `@latest` and release binaries use the latest published tag, which may lag the features below. To try the current source, use `go install github.com/tonquoc0407/capybara/cmd/capybara@main`.
 
@@ -111,7 +111,7 @@ capybara
 
 Traces land in `capybara.db` in the working directory. Set `CAPYBARA_DB=~/traces/capybara.db` once in your shell profile to share that location across `capybara`, `import`, `runs`, and other commands. `-db` overrides it for one command. `CAPYBARA_OTLP_ADDR` sets the HTTP receiver address; `CAPYBARA_NO_CLAUDE=1` disables the automatic Claude Code watcher in the TUI. Use `-no-content` to omit prompt, completion and tool bodies and to keep only selected numeric and status attributes from raw telemetry. Names, IDs and other structured metadata can still contain sensitive text if your instrumentor puts it there. The flag does not erase existing runs; use a new database or remove old data separately. With an empty database, the middle pane shows what it's listening on and how to send it something.
 
-To inspect a labelled synthetic failure immediately, run `capybara sample` against the same database, then reopen the TUI or Web view. The sample is idempotent and its `demo` environment distinguishes it from live traffic.
+To inspect a labelled synthetic failure immediately, run `capybara sample` against the same database, then reopen the TUI or Web view. The sample is idempotent, includes token usage and an estimated cost, and its `demo` environment distinguishes it from live traffic.
 
 If something else already holds 4317 or 4318 — a collector, Jaeger, another tracing UI — capybara keeps the transport that did bind, reports which one it lost, and carries on. `-otlp 127.0.0.1:4319` moves the HTTP listener somewhere free.
 
@@ -157,7 +157,7 @@ For a long-running local service without a terminal UI, run `capybara listen`. I
 
 Each request needs a unique `event_id`, `type`, `run_id`, `span_id` and RFC3339 `time`. `span.start` needs `kind` and `name`; `span.end` needs `status` (`ok` or `error`). `span.complete` can send a finished span in one request, with optional `start_time`. Retries with the same event ID and body are safe. An update or end before start returns HTTP 409. The receiver stores `model`, `provider`, `tool_name`, `tokens_in`, `tokens_out`, `cost_usd`, `attrs` and `contents` when provided. `-no-content` drops content bodies and untrusted attributes. The endpoint accepts requests from the same machine only; it has no API key.
 
-The TUI also lists OTLP, both SDKs, the Claude watcher and file import under `i`.
+The TUI also lists OTLP, both SDKs, the Claude watcher and file import under `i`. Press `v` to read the full setup on a narrow terminal; a newly received run appears in Connect and `o` opens it.
 
 Install the Python SDK:
 
@@ -193,6 +193,8 @@ The tree marks `x` for a failed span, `!` for one carrying a finding, and `?` fo
 | `tab` | change pane | `b` | blame the output |
 | `f` | filter by kind | `r` | re-run from a span |
 | `a` | raw attributes | `t` | export a pytest case |
+| `space` in detail | full-width inspector | `l` in detail | linked logs |
+| `[` / `]` in detail | previous/next payload page | `n` / `p` in logs | next/previous log |
 | `e` | edit a tool output | `y` / `Y` | copy content / curl |
 | `q` | quit | `?` | full help |
 | `m` | resource monitor | | |
@@ -325,7 +327,7 @@ The labelled [`corpus/`](corpus) has 34 curated runs: positives and near misses 
 | `capybara relevance` | grade answer relevance with an opt-in llm judge |
 | `capybara eval` | score detectors against a labelled corpus (precision, recall) |
 | `capybara coverage` | report typed-span coverage and unmapped namespaces |
-| `capybara doctor` | check the database and count missing usage, cost, and mapping data |
+| `capybara doctor [-bundle diagnostics.json]` | check the database; optionally write aggregate counts and build info for feedback |
 | `capybara incidents` | group recent error runs and detector findings by a deterministic signature |
 | `capybara dataset` | capture a case from a recorded run |
 | `capybara dataset export promptfoo <id> cases.json` | export cases in Promptfoo's JSON test-case format |

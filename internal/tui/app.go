@@ -59,6 +59,10 @@ type (
 		findings []store.Finding
 		sample   *store.ResourceSample
 	}
+	logsMsg struct {
+		runID string
+		logs  []store.TraceLog
+	}
 	statsMsg struct {
 		runID string
 		stats map[string]map[string]int64
@@ -74,46 +78,52 @@ type (
 )
 
 type keyMap struct {
-	Nav      key.Binding
-	Expand   key.Binding
-	Panes    key.Binding
-	Search   key.Binding
-	Filter   key.Binding
-	Views    key.Binding
-	Diff     key.Binding
-	Blame    key.Binding
-	Test     key.Binding
-	Edit     key.Binding
-	Rerun    key.Binding
-	Attrs    key.Binding
-	Palette  key.Binding
-	Connect  key.Binding
-	Yank     key.Binding
-	YankCurl key.Binding
-	Help     key.Binding
-	Quit     key.Binding
+	Nav        key.Binding
+	Expand     key.Binding
+	Panes      key.Binding
+	Search     key.Binding
+	Filter     key.Binding
+	Views      key.Binding
+	Diff       key.Binding
+	Blame      key.Binding
+	Test       key.Binding
+	Edit       key.Binding
+	Rerun      key.Binding
+	Attrs      key.Binding
+	FullDetail key.Binding
+	Logs       key.Binding
+	Pages      key.Binding
+	Palette    key.Binding
+	Connect    key.Binding
+	Yank       key.Binding
+	YankCurl   key.Binding
+	Help       key.Binding
+	Quit       key.Binding
 }
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Nav:      key.NewBinding(key.WithKeys("j", "k"), key.WithHelp("j/k", "nav")),
-		Expand:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "expand")),
-		Panes:    key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "panes")),
-		Search:   key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
-		Filter:   key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "filter")),
-		Views:    key.NewBinding(key.WithKeys("w", "c", "m"), key.WithHelp("w/c/m", "waterfall/context/monitor")),
-		Diff:     key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "diff")),
-		Blame:    key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "blame")),
-		Test:     key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "export test")),
-		Edit:     key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit output")),
-		Rerun:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "re-run")),
-		Attrs:    key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "attrs")),
-		Palette:  key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "commands")),
-		Connect:  key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "connect")),
-		Yank:     key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "yank")),
-		YankCurl: key.NewBinding(key.WithKeys("Y"), key.WithHelp("Y", "curl")),
-		Help:     key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
-		Quit:     key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+		Nav:        key.NewBinding(key.WithKeys("j", "k"), key.WithHelp("j/k", "nav")),
+		Expand:     key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "expand")),
+		Panes:      key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "panes")),
+		Search:     key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
+		Filter:     key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "filter")),
+		Views:      key.NewBinding(key.WithKeys("w", "c", "m"), key.WithHelp("w/c/m", "waterfall/context/monitor")),
+		Diff:       key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "diff")),
+		Blame:      key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "blame")),
+		Test:       key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "export test")),
+		Edit:       key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit output")),
+		Rerun:      key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "re-run")),
+		Attrs:      key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "attrs")),
+		FullDetail: key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "full detail")),
+		Logs:       key.NewBinding(key.WithKeys("l"), key.WithHelp("l", "linked logs")),
+		Pages:      key.NewBinding(key.WithKeys("[", "]"), key.WithHelp("[/]", "payload pages")),
+		Palette:    key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "commands")),
+		Connect:    key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "connect")),
+		Yank:       key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "yank")),
+		YankCurl:   key.NewBinding(key.WithKeys("Y"), key.WithHelp("Y", "curl")),
+		Help:       key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		Quit:       key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 	}
 }
 
@@ -128,51 +138,56 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.Search, k.Filter, k.Attrs},
 		{k.Views, k.Diff, k.Blame},
 		{k.Test, k.Edit, k.Rerun, k.Yank, k.YankCurl},
+		{k.Attrs, k.FullDetail, k.Logs, k.Pages},
 		{k.Help, k.Quit},
 	}
 }
 
 type appModel struct {
-	st            *store.Store
-	th            theme.Theme
-	events        <-chan struct{}
-	keys          keyMap
-	help          help.Model
-	runs          *runsModel
-	tree          treeModel
-	waterfall     waterfallModel
-	contextv      contextModel
-	diffv         diffModel
-	monitorv      monitorModel
-	blamev        blameModel
-	detail        detailModel
-	mode          viewMode
-	focus         focusArea
-	width         int
-	height        int
-	selectedRun   string
-	diffMark      string
-	edit          edit
-	capture       bool
-	replaying     bool
-	paletteOpen   bool
-	connectOpen   bool
-	connectIndex  int
-	connectRuns   int
-	connectDemoAt time.Time
-	paletteQuery  string
-	paletteIndex  int
-	detailFull    bool
-	version       string
-	dbPath        string
-	about         About
-	spans         []store.Span
-	findings      map[string][]store.Finding
-	runFindings   []store.Finding
-	samples       map[string]store.ResourceSample
-	notice        string
-	lastErr       error
-	hintSeen      bool
+	st               *store.Store
+	th               theme.Theme
+	events           <-chan struct{}
+	keys             keyMap
+	help             help.Model
+	runs             *runsModel
+	tree             treeModel
+	waterfall        waterfallModel
+	contextv         contextModel
+	diffv            diffModel
+	monitorv         monitorModel
+	blamev           blameModel
+	detail           detailModel
+	mode             viewMode
+	focus            focusArea
+	width            int
+	height           int
+	selectedRun      string
+	diffMark         string
+	edit             edit
+	capture          bool
+	replaying        bool
+	paletteOpen      bool
+	connectOpen      bool
+	connectIndex     int
+	connectSetupOpen bool
+	connectScroll    int
+	connectRuns      int
+	connectDemoAt    time.Time
+	connectSeen      map[string]bool
+	connectNewRun    string
+	paletteQuery     string
+	paletteIndex     int
+	detailFull       bool
+	version          string
+	dbPath           string
+	about            About
+	spans            []store.Span
+	findings         map[string][]store.Finding
+	runFindings      []store.Finding
+	samples          map[string]store.ResourceSample
+	notice           string
+	lastErr          error
+	hintSeen         bool
 }
 
 func newApp(st *store.Store, th theme.Theme, events <-chan struct{}, captureContent bool) appModel {
@@ -306,6 +321,17 @@ func (m appModel) loadContents(sp store.Span) tea.Cmd {
 	}
 }
 
+func (m appModel) loadLogs(runID string) tea.Cmd {
+	st := m.st
+	return func() tea.Msg {
+		logs, err := st.TraceLogs(context.Background(), runID)
+		if err != nil {
+			return errMsg{err}
+		}
+		return logsMsg{runID: runID, logs: logs}
+	}
+}
+
 func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -322,10 +348,22 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 	case runsMsg:
+		if m.connectOpen && m.connectSeen != nil && m.connectNewRun == "" {
+			for _, run := range msg.runs {
+				if !m.connectSeen[run.ID] {
+					m.connectNewRun = run.ID
+					break
+				}
+			}
+		}
 		m.runs.setRuns(msg.runs, msg.orphaned)
+		if run, ok := m.runs.selectedRun(); ok {
+			m.detail.setRun(run)
+		}
 		m.layout() // the run column is sized from the item count, which just changed
 		if sel := m.runs.selectedID(); sel != m.selectedRun {
 			m.selectedRun = sel
+			m.detail.setSpan(store.Span{}, nil, nil, nil)
 			return m, m.loadSpans(sel)
 		}
 		return m, nil
@@ -393,6 +431,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.detail.setSpan(msg.span, msg.contents, msg.findings, msg.sample)
 		}
 		return m, nil
+	case logsMsg:
+		if msg.runID == m.selectedRun {
+			m.detail.setLogs(msg.logs)
+		}
+		return m, nil
 	case yankCurlDoneMsg:
 		m.notice = "copied curl command"
 		return m, nil
@@ -422,6 +465,9 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.layout()
 			return m, nil
 		}
+		if msg.String() == "l" {
+			return m.toggleLogs()
+		}
 		return m, m.detail.update(msg)
 	}
 	if m.focus == focusDetail && msg.String() == " " {
@@ -440,6 +486,13 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Connect):
 			m.connectOpen = true
 			m.connectDemoAt = time.Now().UTC()
+			m.connectNewRun = ""
+			m.connectSeen = make(map[string]bool)
+			for _, item := range m.runs.list.Items() {
+				if run, ok := item.(runItem); ok {
+					m.connectSeen[run.run.ID] = true
+				}
+			}
 			return m, m.loadEventCount()
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
@@ -480,17 +533,36 @@ func (m appModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch m.focus {
 	case focusRuns:
 		cmd := m.runs.update(msg)
+		if run, ok := m.runs.selectedRun(); ok {
+			m.detail.setRun(run)
+		}
 		if sel := m.runs.selectedID(); sel != m.selectedRun {
 			m.selectedRun = sel
+			m.detail.setSpan(store.Span{}, nil, nil, nil)
 			return m, tea.Batch(cmd, m.loadSpans(sel))
 		}
 		return m, cmd
 	case focusTree:
 		return m.updateMiddle(msg)
 	case focusDetail:
+		if msg.String() == "l" {
+			return m.toggleLogs()
+		}
 		return m, m.detail.update(msg)
 	}
 	return m, nil
+}
+
+func (m appModel) toggleLogs() (tea.Model, tea.Cmd) {
+	if m.detail.showLogs {
+		m.detail.showLogs = false
+		m.detail.render()
+		return m, nil
+	}
+	if m.selectedRun == "" {
+		return m, nil
+	}
+	return m, m.loadLogs(m.selectedRun)
 }
 
 // handleDiffKey implements the two-step diff: d marks the first run, a second
@@ -1151,7 +1223,10 @@ func (m appModel) pupuStatusView() string {
 	case focusRuns:
 		area, hint = "RUNS", "j/k select  ·  / filter  ·  d compare"
 	case focusDetail:
-		area, hint = "DETAIL", "j/k scroll  ·  space expand"
+		area, hint = "DETAIL", "j/k scroll  ·  space expand  ·  l logs  ·  [/] pages"
+		if m.detail.showLogs {
+			hint = "j/k scroll  ·  n/p logs  ·  [/] pages  ·  l back"
+		}
 	}
 	if m.lastErr != nil {
 		hint = m.lastErr.Error()

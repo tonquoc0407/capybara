@@ -173,6 +173,16 @@ func (m *runsModel) selectedID() string {
 	return ""
 }
 
+func (m *runsModel) selectByID(id string) bool {
+	for i, item := range m.list.Items() {
+		if run, ok := item.(runItem); ok && run.run.ID == id {
+			m.list.Select(i)
+			return true
+		}
+	}
+	return false
+}
+
 func (m *runsModel) selectedRun() (store.Run, bool) {
 	it, ok := m.list.SelectedItem().(runItem)
 	return it.run, ok

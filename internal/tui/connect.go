@@ -7,6 +7,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	reflowwrap "github.com/muesli/reflow/wrap"
+
+	"github.com/tonquoc0407/capybara/internal/store"
 )
 
 var (
@@ -22,21 +25,70 @@ var (
 )
 
 func (m appModel) handleConnectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.connectSetupOpen {
+		switch msg.String() {
+		case "esc", "v":
+			m.connectSetupOpen = false
+		case "up", "k":
+			m.connectScroll = max(0, m.connectScroll-1)
+		case "down", "j":
+			m.connectScroll++
+		case "pgup", "ctrl+u":
+			m.connectScroll = max(0, m.connectScroll-max(1, m.height/2))
+		case "pgdown", "ctrl+d":
+			m.connectScroll += max(1, m.height/2)
+		case "y", "enter":
+			m.copyConnectSnippet()
+		case "o":
+			return m.openConnectedRun()
+		}
+		return m, nil
+	}
 	switch msg.String() {
 	case "esc", "q", "i":
 		m.connectOpen = false
 	case "up", "k":
 		m.connectIndex = (m.connectIndex + len(connectOptions) - 1) % len(connectOptions)
+		m.connectScroll = 0
 		m.notice = ""
 	case "down", "j":
 		m.connectIndex = (m.connectIndex + 1) % len(connectOptions)
+		m.connectScroll = 0
 		m.notice = ""
 	case "y", "enter":
-		snippet := m.connectSnippet()
-		if snippet != "" {
-			_ = copyToClipboard(snippet)
-			m.notice = "copy requested; paste to confirm"
+		m.copyConnectSnippet()
+	case "v":
+		m.connectSetupOpen = true
+		m.connectScroll = 0
+	case "o":
+		return m.openConnectedRun()
+	}
+	return m, nil
+}
+
+func (m *appModel) copyConnectSnippet() {
+	if snippet := m.connectSnippet(); snippet != "" {
+		if err := copyToClipboard(snippet); err != nil {
+			m.notice = "clipboard unavailable; press v to read the full setup"
+		} else {
+			m.notice = "copy command sent; paste to confirm"
 		}
+	}
+}
+
+func (m appModel) openConnectedRun() (tea.Model, tea.Cmd) {
+	if m.connectNewRun != "" && m.runs.selectByID(m.connectNewRun) {
+		if run, ok := m.runs.selectedRun(); ok {
+			m.detail.setRun(run)
+		}
+		m.detail.setSpan(store.Span{}, nil, nil, nil)
+		m.selectedRun = m.connectNewRun
+		m.connectOpen = false
+		m.connectSetupOpen = false
+		m.mode = viewTree
+		m.focus = focusTree
+		m.layout()
+		return m, m.loadSpans(m.selectedRun)
 	}
 	return m, nil
 }
@@ -96,6 +148,9 @@ func (m appModel) connectSnippet() string {
 }
 
 func (m appModel) connectView() string {
+	if m.connectSetupOpen {
+		return m.connectSetupView()
+	}
 	if m.th.Name == "pupu" {
 		return m.pupuConnectView()
 	}
@@ -119,6 +174,11 @@ func (m appModel) connectView() string {
 	} else if m.about.OTLP != "" {
 		lines = append(lines, m.th.Dim.Render("Waiting for the first HTTP event"))
 	}
+	if m.connectNewRun != "" {
+		lines = append(lines, m.th.StatusOK.Render("Trace received: "+m.connectNewRun+"  ·  press o to open"))
+	} else {
+		lines = append(lines, m.th.Dim.Render("Waiting for a new trace  ·  run the setup, then watch here"))
+	}
 	if m.notice != "" {
 		lines = append(lines, m.th.Dim.Render(m.notice))
 	}
@@ -138,7 +198,7 @@ func (m appModel) connectView() string {
 	lines = append(lines, "")
 	lines = append(lines, m.th.Dim.Render(connectDescriptions[m.connectIndex]), "")
 	if snippet := m.connectSnippet(); snippet != "" {
-		lines = append(lines, m.th.Dim.Render("Enter/y: send copy request  ·  j/k: select"))
+		lines = append(lines, m.th.Dim.Render("Enter/y: copy setup  ·  o: open received trace  ·  j/k: select"))
 		for _, line := range strings.Split(snippet, "\n") {
 			lines = append(lines, m.th.Text.Render(line))
 		}
@@ -147,10 +207,34 @@ func (m appModel) connectView() string {
 	return m.headerView() + "\n" + lipgloss.NewStyle().Width(max(1, m.width-2)).MaxHeight(max(1, m.height-2)).Render(content)
 }
 
+func (m appModel) connectSetupView() string {
+	header := m.headerView()
+	footer := m.th.Shell.Width(m.width).Render(m.th.HelpKey.Render("j/k") + " scroll   " +
+		m.th.HelpKey.Render("enter") + " copy   " + m.th.HelpKey.Render("o") + " open trace   " + m.th.HelpKey.Render("esc") + " sources")
+	areaH := max(3, m.height-lipgloss.Height(header)-lipgloss.Height(footer))
+	width := max(1, m.width-paneChrome)
+	lines := []string{m.th.Accent.Render(connectOptions[m.connectIndex]), m.th.Dim.Render(connectDescriptions[m.connectIndex]), ""}
+	for _, line := range strings.Split(m.connectSnippet(), "\n") {
+		lines = append(lines, reflowwrap.String(stripControl(line), width))
+	}
+	if m.connectNewRun != "" {
+		lines = append(lines, "", m.th.StatusOK.Render("Trace received: "+m.connectNewRun+"  ·  o to open"))
+	}
+	if m.notice != "" {
+		lines = append(lines, "", m.th.Dim.Render(m.notice))
+	}
+	// Reflow can add rows inside one source line; scroll by actual screen row.
+	content := strings.Split(strings.Join(lines, "\n"), "\n")
+	visible := max(1, areaH-3)
+	start := min(max(0, m.connectScroll), max(0, len(content)-visible))
+	end := min(len(content), start+visible)
+	return header + "\n" + m.pane("setup  ·  "+fmt.Sprintf("%d/%d", start+1, max(1, len(content))), strings.Join(content[start:end], "\n"), m.width, areaH, true) + "\n" + footer
+}
+
 func (m appModel) pupuConnectView() string {
 	header := m.headerView()
 	footer := m.th.Shell.Width(m.width).Render(m.th.HelpKey.Render("j/k") + " choose   " +
-		m.th.HelpKey.Render("enter") + " copy setup   " + m.th.HelpKey.Render("esc") + " close")
+		m.th.HelpKey.Render("v") + " full setup   " + m.th.HelpKey.Render("enter") + " copy   " + m.th.HelpKey.Render("o") + " open")
 	areaH := max(3, m.height-lipgloss.Height(header)-lipgloss.Height(footer))
 	leftW := min(34, max(24, m.width/3))
 	var options []string
@@ -177,6 +261,11 @@ func (m appModel) pupuConnectView() string {
 		policy = "content capture off"
 	}
 	right = append(right, m.th.Dim.Render(fmt.Sprintf("%s  ·  %d HTTP runs", policy, m.connectRuns)), "", m.th.Text.Render(connectDescriptions[m.connectIndex]))
+	if m.connectNewRun != "" {
+		right = append(right, "", m.th.StatusOK.Render("Trace received: "+m.connectNewRun), m.th.Accent.Render("Press o to open it"))
+	} else {
+		right = append(right, "", m.th.Dim.Render("Waiting for a new trace"))
+	}
 	if m.notice != "" {
 		right = append(right, "", m.th.Accent.Render(m.notice))
 	}
@@ -190,7 +279,10 @@ func (m appModel) pupuConnectView() string {
 		content := append([]string{}, options...)
 		content = append(content, "", m.th.Accent.Render(status), m.th.Dim.Render(policy),
 			m.th.Text.Render(connectDescriptions[m.connectIndex]), "",
-			m.th.Dim.Render("Enter copies the full setup"))
+			m.th.Dim.Render("v shows the full setup; Enter copies it"))
+		if m.connectNewRun != "" {
+			content = append(content, m.th.StatusOK.Render("Received "+shortID(m.connectNewRun)+" · o to open"))
+		}
 		if len(content) > areaH-3 {
 			content = content[:areaH-3]
 		}

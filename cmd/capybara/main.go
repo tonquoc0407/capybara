@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strconv"
 	"syscall"
 
@@ -62,7 +63,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	if *showVersion {
-		_, err := fmt.Fprintln(out, "capybara "+version)
+		_, err := fmt.Fprintln(out, "capybara "+displayVersion())
 		return err
 	}
 	capture := !*noContent
@@ -137,6 +138,16 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	return fmt.Errorf("unknown command %q", args[0])
 }
 
+func displayVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return version
+}
+
 // receive runs the OTLP receiver, the claude watcher when its log directory
 // exists, and the TUI, until any of them quits.
 func receive(ctx context.Context, dbPath, otlpAddr string, capture, watchClaude bool) error {
@@ -181,7 +192,7 @@ func receive(ctx context.Context, dbPath, otlpAddr string, capture, watchClaude 
 		go func() { errc <- claude.Watch(runCtx, st, claudeRoot, capture) }()
 	}
 	about := tui.About{
-		Version: version, DBPath: dbPath,
+		Version: displayVersion(), DBPath: dbPath,
 		OTLP: rcv.HTTPBase(), Watching: claudeRoot,
 	}
 	if listenErr != nil {

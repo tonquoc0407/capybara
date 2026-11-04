@@ -4,7 +4,12 @@ import "context"
 
 // Diagnostics summarizes what arrived without reading prompt or tool bodies.
 type Diagnostics struct {
-	Runs, Spans, Logs, Unmapped, MissingUsage, MissingCost int64
+	Runs         int64 `json:"runs"`
+	Spans        int64 `json:"spans"`
+	Logs         int64 `json:"logs"`
+	Unmapped     int64 `json:"unmapped_spans"`
+	MissingUsage int64 `json:"llm_spans_without_usage"`
+	MissingCost  int64 `json:"llm_spans_without_cost"`
 }
 
 // Diagnostics counts stored runs, spans, logs, and missing usage or cost.

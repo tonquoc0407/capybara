@@ -82,6 +82,19 @@ func TestAppShowsContentOnSelection(t *testing.T) {
 	quitApp(t, tm)
 }
 
+func TestAppLoadsLinkedLogsIntoInspector(t *testing.T) {
+	st := seededStore(t)
+	if err := st.PutTraceLogs(context.Background(), "test", []store.TraceLog{{ID: "log1", RunID: "r1", SpanID: "llm1", Severity: "ERROR", Body: "unique linked failure"}}); err != nil {
+		t.Fatal(err)
+	}
+	tm := startApp(t, st)
+	waitFor(t, tm, "agent_loop")
+	tm.Send(tea.KeyMsg{Type: tea.KeyTab})
+	tm.Send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+	waitFor(t, tm, "unique linked failure")
+	quitApp(t, tm)
+}
+
 func TestAppStreamsLiveSpans(t *testing.T) {
 	st := seededStore(t)
 	tm := startApp(t, st)

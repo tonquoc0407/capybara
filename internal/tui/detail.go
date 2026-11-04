@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	reflowwrap "github.com/muesli/reflow/wrap"
 
 	"github.com/tonquoc0407/capybara/internal/store"
 	"github.com/tonquoc0407/capybara/internal/theme"
@@ -24,11 +26,16 @@ type detailModel struct {
 	width    int
 	height   int
 	span     *store.Span
+	run      *store.Run
 	contents []store.Content
+	logs     []store.TraceLog
 	findings []store.Finding
 	sample   *store.ResourceSample
 	diff     *diffDetail
 	showRaw  bool
+	showLogs bool
+	logIndex int
+	bodyPage int
 	markdown *glamour.TermRenderer
 }
 
@@ -52,14 +59,31 @@ func (m *detailModel) setSize(w, h int) {
 }
 
 func (m *detailModel) setSpan(sp store.Span, contents []store.Content, findings []store.Finding, sample *store.ResourceSample) {
+	if sp.ID == "" {
+		m.span = nil
+		m.contents = nil
+		m.findings = nil
+		m.sample = nil
+		m.showLogs = false
+		m.vp.GotoTop()
+		m.render()
+		return
+	}
 	if m.span == nil || m.span.ID != sp.ID {
 		m.vp.GotoTop()
+		m.bodyPage = 0
 	}
 	m.span = &sp
 	m.contents = contents
 	m.findings = findings
 	m.sample = sample
 	m.diff = nil
+	m.bodyPage = min(m.bodyPage, m.bodyPages()-1)
+	m.render()
+}
+
+func (m *detailModel) setRun(run store.Run) {
+	m.run = &run
 	m.render()
 }
 
@@ -68,6 +92,7 @@ func (m *detailModel) setDiffStep(d diffDetail) {
 	m.vp.GotoTop()
 	m.diff = &d
 	m.span = nil
+	m.bodyPage = 0
 	m.render()
 }
 
@@ -76,8 +101,20 @@ func (m *detailModel) toggleRaw() {
 	m.render()
 }
 
+func (m *detailModel) setLogs(logs []store.TraceLog) {
+	m.logs = logs
+	m.showLogs = true
+	m.logIndex = 0
+	m.bodyPage = 0
+	m.vp.GotoTop()
+	m.render()
+}
+
 // yankText returns the primary text payload of the selected span or diff step.
 func (m *detailModel) yankText() string {
+	if m.showLogs && m.logIndex < len(m.logs) {
+		return m.logs[m.logIndex].Body
+	}
 	if m.diff != nil {
 		var parts []string
 		for _, c := range m.diff.sideA {
@@ -113,8 +150,40 @@ func (m *detailModel) yankText() string {
 }
 
 func (m *detailModel) update(msg tea.KeyMsg) tea.Cmd {
+	if m.showLogs {
+		switch msg.String() {
+		case "n":
+			if m.logIndex+1 < len(m.logs) {
+				m.logIndex++
+				m.bodyPage = 0
+				m.vp.GotoTop()
+				m.render()
+			}
+			return nil
+		case "p":
+			if m.logIndex > 0 {
+				m.logIndex--
+				m.bodyPage = 0
+				m.vp.GotoTop()
+				m.render()
+			}
+			return nil
+		}
+	}
 	if msg.String() == "a" {
 		m.toggleRaw()
+		return nil
+	}
+	if msg.String() == "]" && m.bodyPage+1 < m.bodyPages() {
+		m.bodyPage++
+		m.vp.GotoTop()
+		m.render()
+		return nil
+	}
+	if msg.String() == "[" && m.bodyPage > 0 {
+		m.bodyPage--
+		m.vp.GotoTop()
+		m.render()
 		return nil
 	}
 	var cmd tea.Cmd
@@ -128,6 +197,12 @@ func (m *detailModel) view() string {
 
 func (m *detailModel) render() {
 	if m.width <= 0 {
+		return
+	}
+	if m.showLogs {
+		var b strings.Builder
+		m.writeLog(&b)
+		m.vp.SetContent(b.String())
 		return
 	}
 	if m.diff != nil {
@@ -149,6 +224,30 @@ func (m *detailModel) render() {
 		m.writeContents(&b)
 	}
 	m.vp.SetContent(b.String())
+}
+
+func (m *detailModel) writeLog(b *strings.Builder) {
+	b.WriteString(m.th.PaneTitle.Render("linked logs  ·  l back  ·  n/p next/previous log") + "\n\n")
+	if len(m.logs) == 0 {
+		b.WriteString(m.th.Dim.Render("no linked logs for this run"))
+		return
+	}
+	log := m.logs[m.logIndex]
+	b.WriteString(m.th.Accent.Render(reflowwrap.String(stripControl(fmt.Sprintf("log %d/%d  ·  %s", m.logIndex+1, len(m.logs), log.Severity)), max(1, m.width))) + "\n")
+	b.WriteString(reflowwrap.String(stripControl("span "+log.SpanID+"  ·  "+log.ObservedAt.Format("2006-01-02 15:04:05.000")), max(1, m.width)) + "\n\n")
+	body, pages := bodyChunk(logPayload(log), m.bodyPage)
+	if pages > 1 {
+		b.WriteString(m.th.Dim.Render(fmt.Sprintf("payload page %d/%d  ·  [/] change page", m.bodyPage+1, pages)) + "\n")
+	}
+	b.WriteString(reflowwrap.String(body, max(1, m.width)) + "\n")
+}
+
+func logPayload(log store.TraceLog) string {
+	body := stripControl(log.Body)
+	if log.AttrsJSON != "" {
+		body += "\n\nattributes\n" + prettyJSON(stripControl(log.AttrsJSON))
+	}
+	return body
 }
 
 func (m *detailModel) writeFindings(b *strings.Builder) {
@@ -200,7 +299,15 @@ func humanBytes(n int64) string {
 
 func (m *detailModel) writeHeader(b *strings.Builder) {
 	sp := m.span
-	b.WriteString(m.th.Accent.Render(sp.Name) + "\n")
+	if m.run != nil {
+		label := m.run.Label
+		if label == "" {
+			label = m.run.ID
+		}
+		b.WriteString(m.th.Dim.Render(reflowwrap.String(stripControl("run "+label), max(1, m.width))) + "\n")
+	}
+	b.WriteString(m.th.Accent.Render(reflowwrap.String(stripControl(sp.Name), max(1, m.width))) + "\n")
+	b.WriteString(m.th.Dim.Render(reflowwrap.String(stripControl("span "+sp.ID+"  ·  run "+sp.RunID), max(1, m.width))) + "\n")
 	info := fmt.Sprintf("%s - %s", sp.Kind, sp.Status)
 	if d := spanDuration(*sp); d != "" {
 		info += " - " + d
@@ -217,7 +324,7 @@ func (m *detailModel) writeHeader(b *strings.Builder) {
 	if r := resourceLine(m.sample); r != "" {
 		info += " - " + r
 	}
-	b.WriteString(m.th.Dim.Render(info) + "\n")
+	b.WriteString(m.th.Dim.Render(reflowwrap.String(stripControl(info), max(1, m.width))) + "\n")
 	meta := []string{}
 	if sp.Attrs.Model != "" {
 		meta = append(meta, sp.Attrs.Model)
@@ -232,7 +339,7 @@ func (m *detailModel) writeHeader(b *strings.Builder) {
 		meta = append(meta, "mcp")
 	}
 	if len(meta) > 0 {
-		b.WriteString(m.th.Dim.Render(strings.Join(meta, " - ")) + "\n")
+		b.WriteString(m.th.Dim.Render(reflowwrap.String(stripControl(strings.Join(meta, " - ")), max(1, m.width))) + "\n")
 	}
 	b.WriteString("\n")
 }
@@ -262,20 +369,69 @@ func (m *detailModel) writeContentList(b *strings.Builder, contents []store.Cont
 	for _, c := range contents {
 		b.WriteString(m.th.PaneTitle.Render(c.Role) + "\n")
 		body := stripControl(c.Body)
-		truncated := false
-		if len(body) > maxRenderedBody {
-			body, truncated = body[:maxRenderedBody], true
+		body, pages := bodyChunk(body, m.bodyPage)
+		if pages > 1 {
+			b.WriteString(m.th.Dim.Render(fmt.Sprintf("payload page %d/%d  ·  [/] change page", min(m.bodyPage+1, pages), pages)) + "\n")
 		}
 		if c.MediaType == "application/json" {
-			b.WriteString(prettyJSON(body))
+			b.WriteString(reflowwrap.String(prettyJSON(body), max(1, m.width)))
 		} else {
 			b.WriteString(m.renderMarkdown(body))
 		}
-		if truncated {
-			b.WriteString(m.th.Dim.Render("(truncated)") + "\n")
-		}
 		b.WriteString("\n")
 	}
+}
+
+// bodyChunk bounds rendering while making every byte reachable. Page ends
+// advance to the next UTF-8 boundary so changing pages never loses a rune.
+func bodyChunk(body string, page int) (string, int) {
+	if len(body) <= maxRenderedBody {
+		return body, 1
+	}
+	starts := []int{0}
+	for start := 0; start < len(body); {
+		end := min(start+maxRenderedBody, len(body))
+		for end < len(body) && !utf8.RuneStart(body[end]) {
+			end++
+		}
+		if end == len(body) {
+			break
+		}
+		starts = append(starts, end)
+		start = end
+	}
+	if page >= len(starts) {
+		return "", len(starts)
+	}
+	end := len(body)
+	if page+1 < len(starts) {
+		end = starts[page+1]
+	}
+	return body[starts[page]:end], len(starts)
+}
+
+func (m *detailModel) bodyPages() int {
+	if m.showLogs {
+		if m.logIndex >= len(m.logs) {
+			return 1
+		}
+		_, n := bodyChunk(logPayload(m.logs[m.logIndex]), 0)
+		return n
+	}
+	pages := 1
+	check := func(contents []store.Content) {
+		for _, c := range contents {
+			_, n := bodyChunk(stripControl(c.Body), 0)
+			pages = max(pages, n)
+		}
+	}
+	if m.diff != nil {
+		check(m.diff.sideA)
+		check(m.diff.sideB)
+	} else {
+		check(m.contents)
+	}
+	return pages
 }
 
 // minColumnWidth is the narrowest a diff side can get before two columns cost

@@ -1,0 +1,44 @@
+name: Beta feedback
+description: Report a setup problem, missing trace, or investigation problem
+title: "[beta] "
+body:
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where did it fail?
+      options:
+        - Install or launch
+        - Connect an app
+        - Receive the first trace
+        - Read a trace or linked log
+        - Cost or finding accuracy
+        - Export or replay
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the command or key sequence and what you expected to see.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Run `capybara doctor -bundle diagnostics.json` and paste its JSON. It contains counts and build identity, not trace bodies or database paths.
+      render: json
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Before posting
+      options:
+        - label: I removed secrets and private trace data from any extra logs or screenshots.
+          required: true
