@@ -96,6 +96,9 @@ func (m appModel) connectSnippet() string {
 }
 
 func (m appModel) connectView() string {
+	if m.th.Name == "pupu" {
+		return m.pupuConnectView()
+	}
 	var lines []string
 	lines = append(lines, m.th.PaneTitle.Render("Connect  (Esc to close)"), "")
 	if m.about.OTLP == "" {
@@ -142,4 +145,62 @@ func (m appModel) connectView() string {
 	}
 	content := strings.Join(lines, "\n")
 	return m.headerView() + "\n" + lipgloss.NewStyle().Width(max(1, m.width-2)).MaxHeight(max(1, m.height-2)).Render(content)
+}
+
+func (m appModel) pupuConnectView() string {
+	header := m.headerView()
+	footer := m.th.Shell.Width(m.width).Render(m.th.HelpKey.Render("j/k") + " choose   " +
+		m.th.HelpKey.Render("enter") + " copy setup   " + m.th.HelpKey.Render("esc") + " close")
+	areaH := max(3, m.height-lipgloss.Height(header)-lipgloss.Height(footer))
+	leftW := min(34, max(24, m.width/3))
+	var options []string
+	for i, option := range connectOptions {
+		row := fmt.Sprintf(" %d  %s", i+1, option)
+		if i == m.connectIndex {
+			options = append(options, m.th.Selected.Width(max(1, leftW-paneChrome)).Render(row))
+		} else {
+			options = append(options, m.th.Text.Render(row))
+		}
+	}
+	status := "● HTTP ready"
+	if m.about.OTLP == "" {
+		status = "! HTTP unavailable"
+	}
+	right := []string{m.th.Accent.Render(status), ""}
+	if m.about.OTLP != "" {
+		right = append(right, m.th.Dim.Render(m.about.OTLP+"/api/v1/events"))
+	} else if m.about.OTLPErr != "" {
+		right = append(right, m.th.StatusErr.Render(m.about.OTLPErr))
+	}
+	policy := "content capture on"
+	if !m.capture {
+		policy = "content capture off"
+	}
+	right = append(right, m.th.Dim.Render(fmt.Sprintf("%s  ·  %d HTTP runs", policy, m.connectRuns)), "", m.th.Text.Render(connectDescriptions[m.connectIndex]))
+	if m.notice != "" {
+		right = append(right, "", m.th.Accent.Render(m.notice))
+	}
+	if snippet := m.connectSnippet(); snippet != "" {
+		right = append(right, "", m.th.PaneTitle.Render("COPYABLE SETUP"))
+		for _, line := range strings.Split(snippet, "\n") {
+			right = append(right, m.th.Text.Render(line))
+		}
+	}
+	if m.width < 72 {
+		content := append(options, "")
+		content = append(content, right...)
+		if len(content) > areaH-3 {
+			content = content[:areaH-3]
+		}
+		return header + "\n" + m.pane("connect", strings.Join(content, "\n"), m.width, areaH, true) + "\n" + footer
+	}
+	rightW := m.width - leftW - paneGap
+	if len(right) > areaH-3 {
+		right = right[:areaH-3]
+	}
+	body := lipgloss.JoinHorizontal(lipgloss.Top,
+		m.pane("sources", strings.Join(options, "\n"), leftW, areaH, true),
+		lipgloss.NewStyle().Width(paneGap).Height(areaH).Render(""),
+		m.pane("setup", strings.Join(right, "\n"), rightW, areaH, false))
+	return header + "\n" + body + "\n" + footer
 }

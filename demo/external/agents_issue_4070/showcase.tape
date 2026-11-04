@@ -1,23 +1,28 @@
-# Run from the repository root after: go build -o /tmp/capybara ./cmd/capybara
+# Record from the repository root: vhs demo/external/agents_issue_4070/showcase.tape
 Output demo/external/agents_issue_4070/showcase.gif
 Output demo/external/agents_issue_4070/showcase.mp4
 
 Set Shell "bash"
-Set Theme "Dracula"
-Set FontFamily "DejaVu Sans Mono"
-Set FontSize 19
-Set Width 1300
-Set Height 660
-Set Framerate 12
-Set TypingSpeed 4ms
+Set FontSize 18
+Set Width 1100
+Set Height 520
+Set Padding 20
+Set Framerate 24
+Set TypingSpeed 30ms
+Set WindowBar Colorful
 
-Type "/tmp/capybara -db /tmp/capybara4070.db import demo/external/agents_issue_4070/trace.jsonl" Enter
+Hide
+Type "unset NO_COLOR; REPO=$PWD; DEMO_DIR=$(mktemp -d); go build -o $DEMO_DIR/capybara ./cmd/capybara && cp $REPO/demo/external/agents_issue_4070/trace.jsonl $DEMO_DIR/ && export PATH=$DEMO_DIR:$PATH CAPYBARA_DB=$DEMO_DIR/traces.db PS1='$ ' && cd $DEMO_DIR && printf '%s%s\\n' BUILD_ READY" Enter
+Wait /BUILD_READY/
+Type "clear" Enter
+Show
+Type "capybara import trace.jsonl" Enter
 Sleep 900ms
-Type "/tmp/capybara -db /tmp/capybara4070.db runs" Enter
+Type "capybara runs" Enter
 Sleep 2s
-Type "/tmp/capybara -db /tmp/capybara4070.db diff trace_76d3 trace_451b" Enter
+Type "capybara diff trace_76d3 trace_451b" Enter
 Sleep 3s
-Type "/tmp/capybara -db /tmp/capybara4070.db export --golden -o /tmp/capybara4070-golden trace_76d3" Enter
+Type "capybara export --golden -o golden trace_76d3" Enter
 Sleep 900ms
-Type "/tmp/capybara -db /tmp/capybara4070.db check /tmp/capybara4070-golden/golden_trace_76.json trace_451b" Enter
+Type "capybara check golden/golden_trace_76.json trace_451b" Enter
 Sleep 4s

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,8 +14,34 @@ func TestLoadThemeDefaultsWhenConfigMissing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadTheme: %v", err)
 	}
-	if th.Name == "" {
-		t.Error("expected a default theme")
+	if th.Name != "pupu" {
+		t.Errorf("default theme = %q, want pupu", th.Name)
+	}
+}
+
+func TestDatabaseEnvironmentDefaultAndFlagOverride(t *testing.T) {
+	dir := t.TempDir()
+	envDB := filepath.Join(dir, "environment.db")
+	flagDB := filepath.Join(dir, "flag.db")
+	t.Setenv("CAPYBARA_DB", envDB)
+	if err := run(context.Background(), []string{"runs"}, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(envDB); err != nil {
+		t.Fatalf("environment database: %v", err)
+	}
+	if err := run(context.Background(), []string{"-db", flagDB, "runs"}, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(flagDB); err != nil {
+		t.Fatalf("flag database: %v", err)
+	}
+}
+
+func TestInvalidNoClaudeEnvironmentIsReported(t *testing.T) {
+	t.Setenv("CAPYBARA_NO_CLAUDE", "yes")
+	if err := run(context.Background(), []string{"-version"}, io.Discard); err == nil {
+		t.Fatal("expected invalid CAPYBARA_NO_CLAUDE to fail")
 	}
 }
 

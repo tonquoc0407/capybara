@@ -4,14 +4,15 @@ Output demo/sdk-error.gif
 
 Set Shell bash
 Set FontSize 18
-Set Width 1160
-Set Height 630
-Set Padding 24
+Set Width 1100
+Set Height 520
+Set Padding 20
 Set Framerate 24
-Set TypingSpeed 22ms
+Set TypingSpeed 30ms
+Set WindowBar Colorful
 
 Hide
-Type "cd sdk-js && npm run build && clear" Enter
+Type "unset NO_COLOR; cd sdk-js && npm run build && clear" Enter
 Sleep 2s
 Show
 Type "sed -n '9,20p' examples/error-span.mjs" Enter

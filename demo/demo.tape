@@ -18,15 +18,16 @@ Set Framerate 24
 Set TypingSpeed 45ms
 
 Hide
-Type "REPO=$PWD; mkdir -p /tmp/capybara-demo && go build -o /tmp/capybara-demo/capybara ./cmd/capybara && export PATH=/tmp/capybara-demo:$PATH HOME=$(mktemp -d) PS1='$ ' && cd $HOME && clear" Enter
-Sleep 45s
+Type "unset NO_COLOR; REPO=$PWD; mkdir -p /tmp/capybara-demo && go build -o /tmp/capybara-demo/capybara ./cmd/capybara && export PATH=/tmp/capybara-demo:$PATH HOME=$(mktemp -d) PS1='$ ' && cp $REPO/demo/session.jsonl $REPO/demo/demo.jsonl $HOME/ && cd $HOME && printf '%s%s\\n' BUILD_ READY" Enter
+Wait /BUILD_READY/
+Type "clear" Enter
 Show
 
-Type "capybara import $REPO/demo/session.jsonl"
+Type "capybara import session.jsonl"
 Sleep 400ms
 Enter
 Sleep 1800ms
-Type "capybara import $REPO/demo/demo.jsonl"
+Type "capybara import demo.jsonl"
 Sleep 400ms
 Enter
 Sleep 1800ms

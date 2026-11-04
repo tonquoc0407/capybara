@@ -1,8 +1,8 @@
 # Records frameworks.gif: a real LangGraph agent, traced by OpenLLMetry, caught
 # answering past a failed tool. Run from the repository root, with the
-# demo/frameworks requirements installed in .venv:
+# demo/frameworks requirements installed in demo/frameworks/.venv:
 #
-#   python -m venv .venv && .venv/bin/pip install -r demo/frameworks/requirements.txt
+#   python -m venv demo/frameworks/.venv && demo/frameworks/.venv/bin/pip install -r demo/frameworks/requirements.txt
 #   vhs demo/frameworks.tape
 #
 # The agent is scheduled to start a few seconds after the TUI opens, so the run
@@ -21,14 +21,14 @@ Set Framerate 24
 Set TypingSpeed 45ms
 
 Hide
-Type "REPO=$PWD; mkdir -p /tmp/capybara-fw && go build -o /tmp/capybara-fw/capybara ./cmd/capybara" Enter
-Sleep 45s
+Type "unset NO_COLOR; REPO=$PWD; mkdir -p /tmp/capybara-fw && go build -o /tmp/capybara-fw/capybara ./cmd/capybara && printf '%s%s\\n' BUILD_ READY" Enter
+Wait /BUILD_READY/
 Type "export PATH=/tmp/capybara-fw:$PATH PS1='$ ' HOME=$(mktemp -d) && cd $HOME" Enter
 Sleep 1s
 # The stub API stands in for the model provider, and the agent is queued to run
 # eight seconds from now - after the TUI is up and listening.
-Type "nohup $REPO/.venv/bin/python $REPO/demo/frameworks/fake_openai_api.py >/dev/null 2>&1 &" Enter
-Type "( sleep 8; $REPO/.venv/bin/python $REPO/demo/frameworks/langchain_agent.py >/dev/null 2>&1 ) &" Enter
+Type "nohup $REPO/demo/frameworks/.venv/bin/python $REPO/demo/frameworks/fake_openai_api.py >/dev/null 2>&1 &" Enter
+Type "( sleep 8; $REPO/demo/frameworks/.venv/bin/python $REPO/demo/frameworks/langchain_agent.py >/dev/null 2>&1 ) &" Enter
 Sleep 1s
 Type "clear" Enter
 Show

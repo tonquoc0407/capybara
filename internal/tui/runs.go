@@ -63,8 +63,14 @@ func (d runDelegate) Render(w io.Writer, m list.Model, index int, item list.Item
 	case it.run.Status == "running":
 		style = d.th.StatusRun
 	}
-	head := style.Render(truncate(runMark(it)+" "+label, width))
-	fmt.Fprint(w, head+"\n"+d.th.Dim.Render(truncate("  "+runMeta(it.run), width)))
+	headText := truncate(runMark(it)+" "+label, width)
+	metaText := truncate("  "+runMeta(it.run), width)
+	metaStyle := d.th.Dim
+	if index == m.Index() && d.th.Name == "pupu" {
+		style = style.Width(width)
+		metaStyle = d.th.SelectedMeta.Width(width)
+	}
+	fmt.Fprint(w, style.Render(headText)+"\n"+metaStyle.Render(metaText))
 }
 
 func runMark(it runItem) string {

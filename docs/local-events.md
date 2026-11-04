@@ -1,6 +1,6 @@
 # Local HTTP events
 
-Start capybara's TUI, then press `i` and choose **HTTP JSON events**. For a service without a terminal UI, run `capybara listen`; it prints the endpoint and keeps the analyzer running. The default endpoint is `http://127.0.0.1:4318/api/v1/events`; the TUI and `listen` show the bound address if you moved it with `-otlp`.
+Start capybara's TUI, then press `i` and choose **HTTP JSON events**. For a service without a terminal UI, run `capybara listen`; it prints the endpoint and keeps the analyzer running. The default endpoint is `http://127.0.0.1:4318/api/v1/events`; the TUI and `listen` show the bound address if you moved it with `-otlp` or `CAPYBARA_OTLP_ADDR`.
 
 This [GIF](../demo/local-api.gif) shows a labelled synthetic failure sent through the local HTTP listener, then inspected in Connect, the span tree, and the cost view. Rebuild it with `vhs demo/local-api.tape` from the repository root. The tape uses a temporary database and `-no-claude`, so it does not read local Claude Code sessions.
 

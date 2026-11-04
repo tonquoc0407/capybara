@@ -20,6 +20,8 @@
   <img src="demo/local-api.gif" alt="local HTTP event arriving in the Connect screen, trace tree and cost view" width="720">
 </p>
 
+<p align="center"><a href="demo/local-api.mp4">Watch MP4</a> · <a href="demo/local-api.tape">Recording script</a></p>
+
 Capybara runs locally and stores traces in SQLite. Capture them with OTLP, HTTP JSON events, an SDK, a Claude Code session, or a file. Inspect failures in the TUI or read-only Web view; compare runs, export regression fixtures, and review cost provenance. The optional hub adds project tokens and a shared Web workspace.
 
 ## Contents
@@ -40,6 +42,8 @@ brew install tonquoc0407/tap/capybara
 ```
 
 Or `go install github.com/tonquoc0407/capybara/cmd/capybara@latest`, or grab a binary from the [releases page](https://github.com/tonquoc0407/capybara/releases). One file, no CGo, no runtime dependencies.
+
+For a local tour, run `capybara sample && capybara`. Press `i` to see connection methods.
 
 This README describes `main`. Homebrew, `@latest` and release binaries use the latest published tag, which may lag the features below. To try the current source, use `go install github.com/tonquoc0407/capybara/cmd/capybara@main`.
 
@@ -66,11 +70,7 @@ The resource monitor keeps CPU and memory samples when a step dies before its sp
   <img src="demo/monitor.gif" alt="TUI resource monitor while a pipeline stops mid-step" width="720">
 </p>
 
-A separate [LangChain chess agent](demo/knightvision_run.py) shows a trace from another codebase and cost estimated from Gemini usage.
-
-<p align="center">
-  <img src="demo/knightvision.gif" alt="LangChain chess agent trace and estimated token cost" width="720">
-</p>
+The [LangChain chess agent example](demo/knightvision_run.py) can instrument an external project. Its old recording needed a separate checkout and model key, so it is no longer part of the current UI tour.
 
 ### Web
 
@@ -91,7 +91,9 @@ These short command recordings show the evidence behind two specific behaviors. 
 | OpenAI Agents SDK issue #4070 | Import a pinned public trace, compare the first status divergence, and run a golden check. | [Recording](demo/external/agents_issue_4070/showcase.gif) · [Reproducer](demo/external/agents_issue_4070/) |
 | Node SDK error span | Record a failed call with error status through the Node SDK. | [Recording](demo/sdk-error.gif) · [Example](sdk-js/examples/error-span.mjs) |
 
-The [earlier TUI recording](demo/demo.gif) is also available.
+The [file import walkthrough](demo/demo.gif) shows the same workspace with a saved trace.
+
+To refresh the recordings from a source checkout, run `demo/record.sh`. It records each tape in order so their local listeners do not compete for the same port.
 
 ## Getting a trace in
 
@@ -101,7 +103,7 @@ Run it with no arguments. It opens the TUI, listens for OTLP on `127.0.0.1:4318`
 capybara
 ```
 
-Traces land in `capybara.db` in the working directory. Point somewhere else with `-db`. Use `-no-content` to omit prompt, completion and tool bodies and to keep only selected numeric and status attributes from raw telemetry. Names, IDs and other structured metadata can still contain sensitive text if your instrumentor puts it there. The flag does not erase existing runs; use a new database or remove old data separately. Use `-no-claude` to disable the automatic Claude Code watcher in the TUI. With an empty database, the middle pane shows what it's listening on and how to send it something.
+Traces land in `capybara.db` in the working directory. Set `CAPYBARA_DB=~/traces/capybara.db` once in your shell profile to share that location across `capybara`, `import`, `runs`, and other commands. `-db` overrides it for one command. `CAPYBARA_OTLP_ADDR` sets the HTTP receiver address; `CAPYBARA_NO_CLAUDE=1` disables the automatic Claude Code watcher in the TUI. Use `-no-content` to omit prompt, completion and tool bodies and to keep only selected numeric and status attributes from raw telemetry. Names, IDs and other structured metadata can still contain sensitive text if your instrumentor puts it there. The flag does not erase existing runs; use a new database or remove old data separately. With an empty database, the middle pane shows what it's listening on and how to send it something.
 
 To inspect a labelled synthetic failure immediately, run `capybara sample` against the same database, then reopen the TUI or Web view. The sample is idempotent and its `demo` environment distinguishes it from live traffic.
 
@@ -381,10 +383,10 @@ Overview reports errors, running runs, completed-run p95 latency, known costs, h
 `~/.config/capybara/config.toml`:
 
 ```toml
-theme = "bara"
+theme = "pupu"
 ```
 
-`bara` is the default warm dark. `mono` drops the accent to grey; `paper` is for a light terminal. Red and amber mean the same thing in all three.
+`pupu` is the default warm dark workspace theme, with a two-row navigation header and stronger pane focus. `bara` keeps the earlier compact layout; `mono` drops the accent to grey; `paper` is for a light terminal. Status text and markers remain visible without color.
 
 Model rates live in a table built into the binary, covering the current Claude, OpenAI, and Gemini families. Extend or override it with `~/.config/capybara/pricing.json`, which is merged over the built-in one. A model with no entry stays unpriced rather than being guessed at, and a rate that varies by context length or by date is recorded at its standard tier — the table has no conditions in it.
 

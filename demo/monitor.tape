@@ -24,12 +24,13 @@ Set Framerate 24
 Set TypingSpeed 30ms
 
 Hide
-Type "REPO=$PWD; mkdir -p /tmp/capybara-monitor && go build -o /tmp/capybara-monitor/capybara ./cmd/capybara && export PATH=/tmp/capybara-monitor:$PATH HOME=$(mktemp -d) PS1='$ ' PIPE=$REPO/demo/monitor_pipeline.py PY=$REPO/sdk/.venv/bin/python && cd $HOME && clear" Enter
-Sleep 45s
+Type "unset NO_COLOR; REPO=$PWD; mkdir -p /tmp/capybara-monitor && go build -o /tmp/capybara-monitor/capybara ./cmd/capybara && export PATH=/tmp/capybara-monitor:$REPO/sdk/.venv/bin:$PATH HOME=$(mktemp -d) PS1='$ ' && cp $REPO/demo/monitor_pipeline.py $HOME/pipeline.py && cd $HOME && printf '%s%s\\n' BUILD_ READY" Enter
+Wait /BUILD_READY/
+Type "clear" Enter
 Show
 
 # The pipeline runs in the background so the tui can watch it happen.
-Type "$PY $PIPE &"
+Type "python pipeline.py &"
 Sleep 300ms
 Enter
 Sleep 600ms

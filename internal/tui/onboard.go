@@ -1,10 +1,11 @@
 package tui
 
-import "strings"
+import (
+	"os"
+	"strings"
+)
 
-// waitingView replaces the span tree while the database is empty. A new install
-// otherwise shows three blank panes and no way to guess what to do next, which
-// is the whole difference between a tool someone keeps and one they delete.
+// waitingView replaces the span tree while the database is empty.
 func (m appModel) waitingView(width int) string {
 	var out []string
 	step := func(label, value string) {
@@ -15,11 +16,10 @@ func (m appModel) waitingView(width int) string {
 		out = append(out, "")
 	}
 	out = append(out, m.th.Text.Render("no traces yet"), "")
-	step("connect an application", "press i for HTTP events, OTLP, SDKs and file import")
+	step("connect an application", "press i: HTTP, OTLP, SDK, or file")
 	if m.about.OTLP != "" {
 		out = append(out, m.th.Dim.Render("listening on"),
 			"  "+m.th.Accent.Render(truncate(m.about.OTLP, width-2)), "")
-		step("point an instrumented app at it", "OTEL_EXPORTER_OTLP_ENDPOINT="+m.about.OTLP)
 	}
 	if m.about.OTLPErr != "" {
 		out = append(out, m.th.StatusErr.Render(truncate("a port was refused: "+m.about.OTLPErr, width)))
@@ -29,7 +29,11 @@ func (m appModel) waitingView(width int) string {
 		step("tailing claude sessions in", m.about.Watching)
 	}
 	step("or read a file you already have", "capybara import trace.jsonl")
-	step("try a labelled sample trace", "capybara -db "+m.dbPath+" sample")
+	sample := "capybara sample"
+	if m.dbPath != "" && m.dbPath != "capybara.db" && m.dbPath != os.Getenv("CAPYBARA_DB") {
+		sample = "capybara -db " + m.dbPath + " sample"
+	}
+	step("try a labelled sample trace", sample)
 	step("recording to", m.dbPath)
 	return strings.Join(out, "\n")
 }

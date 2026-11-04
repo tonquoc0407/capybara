@@ -3,12 +3,16 @@ package theme
 
 import "github.com/charmbracelet/lipgloss"
 
-// Theme is the complete style set for the TUI. Near-monochrome by charter:
-// one accent color, status carried by characters plus weight.
+// Theme is the complete style set for the TUI. Status is also carried by
+// characters, so it remains legible without color.
 type Theme struct {
 	Name          string
 	GlamourStyle  string
 	MascotPalette Palette
+	Shell         lipgloss.Style
+	TabActive     lipgloss.Style
+	TabIdle       lipgloss.Style
+	SelectedMeta  lipgloss.Style
 	Header        lipgloss.Style
 	HeaderInfo    lipgloss.Style
 	Border        lipgloss.Style
@@ -40,5 +44,5 @@ func ByName(name string) (Theme, bool) {
 
 // All returns the shipped themes; the first entry is the default.
 func All() []Theme {
-	return []Theme{Bara(), Mono(), Paper()}
+	return []Theme{Pupu(), Bara(), Mono(), Paper()}
 }

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"syscall"
 
 	"github.com/tonquoc0407/capybara/internal/analyze"
@@ -37,10 +38,22 @@ func main() {
 func run(ctx context.Context, args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("capybara", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	dbPath := fs.String("db", "capybara.db", "database file")
+	dbDefault := os.Getenv("CAPYBARA_DB")
+	if dbDefault == "" {
+		dbDefault = "capybara.db"
+	}
+	dbPath := fs.String("db", dbDefault, "database file")
 	noContent := fs.Bool("no-content", false, "drop prompt, completion and tool content")
-	noClaude := fs.Bool("no-claude", false, "do not auto-watch Claude Code sessions in the TUI")
-	otlpAddr := fs.String("otlp", "", "OTLP http address to listen on (default 127.0.0.1:4318)")
+	noClaudeDefault := false
+	if value := os.Getenv("CAPYBARA_NO_CLAUDE"); value != "" {
+		var err error
+		noClaudeDefault, err = strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("CAPYBARA_NO_CLAUDE: %w", err)
+		}
+	}
+	noClaude := fs.Bool("no-claude", noClaudeDefault, "do not auto-watch Claude Code sessions in the TUI")
+	otlpAddr := fs.String("otlp", os.Getenv("CAPYBARA_OTLP_ADDR"), "OTLP http address to listen on (default 127.0.0.1:4318)")
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -321,10 +334,10 @@ watcher when ~/.claude/projects exists.
 
 Flags, before the command:
 
-  -db path      database file (default capybara.db)
+  -db path      database file (default CAPYBARA_DB or ./capybara.db)
   -no-content   drop prompt, completion, tool content and raw text attributes
-  -no-claude    do not auto-watch Claude Code sessions in the TUI
-  -otlp addr    OTLP http address to listen on (default 127.0.0.1:4318)
+  -no-claude    do not auto-watch Claude Code sessions in the TUI (CAPYBARA_NO_CLAUDE=1)
+  -otlp addr    OTLP http address (default CAPYBARA_OTLP_ADDR or 127.0.0.1:4318)
   -version      print the version and exit
 `)
 	return err

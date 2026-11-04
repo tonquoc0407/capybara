@@ -746,7 +746,7 @@ func (m *appModel) layout() {
 	}
 	m.help.Width = m.width
 	statusH := lipgloss.Height(m.statusView())
-	paneH := max(3, m.height-1-statusH)
+	paneH := max(3, m.height-lipgloss.Height(m.headerView())-statusH)
 	runsW, middleW, detailW := m.displayPaneWidths()
 	listH, _ := m.paneHeights(paneH)
 	// -2 borders, -1 pane title line
@@ -774,7 +774,7 @@ func (m appModel) View() string {
 		return m.connectView()
 	}
 	statusView := m.statusView()
-	paneH := max(3, m.height-1-lipgloss.Height(statusView))
+	paneH := max(3, m.height-lipgloss.Height(m.headerView())-lipgloss.Height(statusView))
 	if m.detailFull {
 		return m.headerView() + "\n" + m.pane("detail  (Esc to close)", m.detail.view(), m.width, paneH, true) + "\n" + statusView
 	}
@@ -840,6 +840,18 @@ func (m appModel) View() string {
 }
 
 func (m appModel) pane(title, content string, w, h int, focused bool) string {
+	if m.th.Name == "pupu" {
+		mark := "  "
+		border := m.th.Border
+		if focused {
+			mark, border = "▌ ", m.th.BorderFocus
+		}
+		label := m.th.PaneTitle.Render(truncate(mark+strings.ToUpper(title), max(1, w-paneChrome)))
+		body := lipgloss.NewStyle().Background(m.th.Border.GetBackground()).
+			Width(max(1, w-paneChrome)).Height(max(0, h-3)).Render(content)
+		return border.Border(lipgloss.RoundedBorder()).Padding(0, 1).
+			Width(w - 2).Height(h - 2).Render(label + "\n" + body)
+	}
 	border, frame := m.th.Border, lipgloss.NormalBorder()
 	// A color change alone is easy to miss on a low-contrast terminal; the
 	// focused pane also gets a heavier frame and a leading marker, so which
@@ -858,6 +870,9 @@ func (m appModel) pane(title, content string, w, h int, focused bool) string {
 }
 
 func (m appModel) headerView() string {
+	if m.th.Name == "pupu" {
+		return m.pupuHeaderView()
+	}
 	title := m.th.Header.Render(" capybara ")
 	info := ""
 	if run, ok := m.runs.selectedRun(); ok {
@@ -878,6 +893,9 @@ func (m appModel) headerView() string {
 }
 
 func (m appModel) statusView() string {
+	if m.th.Name == "pupu" {
+		return m.pupuStatusView()
+	}
 	line := m.help.View(m.keys)
 	if !m.hintSeen {
 		hint := truncate("tab: switch panes  enter: expand  ?: help", m.width/2)
@@ -909,6 +927,122 @@ func (m appModel) statusView() string {
 			m.th.StatusBar.Render(" | ") + line
 	}
 	return m.faceStyle().Render(theme.Face(m.mood())) + " " + line
+}
+
+func (m appModel) pupuHeaderView() string {
+	if m.width < 24 {
+		return m.th.Shell.Width(m.width).Render(m.th.Header.Render(truncate(" capybara ", m.width)))
+	}
+	brand := m.th.Header.Render("  capybara  ")
+	scope := "local workspace"
+	info := "HTTP off"
+	if m.about.OTLP != "" {
+		info = "● receiving"
+	}
+	if run, ok := m.runs.selectedRun(); ok {
+		scope = run.Project
+		if scope == "" {
+			scope = "default"
+		}
+		if run.Environment != "" {
+			scope += " / " + run.Environment
+		}
+		info = fmt.Sprintf("%s  %s", shortID(run.ID), run.Status)
+		if run.Findings > 0 {
+			info += fmt.Sprintf("  ! %d", run.Findings)
+		}
+		if run.CostUSD != nil {
+			info += fmt.Sprintf("  $%.4g", *run.CostUSD)
+		}
+	}
+	scopeWidth := max(0, m.width-lipgloss.Width(brand)-lipgloss.Width(info)-5)
+	left := brand + m.th.Shell.Render("  "+truncate(scope, scopeWidth))
+	info = truncate(info, max(0, m.width-lipgloss.Width(left)-2))
+	fill := max(0, m.width-lipgloss.Width(left)-lipgloss.Width(info)-1)
+	top := m.th.Shell.Width(m.width).Render(left + strings.Repeat(" ", fill) + m.th.HeaderInfo.Render(info+" "))
+	return top + "\n" + m.pupuTabs()
+}
+
+func (m appModel) pupuTabs() string {
+	tabs := []struct {
+		mode  viewMode
+		label string
+	}{
+		{viewTree, "esc TRACE"},
+		{viewWaterfall, "w COST"},
+		{viewContext, "c CONTEXT"},
+		{viewMonitor, "m MONITOR"},
+		{viewDiff, "d DIFF"},
+		{viewBlame, "b BLAME"},
+	}
+	active := "TRACE"
+	for _, tab := range tabs {
+		if tab.mode == m.mode {
+			active = tab.label
+			break
+		}
+	}
+	if m.width < 82 {
+		line := m.th.TabActive.Render(active) + m.th.TabIdle.Render("ctrl+p commands")
+		return m.th.Shell.Width(m.width).Render(line)
+	}
+	var line strings.Builder
+	for _, tab := range tabs {
+		style := m.th.TabIdle
+		if tab.mode == m.mode {
+			style = m.th.TabActive
+		}
+		line.WriteString(style.Render(tab.label))
+	}
+	line.WriteString(m.th.TabIdle.Render("i CONNECT"))
+	if lipgloss.Width(line.String()) > m.width {
+		return m.th.Shell.Width(m.width).Render(m.th.TabActive.Render(active) + m.th.TabIdle.Render("ctrl+p commands"))
+	}
+	return m.th.Shell.Width(m.width).Render(line.String())
+}
+
+func (m appModel) pupuStatusView() string {
+	if m.help.ShowAll {
+		return m.help.View(m.keys)
+	}
+	area, hint := "TRACE", "j/k move  ·  enter fold  ·  / search"
+	switch m.mode {
+	case viewWaterfall:
+		area, hint = "COST", "j/k select  ·  tab detail"
+	case viewContext:
+		area, hint = "CONTEXT", "j/k select  ·  tab detail"
+	case viewMonitor:
+		area, hint = "MONITOR", "live samples  ·  esc trace"
+	case viewDiff:
+		area, hint = "DIFF", "j/k select  ·  tab detail"
+	case viewBlame:
+		area, hint = "BLAME", "j/k select  ·  tab detail"
+	}
+	switch m.focus {
+	case focusRuns:
+		area, hint = "RUNS", "j/k select  ·  / filter  ·  d compare"
+	case focusDetail:
+		area, hint = "DETAIL", "j/k scroll  ·  space expand"
+	}
+	if m.lastErr != nil {
+		hint = m.lastErr.Error()
+	} else if m.notice != "" {
+		hint = m.notice
+	} else if m.replaying {
+		hint = "replaying"
+	} else if m.edit.spanID != "" {
+		hint = "edited " + m.edit.name + "  ·  r re-run"
+	}
+	left := m.faceStyle().Render(theme.Face(m.mood())) + " " + m.th.Accent.Render(area) + m.th.StatusBar.Render("  "+truncate(hint, max(0, m.width/2)))
+	right := m.th.HelpKey.Render("tab") + m.th.StatusBar.Render(" panes  ") + m.th.HelpKey.Render("ctrl+p") + m.th.StatusBar.Render(" commands")
+	if m.width < 70 {
+		right = m.th.HelpKey.Render("ctrl+p") + m.th.StatusBar.Render(" commands")
+	}
+	fill := max(0, m.width-lipgloss.Width(left)-lipgloss.Width(right)-1)
+	if lipgloss.Width(left)+lipgloss.Width(right)+1 > m.width {
+		return m.th.Shell.Width(m.width).Render(truncate(area+"  "+hint, m.width))
+	}
+	return m.th.Shell.Width(m.width).Render(left + strings.Repeat(" ", fill) + right + " ")
 }
 
 func (m appModel) faceStyle() lipgloss.Style {

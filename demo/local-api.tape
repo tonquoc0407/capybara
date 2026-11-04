@@ -1,6 +1,6 @@
 # Record from the repository root: vhs demo/local-api.tape
 # A labelled synthetic failure is sent through the real local HTTP listener.
-# -no-claude keeps private sessions out of the recording.
+# The recording uses a throwaway database and disables session watching.
 Output demo/local-api.gif
 Output demo/local-api.mp4
 
@@ -14,16 +14,16 @@ Set TypingSpeed 28ms
 Set WindowBar Colorful
 
 Hide
-Type "REPO=$PWD; DEMO_DIR=$(mktemp -d); GOCACHE=/tmp/capybara-go-cache go build -o $DEMO_DIR/capybara ./cmd/capybara && printf '%s%s\\n' BUILD_ READY" Enter
+Type "unset NO_COLOR; REPO=$PWD; DEMO_DIR=$(mktemp -d); go build -o $DEMO_DIR/capybara ./cmd/capybara && export PATH=$DEMO_DIR:$PATH CAPYBARA_DB=$DEMO_DIR/demo.db CAPYBARA_OTLP_ADDR=127.0.0.1:43218 CAPYBARA_NO_CLAUDE=1 PS1='$ ' && printf '%s%s\\n' BUILD_ READY" Enter
 Wait /BUILD_READY/
-Type "$DEMO_DIR/capybara -db $DEMO_DIR/demo.db -otlp 127.0.0.1:43218 listen >$DEMO_DIR/listen.log 2>&1 & LISTENER_PID=$!" Enter
+Type "capybara listen >$DEMO_DIR/listen.log 2>&1 & LISTENER_PID=$!" Enter
 Sleep 1s
 Type "CAPYBARA_EVENTS_URL=http://127.0.0.1:43218/api/v1/events node $REPO/demo/local_api.mjs && printf '%s%s\\n' SEND_ READY" Enter
 Wait /SEND_READY/
 Type "kill $LISTENER_PID; wait $LISTENER_PID; clear" Enter
 Sleep 1s
 Show
-Type "$DEMO_DIR/capybara -db $DEMO_DIR/demo.db -otlp 127.0.0.1:43218 -no-claude" Enter
+Type "capybara" Enter
 Sleep 2s
 Type "i"
 Sleep 2s
