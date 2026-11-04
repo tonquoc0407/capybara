@@ -610,15 +610,18 @@ func TestToolOutputThatAnnouncesItsOwnFailure(t *testing.T) {
 
 func TestMalformedArguments(t *testing.T) {
 	cases := []struct {
-		name  string
-		input string
-		want  bool
+		name      string
+		input     string
+		mediaType string
+		want      bool
 	}{
-		{"valid json object", `{"query":"test","limit":10}`, false},
-		{"broken json object", `{"query":"test",`, true},
-		{"broken json markdown", "```json\n{\"query\":\"test\"\n", true},
-		{"plain text command", "ls -la /tmp", false},
-		{"empty input", "", false},
+		{"valid json object", `{"query":"test","limit":10}`, "text/plain", false},
+		{"broken json object", `{"query":"test",`, "text/plain", true},
+		{"broken json markdown", "```json\n{\"query\":\"test\"\n", "text/plain", true},
+		{"python repr from LangGraph", `{'symbol': 'NVDA'}`, "text/plain", false},
+		{"declared json with single quotes", `{'symbol': 'NVDA'}`, "application/json", true},
+		{"plain text command", "ls -la /tmp", "text/plain", false},
+		{"empty input", "", "text/plain", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -631,7 +634,7 @@ func TestMalformedArguments(t *testing.T) {
 			b := store.Batch{Source: "test", Spans: []store.Span{sp}}
 			if c.input != "" {
 				b.Contents = append(b.Contents, store.Content{
-					SpanID: sp.ID, Role: "input", Seq: 0, Body: c.input, MediaType: "text/plain",
+					SpanID: sp.ID, Role: "input", Seq: 0, Body: c.input, MediaType: c.mediaType,
 				})
 			}
 			b.Contents = append(b.Contents, store.Content{

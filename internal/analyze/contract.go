@@ -37,7 +37,12 @@ func (a *Analyzer) checkTool(ctx context.Context, sp store.Span) ([]store.Findin
 	var argFindings []store.Finding
 	if input != nil {
 		body := strings.TrimSpace(input.Body)
-		isJSON := strings.HasPrefix(body, "{") || strings.HasPrefix(body, "[") || strings.HasPrefix(body, "```")
+		looksLikeJSON := false
+		if strings.HasPrefix(body, "{") || strings.HasPrefix(body, "[") {
+			afterOpen := strings.TrimSpace(body[1:])
+			looksLikeJSON = strings.HasPrefix(afterOpen, "\"") || strings.HasPrefix(afterOpen, "{")
+		}
+		isJSON := strings.Contains(strings.ToLower(input.MediaType), "json") || looksLikeJSON || strings.HasPrefix(body, "```")
 		if isJSON && !json.Valid([]byte(body)) {
 			argFindings = append(argFindings, finding(sp, "malformed_arguments", "warning", map[string]any{
 				"tool": tool,
