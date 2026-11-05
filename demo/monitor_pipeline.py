@@ -1,8 +1,7 @@
 """Three nodes with different resource shapes, the last one killed.
 
-Recorded by demo/monitor.tape. Each node is written to look like something
-distinct on the graphs: one burns cpu, one grows the heap, and the third dies
-inside its span the way an out-of-memory kill does, leaving nothing to export.
+Recorded by demo/monitor.tape. One node uses CPU, one allocates memory, and
+the third receives SIGKILL inside its span before it can export a result.
 """
 
 import os

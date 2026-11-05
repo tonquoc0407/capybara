@@ -45,9 +45,8 @@ def main():
         base_url="http://127.0.0.1:8099/v1",
         temperature=0,
     )
-    # What a production agent does: the framework catches the failure and hands
-    # it back to the model, which then keeps going. The tool span is marked
-    # failed by the instrumentor, which is the signal capybara reads.
+    # The framework catches the tool failure and passes it back to the model.
+    # The instrumentor marks the tool span as failed.
     agent = create_agent(model, ToolNode([get_stock_price], handle_tool_errors=True))
     result = agent.invoke(
         {"messages": [("user", "What are my 120 NVDA shares worth at the last close?")]}

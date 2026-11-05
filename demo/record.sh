@@ -12,7 +12,6 @@ command -v node >/dev/null && command -v npm >/dev/null || { echo "Install Node.
 
 for tape in \
   demo/local-api.tape \
-  demo/demo.tape \
   demo/frameworks.tape \
   demo/monitor.tape \
   demo/external/agents_issue_4070/showcase.tape \

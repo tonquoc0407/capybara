@@ -76,8 +76,6 @@ The resource monitor keeps CPU and memory samples when a step dies before its sp
   <img src="demo/monitor.gif" alt="TUI resource monitor while a pipeline stops mid-step" width="720">
 </p>
 
-The [LangChain chess agent example](demo/knightvision_run.py) can instrument an external project. Its old recording needed a separate checkout and model key, so it is no longer part of the current UI tour.
-
 ### Web
 
 This hub overview uses a labelled synthetic run. The existing [browser check](scripts/browser_check.mjs) captures it and checks editing, trace evidence and mobile layout. [See the mobile Trace view](demo/web-trace-mobile.png).
@@ -96,8 +94,6 @@ These short command recordings show the evidence behind two specific behaviors. 
 | --- | --- | --- |
 | OpenAI Agents SDK issue #4070 | Import a pinned public trace, compare the first status divergence, and run a golden check. | [Recording](demo/external/agents_issue_4070/showcase.gif) · [Reproducer](demo/external/agents_issue_4070/) |
 | Node SDK error span | Record a failed call with error status through the Node SDK. | [Recording](demo/sdk-error.gif) · [Example](sdk-js/examples/error-span.mjs) |
-
-The [file import walkthrough](demo/demo.gif) shows the same workspace with a saved trace.
 
 To refresh the recordings from a source checkout, run `demo/record.sh`. It records each tape in order so their local listeners do not compete for the same port.
 
@@ -125,7 +121,7 @@ Point any instrumented app at it:
 OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
 ```
 
-Four attribute conventions are read — OpenTelemetry's own `gen_ai.*`, OpenInference (Arize/Phoenix), OpenLLMetry (traceloop), and the Vercel AI SDK's legacy `ai.*` — so whichever instrumentor you already run is enough.
+The receiver reads `gen_ai.*`, OpenInference, OpenLLMetry (traceloop), and the Vercel AI SDK's legacy `ai.*` attributes. Other instrumentors may need a [mapping file](#config).
 
 If LiteLLM is already your gateway, use the [LiteLLM OTLP setup](docs/integrations/litellm.md) to feed its traces into capybara without placing capybara in the request path.
 
@@ -176,7 +172,7 @@ def lookup_price(sku: str) -> dict:
     return {"price": 42.0, "currency": "USD"}
 ```
 
-`init()` reuses a `TracerProvider` you already configured, so any instrumentor you already run keeps working — capybara only adds an exporter to it.
+`init()` reuses an existing OpenTelemetry SDK `TracerProvider` when one is installed. It adds an OTLP exporter and processors for schema and replay metadata. For the local endpoint, it also starts resource sampling by default.
 
 The same three calls exist for Node in [`sdk-js/`](sdk-js): `init`, `trace`, `schema`. The Node package is currently installed from a local source build; it is not published on npm.
 
@@ -198,7 +194,6 @@ The tree marks `x` for a failed span, `!` for one carrying a finding, and `?` fo
 | `e` | edit a tool output | `y` / `Y` | copy content / curl |
 | `q` | quit | `?` | full help |
 | `m` | resource monitor | | |
-| `space` in detail | full-screen detail | | |
 
 The TUI uses three panes on wide terminals, two on medium ones, and one on narrow ones. Arrow keys work alongside `j/k`. There is no timed splash screen.
 
@@ -212,7 +207,7 @@ Findings are recorded, never enforced — analysis touches nothing outside the d
 
 ### `improvised`
 
-The one worth knowing about. A tool call failed, and the next model turn answered as if it hadn't:
+A tool call failed, and the next model turn answered as if it hadn't:
 
 ```
 tool get_stock_price x                    3.0s
@@ -308,7 +303,7 @@ The labelled [`corpus/`](corpus) has 34 curated runs: positives and near misses 
 | `capybara diff <run_a> <run_b>` | align spans, mark the first divergence |
 | `capybara blame <run>` | walk the final output back to its tainted source |
 | `capybara replay <run>` | re-run a recording, optionally with an edited tool result |
-| `capybara mcp [--max-turns N] -- <cmd>` | zero-config stdio proxy interceptor (optional turn limit circuit breaker) |
+| `capybara mcp [--max-turns N] -- <cmd>` | intercept stdio MCP calls; optionally limit turns |
 | `capybara mcp --sse <url>` | bridge stdio MCP client to remote SSE server |
 | `capybara prune` | delete old runs (`--keep`, `--older-than`, `--clean-ok`) |
 | `capybara vacuum` | reclaim disk space from the SQLite database |
@@ -396,9 +391,9 @@ theme = "pupu"
 
 `pupu` is the default theme. Its run rail, trace, and inspector share a status strip; amber marks model work, teal marks tools, purple marks retrieval, and coral marks errors. `bara` keeps the earlier compact layout; `mono` uses grey; `paper` is for a light terminal. Status text and markers remain visible when `NO_COLOR=1` disables ANSI color.
 
-Model rates live in a table built into the binary, covering the current Claude, OpenAI, and Gemini families. Extend or override it with `~/.config/capybara/pricing.json`, which is merged over the built-in one. A model with no entry stays unpriced rather than being guessed at, and a rate that varies by context length or by date is recorded at its standard tier — the table has no conditions in it.
+Model rates live in a table built into the binary, covering selected Claude, OpenAI, and Gemini models. Extend or override it with `~/.config/capybara/pricing.json`, which is merged over the built-in one. A model with no entry stays unpriced rather than being guessed at, and a rate that varies by context length or by date is recorded at its standard tier — the table has no conditions in it.
 
-The built-in conventions (OpenTelemetry `gen_ai`, OpenInference, OpenLLMetry, the Vercel AI SDK) cover most instrumentors. For one they don't, `~/.config/capybara/mapping.toml` names the attributes that decide a span's kind and where its model, tokens and content live, with no rebuild:
+For an instrumentor that uses other attributes, `~/.config/capybara/mapping.toml` names the attributes that decide a span's kind and where its model, tokens and content live, with no rebuild:
 
 ```toml
 [[kind]]

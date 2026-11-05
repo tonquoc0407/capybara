@@ -19,7 +19,7 @@ class Price(BaseModel):
     currency: str
 
 
-capybara.schema("lookup_price", Price)  # declared beats learned
+capybara.schema("lookup_price", Price)  # check this declared shape
 
 
 @capybara.trace(tool="lookup_price")
@@ -27,9 +27,9 @@ def lookup_price(sku: str) -> dict:
     return {"price": 42.0, "currency": "USD"}
 ```
 
-`init()` reuses a `TracerProvider` you already configured, so OpenInference or
-OpenLLMetry instrumentors covering OpenAI, Anthropic, or LangChain keep working;
-capybara only adds an OTLP exporter and the schema processor.
+`init()` reuses an existing OpenTelemetry SDK `TracerProvider` when one is
+installed. It adds an OTLP exporter and processors for schema and replay
+metadata. Resource sampling starts by default for the local endpoint.
 
 `@capybara.trace` wraps un-instrumented functions. A bare `@capybara.trace`
 records a tool span named after the function; `kind="agent"` or `kind="llm"`

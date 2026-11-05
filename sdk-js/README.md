@@ -22,7 +22,7 @@ schema('lookup_price', {
   type: 'object',
   properties: { price: { type: 'number' }, currency: { type: 'string' } },
   required: ['price', 'currency'],
-}); // declared beats learned
+}); // check this declared shape instead of learning one from earlier calls
 
 const lookupPrice = trace((sku: string) => ({ price: 42, currency: 'USD' }), {
   tool: 'lookup_price',
