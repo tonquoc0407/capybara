@@ -42,7 +42,7 @@ func doctorCmd(ctx context.Context, dbPath string, args []string, out io.Writer)
 			return err
 		}
 		data = append(data, '\n')
-		file, err := os.OpenFile(*bundle, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		file, err := os.OpenFile(*bundle, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err != nil {
 			return err
 		}
