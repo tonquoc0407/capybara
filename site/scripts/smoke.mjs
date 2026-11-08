@@ -28,9 +28,14 @@ try {
   await desktop.goto(address);
   assert.match(await desktop.title(), /Capybara/);
   assert.ok(await desktop.getByRole('heading', { name: /Find the step that broke/ }).isVisible());
-  assert.ok(await desktop.locator('.hero-window img').evaluate(image => image.complete && image.naturalWidth > 0));
+  assert.ok(await desktop.locator('.hero-shot img').evaluate(image => image.complete && image.naturalWidth > 0));
   assert.ok((await fetch(`${address}/assets/pupu-tour.mp4`, { method: 'HEAD' })).ok, 'TUI video is missing');
   assert.ok(await desktop.evaluate(() => [...document.querySelectorAll('a[href^="#"]')].every(link => document.getElementById(link.hash.slice(1)))), 'broken in-page link');
+  assert.ok(await desktop.locator('.marquee-copy').evaluateAll(copies => copies.length === 2 && copies[0].textContent === copies[1].textContent && copies[0].getBoundingClientRect().width >= window.innerWidth), 'marquee copies do not form a seamless loop');
+  assert.equal(await desktop.locator('.gradient-text').count(), 1);
+  assert.equal(await desktop.locator('.star-border').count(), 1);
+  assert.equal(await desktop.locator('.glare-hover').count(), 1);
+  assert.equal(await desktop.locator('.spotlight-card').count(), 3);
 
   await desktop.getByRole('button', { name: 'Play replay' }).click();
   await desktop.waitForTimeout(350);
@@ -44,6 +49,9 @@ try {
   await desktop.getByRole('button', { name: /improvised/ }).click();
   assert.ok(await desktop.locator('.finding-strip').getByText(/answer after tool failure/).isVisible());
   assert.ok(await desktop.locator('.real-demo video source').getAttribute('src') === '/assets/pupu-tour.mp4');
+  assert.ok(await desktop.locator('.real-demo video').evaluate(video => video.autoplay && video.loop && video.muted && !video.controls), 'video must autoplay without native progress controls');
+  await desktop.locator('.real-demo video').scrollIntoViewIfNeeded();
+  await desktop.waitForFunction(() => document.querySelector('.real-demo video')?.currentTime > 0.2, undefined, { timeout: 5000 });
   await desktop.getByRole('button', { name: 'Current source' }).click();
   assert.ok(await desktop.getByText('go install github.com/tonquoc0407/capybara/cmd/capybara@main').isVisible());
   await desktop.getByRole('button', { name: 'Homebrew' }).click();
@@ -55,7 +63,17 @@ try {
   assert.ok(await desktop.getByText('export CAPYBARA_EVENTS_URL=http://127.0.0.1:4318/api/v1/events').isVisible());
   assert.deepEqual(errors, [], `browser errors: ${errors.join(', ')}`);
   assert.deepEqual(externalRequests, [], `third-party requests: ${externalRequests.join(', ')}`);
+  for (const element of await desktop.locator('[data-reveal]').all()) await element.scrollIntoViewIfNeeded();
+  await desktop.waitForTimeout(750);
   await desktop.screenshot({ path: '/tmp/capybara-landing-desktop.png', fullPage: true });
+
+  const wide = await browser.newPage({ viewport: { width: 2048, height: 1152 }, deviceScaleFactor: 1 });
+  await wide.goto(address);
+  await wide.waitForTimeout(950);
+  assert.ok(await wide.locator('.hero').evaluate(hero => hero.getBoundingClientRect().height <= 750), 'hero is too tall on a wide desktop');
+  assert.ok(await wide.locator('h1').evaluate(title => parseFloat(getComputedStyle(title).fontSize) <= 74), 'hero title is too large on a wide desktop');
+  assert.ok(await wide.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'wide page overflows horizontally');
+  await wide.screenshot({ path: '/tmp/capybara-landing-wide.png' });
 
   const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
   mobile.on('pageerror', error => errors.push(error.message));
@@ -64,9 +82,11 @@ try {
   assert.ok(await mobile.getByRole('button', { name: 'Play replay' }).isVisible());
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'mobile page overflows horizontally');
   assert.deepEqual(errors, [], `browser errors: ${errors.join(', ')}`);
+  for (const element of await mobile.locator('[data-reveal]').all()) await element.scrollIntoViewIfNeeded();
+  await mobile.waitForTimeout(750);
   await mobile.screenshot({ path: '/tmp/capybara-landing-mobile.png', fullPage: true });
 
-  console.log('Desktop and mobile landing smoke test passed.');
+  console.log('Desktop, wide desktop, and mobile landing smoke test passed.');
 } finally {
   await browser?.close();
   server.kill('SIGTERM');

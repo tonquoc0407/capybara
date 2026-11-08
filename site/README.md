@@ -34,4 +34,4 @@ The project name determines the `*.pages.dev` address. Check name availability i
 
 Before making the site public, review the Homebrew command against the latest release, verify the links and the replay on desktop and mobile, and confirm the deployed page loads its assets over HTTPS.
 
-The spotlight effect is sourced from [React Bits](https://reactbits.dev/) through the [reactbits.dev-skill](https://github.com/Philotheephilix/reactbits.dev-skill) registry helper. Its separate MIT + Commons Clause terms are preserved in [REACT_BITS_LICENSE.md](REACT_BITS_LICENSE.md); the project's root MIT license does not replace them.
+The SpotlightCard, GradientText, GlareHover, and StarBorder effects are sourced from [React Bits](https://reactbits.dev/) through the [reactbits.dev-skill](https://github.com/Philotheephilix/reactbits.dev-skill) registry helper. Their separate MIT + Commons Clause terms are preserved in [REACT_BITS_LICENSE.md](REACT_BITS_LICENSE.md); the project's root MIT license does not replace them.

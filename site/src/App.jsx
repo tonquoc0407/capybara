@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import SpotlightCard from './components/SpotlightCard.jsx';
+import GlareHover from './components/GlareHover.jsx';
+import GradientText from './components/GradientText.jsx';
+import StarBorder from './components/StarBorder.jsx';
 
 const repo = 'https://github.com/tonquoc0407/capybara';
 const installCommands = {
@@ -13,6 +16,7 @@ const connections = [
   { id: 'json', label: 'HTTP events', summary: 'Set the endpoint for the included examples or for your own event sender.', code: 'export CAPYBARA_EVENTS_URL=http://127.0.0.1:4318/api/v1/events', href: '#from-your-own-agent' }
 ];
 const totalSeconds = 9;
+const marqueeItems = ['OTLP INPUT', 'LOCAL HTTP API', 'FULL TRACE TREE', 'LINKED LOGS', 'COST PROVENANCE', 'REGRESSION CHECKS'];
 
 // A labelled, synthetic example of the failure documented in the project tour.
 const trace = [
@@ -122,11 +126,7 @@ function TraceReplay() {
   }
 
   return <div className="replay-shell" id="replay">
-    <div className="replay-topline">
-      <div className="window-dots" aria-hidden="true"><i /><i /><i /></div>
-      <span>capybara / sample run</span>
-      <span className="replay-live">SYNTHETIC TRACE</span>
-    </div>
+    <div className="replay-topline"><span>RUN 01 <span className="topline-divider">/</span> LOCAL DEMO</span><span className="replay-live">SYNTHETIC TRACE</span></div>
     <div className="replay-toolbar">
       <div>
         <p className="eyebrow">INTERACTIVE REPLAY</p>
@@ -163,7 +163,7 @@ function TraceReplay() {
       </div>
       <div className="inspector-pane">
         <div className="pane-title"><span>INSPECTOR</span><span>{selected.kind}</span></div>
-        <div className="inspector-content" aria-live="polite">
+        <div className="inspector-content" key={selected.id} aria-live="polite">
           <div className="inspector-heading"><span className={`status-pill status-${selected.status}`}>{selected.status === 'finding' ? 'FINDING' : selected.status.toUpperCase()}</span><span className="inspector-duration">{selected.duration}</span></div>
           <h4>{selected.name}</h4>
           <p>{selected.detail}</p>
@@ -181,7 +181,7 @@ function InstallTerminal() {
   const command = installCommands[method];
 
   return <div className="install-terminal">
-    <div className="terminal-heading"><div className="window-dots" aria-hidden="true"><i /><i /><i /></div><span>quick start</span></div>
+    <div className="terminal-heading"><span>QUICK START</span><span>LOCAL INSTALL ↘</span></div>
     <div className="install-tabs" role="group" aria-label="Installation method">
       <button type="button" className={method === 'brew' ? 'active' : ''} onClick={() => setMethod('brew')} aria-pressed={method === 'brew'}>Homebrew</button>
       <button type="button" className={method === 'source' ? 'active' : ''} onClick={() => setMethod('source')} aria-pressed={method === 'source'}>Current source</button>
@@ -200,11 +200,36 @@ function ConnectPanel() {
   </div>;
 }
 
+function Marquee() {
+  return <section className="marquee" aria-label={`Capabilities: ${marqueeItems.join(', ')}`}>
+    <div className="marquee-track" aria-hidden="true">{[0, 1].map(copy => <div className="marquee-copy" key={copy}>{marqueeItems.map(item => <span key={item}>{item}<b>✳</b></span>)}</div>)}</div>
+  </section>;
+}
+
 function App() {
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return undefined;
+    const elements = [...document.querySelectorAll('[data-reveal]')];
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          observer.unobserve(entry.target);
+        }
+      }
+    }, { threshold: 0.08, rootMargin: '0px 0px -25px 0px' });
+    document.documentElement.classList.add('reveal-enabled');
+    elements.forEach(element => observer.observe(element));
+    return () => {
+      observer.disconnect();
+      document.documentElement.classList.remove('reveal-enabled');
+    };
+  }, []);
+
   const features = [
-    { number: '01 / CAPTURE', title: 'Get a trace in.', body: 'Point an OTLP exporter at localhost, send HTTP JSON events, use a Python SDK, or read a Claude Code session. No cloud account to set up.', tag: 'OTLP · HTTP · SDK · FILE' },
-    { number: '02 / INVESTIGATE', title: 'Follow the failure.', body: 'Open the span tree, full payloads, linked logs, findings, and cost provenance. The TUI expands into a full-width inspector when a line is too long.', tag: 'TUI · LOCAL WEB' },
-    { number: '03 / VERIFY', title: 'Keep the fix.', body: 'Compare runs, export a regression fixture, and check findings in CI. Review what changed before the same failure reaches production again.', tag: 'DIFF · REPLAY · CI' }
+    { number: '01 / CAPTURE', title: 'Get a trace in.', body: 'OTLP, HTTP events, Python SDK, or Claude Code logs.', tag: 'OTLP · HTTP · SDK · FILE' },
+    { number: '02 / INVESTIGATE', title: 'Follow the failure.', body: 'Inspect full spans, linked logs, findings, and costs.', tag: 'TUI · LOCAL WEB' },
+    { number: '03 / VERIFY', title: 'Keep the fix.', body: 'Diff runs and gate regressions in CI.', tag: 'DIFF · REPLAY · CI' }
   ];
 
   return <>
@@ -218,45 +243,42 @@ function App() {
       <section className="hero" id="top">
         <div className="hero-copy">
           <div className="eyebrow hero-eyebrow"><span className="pulse" /> LOCAL-FIRST AGENT TRACING <span className="eyebrow-line" /></div>
-          <h1>Find the step that <em>broke</em> your agent run<span className="period">.</span></h1>
-          <p className="hero-lede">Capybara records agent traces and puts failures, tool calls, logs, and costs where you can inspect them: in your terminal and on your machine.</p>
-          <div className="hero-actions"><a className="button-primary" href="#replay">Try the trace replay <span aria-hidden="true">↘</span></a><a className="button-secondary" href="#install">Get started <span aria-hidden="true">→</span></a></div>
-          <div className="hero-proof"><span>OPEN SOURCE / MIT</span><span>LOCAL SQLITE</span><span>NO ACCOUNT</span></div>
+          <h1>Find the step that <GradientText colors={['#ffb271', '#f68477', '#ffe0af']} animationSpeed={7} glow={0.12} className="hero-gradient">broke</GradientText> your agent run<span className="period">.</span></h1>
+          <p className="hero-lede">Inspect agent traces, tool failures, linked logs, and costs in a local TUI.</p>
+          <div className="hero-actions"><a className="button-primary" href="#replay">Try the trace replay <span aria-hidden="true">↘</span></a><StarBorder as="a" className="button-secondary star-cta" href="#install" color="#ffb271" trailColor="#f68477" backgroundColor="#261b15" textColor="#f6eee5" borderColor="rgba(255, 178, 113, .26)" duration={6} stars={2} glow={0.65} sparkle={false} radius={8}>Get started <span aria-hidden="true">→</span></StarBorder></div>
         </div>
         <div className="hero-visual" aria-label="Capybara terminal interface screenshot">
-          <div className="visual-annotation visual-annotation-top">TRACE / 006 SPANS <span>↘</span></div>
-          <div className="hero-window"><div className="window-bar"><div className="window-dots" aria-hidden="true"><i /><i /><i /></div><span>capybara — incident view</span><span>↗</span></div><img src="/assets/pupu-workspace.png" width="1400" height="780" alt="Capybara TUI with a failed lookup_price span and an improvised answer finding" /></div>
-          <div className="visual-annotation visual-annotation-bottom"><span>× tool error</span><span>! improvised answer</span></div>
+          <GlareHover className="hero-glare" width="100%" glareColor="#ffb271" glareOpacity={0.22} glareSize={42} variant="sheen" mode="hover" transitionDuration={950} borderRadius="4px"><div className="hero-shot"><img src="/assets/pupu-workspace.png" width="1400" height="780" alt="Capybara TUI with a failed lookup_price span and an improvised answer finding" /></div></GlareHover>
         </div>
       </section>
 
-      <section className="marquee" aria-label="Capabilities"><div>OTLP INPUT <span>✳</span> LOCAL HTTP API <span>✳</span> FULL TRACE TREE <span>✳</span> LINKED LOGS <span>✳</span> COST PROVENANCE <span>✳</span> REGRESSION CHECKS <span>✳</span> OTLP INPUT <span>✳</span></div></section>
+      <Marquee />
 
       <section className="section replay-section" aria-labelledby="demo-title">
-        <div className="section-intro"><div><p className="eyebrow">01 / EXPLORE THE FAILURE</p><h2 id="demo-title">Inspect a failed run here.</h2></div><p>Play a sample run, jump to the failed tool, then inspect what the agent answered. This is a synthetic browser demo of Capybara's trace workflow.</p></div>
-        <TraceReplay />
-        <div className="real-demo"><div><p className="eyebrow">ACTUAL PRODUCT RECORDING</p><h3>See the trace arrive in the TUI.</h3><p>This recording sends a synthetic agent run through Capybara's local HTTP API and opens its findings in the terminal. The replay above is a browser demonstration of the same investigation.</p><a href={`${repo}/blob/main/demo/local-api.tape`} target="_blank" rel="noreferrer">View the recording script ↗</a></div><video controls playsInline preload="none" poster="/assets/pupu-workspace.png" aria-label="Capybara TUI receiving and inspecting a local HTTP trace"><source src="/assets/pupu-tour.mp4" type="video/mp4" />Your browser does not support video playback.</video></div>
+        <div className="section-intro" data-reveal><div><p className="eyebrow">01 / EXPLORE THE FAILURE</p><h2 id="demo-title">Inspect a failed run here.</h2></div></div>
+        <div data-reveal><TraceReplay /></div>
+        <div className="real-demo" data-reveal><div><p className="eyebrow">ACTUAL TUI RECORDING</p><h3>See the trace arrive.</h3><a href={`${repo}/blob/main/demo/local-api.tape`} target="_blank" rel="noreferrer">Recording script ↗</a></div><video autoPlay muted loop playsInline preload="metadata" poster="/assets/pupu-workspace.png" aria-label="Capybara TUI receiving and inspecting a local HTTP trace"><source src="/assets/pupu-tour.mp4" type="video/mp4" />Your browser does not support video playback.</video></div>
       </section>
 
       <section className="section workflow-section" id="how-it-works" aria-labelledby="workflow-title">
-        <div className="section-intro"><div><p className="eyebrow">02 / FROM TRACE TO FIX</p><h2 id="workflow-title">From trace to regression check.</h2></div><p>Start with the input you already have. Follow the failing step. Keep a check for the next run.</p></div>
-        <div className="feature-grid">{features.map(feature => <SpotlightCard key={feature.number} className="feature-card" spotlightColor="#ffad68" intensity={0.24} spotlightSize={300} softness={0.8} flare={false} style={{ '--spotlight-card-surface': '#211b17', '--spotlight-card-border': 'rgba(255, 183, 125, .14)', '--spotlight-card-shadow': 'none' }}><span className="feature-number">{feature.number}</span><div className="feature-arrow" aria-hidden="true">↗</div><h3>{feature.title}</h3><p>{feature.body}</p><span className="feature-tag">{feature.tag}</span></SpotlightCard>)}</div>
+        <div className="section-intro" data-reveal><div><p className="eyebrow">02 / FROM TRACE TO FIX</p><h2 id="workflow-title">From trace to regression check.</h2></div></div>
+        <div className="feature-grid" data-reveal>{features.map(feature => <SpotlightCard key={feature.number} className="feature-card" spotlightColor="#ffad68" intensity={0.24} spotlightSize={300} softness={0.8} flare={false} style={{ '--spotlight-card-surface': '#211b17', '--spotlight-card-border': 'rgba(255, 183, 125, .14)', '--spotlight-card-shadow': 'none' }}><span className="feature-number">{feature.number}</span><div className="feature-arrow" aria-hidden="true">↗</div><h3>{feature.title}</h3><p>{feature.body}</p><span className="feature-tag">{feature.tag}</span></SpotlightCard>)}</div>
       </section>
 
-      <section className="section connect-section" aria-labelledby="connect-title"><div className="section-intro"><div><p className="eyebrow">03 / CONNECT YOUR APP</p><h2 id="connect-title">Start with the traces you already have.</h2></div><p>Capybara listens locally. Choose the input that fits your app; the TUI shows the full setup when you press <kbd>i</kbd>.</p></div><ConnectPanel /></section>
+      <section className="section connect-section" aria-labelledby="connect-title"><div className="section-intro" data-reveal><div><p className="eyebrow">03 / CONNECT YOUR APP</p><h2 id="connect-title">Use the traces you already have.</h2></div></div><div data-reveal><ConnectPanel /></div></section>
 
       <section className="section interfaces-section" id="interfaces" aria-labelledby="interfaces-title">
-        <div className="section-intro"><div><p className="eyebrow">04 / INVESTIGATE</p><h2 id="interfaces-title">Stay in the terminal. Open the web when you need it.</h2></div><p>The TUI keeps the investigation in your terminal. The local web view gives the same database room for charts, prompts, datasets, and usage.</p></div>
-        <div className="interface-grid">
-          <div className="interface-card interface-tui"><div className="interface-caption"><span>TUI / INVESTIGATE</span><a href={`${repo}#reading-a-trace`} target="_blank" rel="noreferrer">Explore keys ↗</a></div><img loading="lazy" src="/assets/pupu-workspace.png" width="1400" height="780" alt="Capybara terminal workspace showing runs, trace tree, and inspector" /></div>
-          <div className="interface-card interface-web"><div className="interface-caption"><span>WEB / REVIEW</span><a href={`${repo}#product-tour`} target="_blank" rel="noreferrer">View tour ↗</a></div><img loading="lazy" src="/assets/web-overview.png" width="1440" height="900" alt="Capybara web overview showing runs, errors, latency, cost, and incident panels" /></div>
+        <div className="section-intro" data-reveal><div><p className="eyebrow">04 / INVESTIGATE</p><h2 id="interfaces-title">TUI for the run. Web for the wider view.</h2></div></div>
+        <div className="interface-grid" data-reveal>
+          <div className="interface-card interface-tui"><img loading="lazy" src="/assets/pupu-workspace.png" width="1400" height="780" alt="Capybara terminal workspace showing runs, trace tree, and inspector" /><div className="interface-caption"><span>TUI / INVESTIGATE</span><a href={`${repo}#reading-a-trace`} target="_blank" rel="noreferrer">Explore keys ↗</a></div></div>
+          <div className="interface-card interface-web"><img loading="lazy" src="/assets/web-overview.png" width="1440" height="900" alt="Capybara web overview showing runs, errors, latency, cost, and incident panels" /><div className="interface-caption"><span>WEB / REVIEW</span><a href={`${repo}#product-tour`} target="_blank" rel="noreferrer">View tour ↗</a></div></div>
         </div>
-        <div className="privacy-line"><span className="privacy-icon" aria-hidden="true">⌁</span><p><strong>Your local trace database stays yours.</strong> Capybara stores traces in SQLite. Its local Web view reads that database; the optional hub is a separate choice for a shared workspace.</p></div>
+        <div className="privacy-line" data-reveal><span className="privacy-icon" aria-hidden="true">⌁</span><p>Traces stay in local SQLite. Sharing through the hub is optional.</p></div>
       </section>
 
       <section className="section install-section" id="install" aria-labelledby="install-title">
-        <div className="install-copy"><p className="eyebrow">05 / RUN IT LOCALLY</p><h2 id="install-title">Get your first trace locally.</h2><p>Install Capybara, then open it with a sample run. It starts the TUI and local receivers. Press <kbd>i</kbd> to choose how your app connects.</p><a href={`${repo}/blob/main/docs/beta-test.md`} target="_blank" rel="noreferrer">Read the beta test guide <span aria-hidden="true">↗</span></a></div>
-        <InstallTerminal />
+        <div className="install-copy" data-reveal><p className="eyebrow">05 / RUN IT LOCALLY</p><h2 id="install-title">Get your first trace locally.</h2><p>Install, open the sample, then press <kbd>i</kbd> to connect your app.</p><a href={`${repo}/blob/main/docs/beta-test.md`} target="_blank" rel="noreferrer">Beta test guide <span aria-hidden="true">↗</span></a></div>
+        <div data-reveal><InstallTerminal /></div>
       </section>
     </main>
     <footer className="site-footer"><div><a className="brand" href="#top"><img src="/assets/logo.png" width="28" height="28" alt="" /><span>capybara<span className="brand-dot">.</span></span></a><p>A local-first trace debugger for AI agents.</p></div><div className="footer-links"><a href={repo} target="_blank" rel="noreferrer">Source ↗</a><a href={`${repo}/issues/new/choose`} target="_blank" rel="noreferrer">Feedback ↗</a><a href={`${repo}/blob/main/LICENSE`} target="_blank" rel="noreferrer">MIT License ↗</a><a href="/assets/react-bits-license.txt">React Bits license ↗</a></div></footer>
