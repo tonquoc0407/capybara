@@ -51,6 +51,13 @@ try {
   assert.ok(await desktop.locator('.recording video').evaluate(video => video.autoplay && video.loop && video.muted && !video.controls), 'video must autoplay without native progress controls');
   await desktop.locator('.recording video').scrollIntoViewIfNeeded();
   await desktop.waitForFunction(() => document.querySelector('.recording video')?.currentTime > 0.2, undefined, { timeout: 5000 });
+  assert.ok((await fetch(`${address}/assets/agents-issue-4070.mp4`, { method: 'HEAD' })).ok, 'public case video is missing');
+  assert.ok(await desktop.locator('.case-media video').evaluate(video => video.autoplay && video.loop && video.muted && !video.controls), 'public case video must autoplay without native progress controls');
+  await desktop.locator('.case-media video').scrollIntoViewIfNeeded();
+  await desktop.waitForFunction(() => document.querySelector('.case-media video')?.currentTime >= 6, undefined, { timeout: 5000 });
+  assert.equal(await desktop.locator('.source-row').count(), 6);
+  assert.ok(await desktop.getByRole('link', { name: 'Start beta test' }).isVisible());
+  assert.ok(await desktop.getByText('The model span failed, but the regular agent span said').isVisible());
   for (const [tab, filename] of [['Web overview', 'web-overview.png'], ['Web trace', 'web-trace-mobile.png'], ['Terminal', 'pupu-workspace.png']]) {
     await desktop.getByRole('group', { name: 'Choose interface preview' }).getByRole('button', { name: tab }).click();
     await desktop.locator('.showcase-stage img').evaluate(image => image.decode());
@@ -64,7 +71,7 @@ try {
   await desktop.locator('.install-terminal .copy-command').first().click();
   assert.equal(await desktop.evaluate(() => navigator.clipboard.readText()), 'brew install tonquoc0407/tap/capybara');
   await desktop.getByRole('button', { name: 'HTTP events' }).click();
-  assert.ok(await desktop.getByText('export CAPYBARA_EVENTS_URL=http://127.0.0.1:4318/api/v1/events').isVisible());
+  assert.ok(await desktop.getByText('python examples/local_events.py').isVisible());
   assert.deepEqual(errors, [], `browser errors: ${errors.join(', ')}`);
   assert.deepEqual(externalRequests, [], `third-party requests: ${externalRequests.join(', ')}`);
   for (const element of await desktop.locator('[data-reveal]').all()) await element.scrollIntoViewIfNeeded();

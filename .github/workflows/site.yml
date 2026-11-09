@@ -10,6 +10,7 @@ on:
       - "demo/web-overview.png"
       - "demo/web-trace-mobile.png"
       - "demo/pupu-tour.mp4"
+      - "demo/external/agents_issue_4070/showcase.mp4"
       - ".github/workflows/site.yml"
   pull_request:
     paths:
@@ -19,6 +20,7 @@ on:
       - "demo/web-overview.png"
       - "demo/web-trace-mobile.png"
       - "demo/pupu-tour.mp4"
+      - "demo/external/agents_issue_4070/showcase.mp4"
       - ".github/workflows/site.yml"
 
 permissions:

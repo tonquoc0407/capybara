@@ -12,7 +12,7 @@ npm ci
 npm run dev
 ```
 
-`npm run build` produces `site/dist`. The build copies five existing repo assets from `demo/` into the output. No API keys or build secrets are required. Fonts are bundled locally; the page makes no third-party runtime requests.
+`npm run build` produces `site/dist`. The build copies six existing repo assets from `demo/` into the output. No API keys or build secrets are required. Fonts are bundled locally; the page makes no third-party runtime requests. The browser replay is synthetic; the public SDK case uses a pinned upstream bug reproducer with its trace and source linked from the page.
 
 Run `npm run build && npm run test:smoke` to check the replay and mobile layout with Playwright. The browser binary is installed separately with `npx playwright install chromium`.
 

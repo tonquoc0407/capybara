@@ -7,10 +7,18 @@ const installCommands = {
   source: 'go install github.com/tonquoc0407/capybara/cmd/capybara@main'
 };
 const connections = [
-  { id: 'otlp', label: 'OTLP', summary: 'Already emitting OTLP over HTTP? Point the exporter at the local receiver.', code: 'export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318', href: '#otlp' },
-  { id: 'python', label: 'Python SDK', summary: 'Install capybara-sdk, then add these lines to your Python app.', code: 'import capybara\ncapybara.init()', href: '#from-your-own-agent' },
-  { id: 'claude', label: 'Claude Code', summary: 'Read an existing Claude Code session from local logs.', code: 'capybara watch claude', href: '#a-session-file' },
-  { id: 'json', label: 'HTTP events', summary: 'Set the endpoint for the included examples or for your own event sender.', code: 'export CAPYBARA_EVENTS_URL=http://127.0.0.1:4318/api/v1/events', href: '#from-your-own-agent' }
+  { id: 'otlp', label: 'OTLP', summary: 'Point your existing OTLP HTTP exporter at the local receiver, then make one traced request.', code: 'export OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318', result: 'The new run appears in Connect; press o to inspect it.', href: '#otlp' },
+  { id: 'python', label: 'Python SDK', summary: 'Install capybara-sdk and trace a function in your app.', code: 'pip install capybara-sdk', result: 'Call your traced function; the run appears in Connect.', href: '#from-your-own-agent' },
+  { id: 'claude', label: 'Claude Code', summary: 'The TUI automatically tails local Claude Code logs. To watch without the TUI:', code: 'capybara watch claude', result: 'Start a Claude Code turn, then open its run in the TUI.', href: '#a-session-file' },
+  { id: 'json', label: 'HTTP events', summary: 'From a source checkout, send a complete run to the local HTTP receiver.', code: 'python examples/local_events.py', result: 'The example prints a run ID; press o in Connect to inspect it.', href: '#from-your-own-agent' }
+];
+const supportedInputs = [
+  { name: 'OTLP', setup: 'HTTP/protobuf and gRPC receivers on localhost.', note: 'GenAI, OpenInference, OpenLLMetry and ai.* attributes; other sources may need a mapping file.', href: '#otlp' },
+  { name: 'HTTP events', setup: 'POST start, update, end or complete events.', note: 'Local clients only; the endpoint has no API key.', href: 'docs/local-events.md' },
+  { name: 'Python SDK', setup: 'Published capybara-sdk package.', note: 'Add init() and trace a function to emit spans.', href: '#from-your-own-agent' },
+  { name: 'Node SDK', setup: 'Install from the repository source.', note: 'The package is not published on npm yet.', href: 'sdk-js/README.md' },
+  { name: 'Claude Code', setup: 'Tail local session logs or import an older session.', note: 'Needs local Claude Code logs; no app instrumentation.', href: '#a-session-file' },
+  { name: 'Files', setup: 'Import span JSONL, OTLP JSONL, Claude JSONL or agent-replay JSON.', note: 'OTLP LogRecords are not imported as traces.', href: '#a-file-you-have' }
 ];
 const totalSeconds = 9;
 const marqueeItems = ['OTLP INPUT', 'LOCAL HTTP API', 'FULL TRACE TREE', 'LINKED LOGS', 'COST PROVENANCE', 'REGRESSION CHECKS'];
@@ -195,10 +203,28 @@ function InstallTerminal() {
 
 function ConnectPanel() {
   const [method, setMethod] = useState(connections[0]);
-  return <div className="connect-panel">
+  return <><div className="connect-journey" aria-label="First trace steps"><span><b>1</b> <a href="#install">Start Capybara</a></span><span><b>2</b> Send one traced run</span><span><b>3</b> Open it in Connect</span></div><div className="connect-panel">
     <div className="connect-tabs" role="group" aria-label="Connection methods">{connections.map(item => <button key={item.id} type="button" className={method.id === item.id ? 'active' : ''} aria-pressed={method.id === item.id} onClick={() => setMethod(item)}>{item.label}</button>)}</div>
-    <div className="connect-content"><div><span className="connect-index">SOURCE / {method.id.toUpperCase()}</span><h3>{method.label}</h3><p>{method.summary}</p><a href={`${repo}${method.href}`} target="_blank" rel="noreferrer">Full setup in the README ↗</a></div><div className="connect-code"><span>CONNECT TO LOCALHOST</span><pre>{method.code}</pre><CopyButton value={method.code} className="copy-connect">Copy snippet</CopyButton></div></div>
-  </div>;
+    <div className="connect-content"><div><h3>{method.label}</h3><p>{method.summary}</p><a href={`${repo}${method.href}`} target="_blank" rel="noreferrer">Full setup ↗</a></div><div className="connect-code"><pre>{method.code}</pre><CopyButton value={method.code} className="copy-connect">Copy</CopyButton><p className="connect-result">{method.result}</p></div></div>
+  </div></>;
+}
+
+function SupportedInputs() {
+  return <div className="supported-inputs" id="sources"><h3>Supported inputs</h3><div className="source-list">{supportedInputs.map(input => <div className="source-row" key={input.name}>
+    <strong>{input.name}</strong><span>{input.setup}</span><span>{input.note}</span><a href={input.href.startsWith('#') ? `${repo}${input.href}` : `${repo}/blob/main/${input.href}`} target="_blank" rel="noreferrer" aria-label={`${input.name} setup`}>Setup ↗</a>
+  </div>)}</div></div>;
+}
+
+function PublicCase() {
+  return <section className="section case-section" id="case" aria-labelledby="case-title">
+    <div className="section-intro" data-reveal><h2 id="case-title">A public bug, traced to a status mismatch.</h2><p>OpenAI Agents SDK issue #4070, reproduced on v0.19.1 with a local model stub. No production traffic.</p></div>
+    <div className="case-layout" data-reveal><div className="case-media"><video autoPlay muted loop playsInline preload="metadata" onLoadedMetadata={event => { event.currentTarget.currentTime = 6; }} onTimeUpdate={event => { if (event.currentTarget.currentTime >= 16.5) event.currentTarget.currentTime = 6; }} aria-label="Capybara imports the issue 4070 trace, compares runs and checks a regression fixture"><source src="/assets/agents-issue-4070.mp4" type="video/mp4" />Your browser does not support video playback.</video></div><div className="case-evidence">
+      <div><span>01</span><p>The model span failed, but the regular agent span said <code>ok</code>.</p></div>
+      <div><span>02</span><p>Comparing regular and streamed runs shows the first status difference.</p></div>
+      <div><span>03</span><p>The exported golden check exits with a failure on that difference.</p></div>
+      <div className="case-links"><a href="/assets/agents-issue-4070.mp4" target="_blank" rel="noreferrer">Open recording ↗</a><a href={`${repo}/tree/main/demo/external/agents_issue_4070`} target="_blank" rel="noreferrer">Trace and reproducer ↗</a></div>
+    </div></div>
+  </section>;
 }
 
 function InterfaceShowcase() {
@@ -248,7 +274,7 @@ function App() {
     <a className="skip-link" href="#main">Skip to content</a>
     <header className="site-header">
       <a className="brand" href="#top" aria-label="Capybara home"><img src="/assets/logo.png" width="32" height="32" alt="" /><span>capybara<span className="brand-dot">.</span></span></a>
-      <nav aria-label="Main navigation"><a href="#replay">Live demo</a><a href="#how-it-works">How it works</a><a href="#interfaces">Interfaces</a></nav>
+      <nav aria-label="Main navigation"><a href="#replay">Demo</a><a href="#case">Real case</a><a href="#sources">Inputs</a><a href="#beta">Beta test</a></nav>
       <a className="header-github" href={repo} target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a>
     </header>
     <main id="main">
@@ -277,7 +303,9 @@ function App() {
         <div className="feature-grid" data-reveal>{features.map((feature, index) => <article key={feature.title} className="feature-card"><span className="feature-number">0{index + 1}</span><h3>{feature.title}</h3><p>{feature.body}</p></article>)}</div>
       </section>
 
-      <section className="section connect-section" aria-labelledby="connect-title"><div className="section-intro" data-reveal><h2 id="connect-title">Use the traces you already have.</h2></div><div data-reveal><ConnectPanel /></div></section>
+      <PublicCase />
+
+      <section className="section connect-section" aria-labelledby="connect-title"><div className="section-intro" data-reveal><h2 id="connect-title">Use the traces you already have.</h2></div><div data-reveal><ConnectPanel /></div><div data-reveal><SupportedInputs /></div></section>
 
       <section className="section interfaces-section" id="interfaces" aria-labelledby="interfaces-title">
         <div className="section-intro" data-reveal><h2 id="interfaces-title">Inspect in terminal or browser.</h2></div>
@@ -286,9 +314,10 @@ function App() {
       </section>
 
       <section className="section install-section" id="install" aria-labelledby="install-title">
-        <div className="install-copy" data-reveal><h2 id="install-title">Get your first trace locally.</h2><p>Install, open the sample, then press <kbd>i</kbd> to connect your app.</p><a href={`${repo}/blob/main/docs/beta-test.md`} target="_blank" rel="noreferrer">Beta test guide <span aria-hidden="true">↗</span></a></div>
+        <div className="install-copy" data-reveal><h2 id="install-title">Get your first trace locally.</h2><p>Install, open the labelled sample, then press <kbd>i</kbd> to connect your app.</p><a href={`${repo}/blob/main/docs/beta-test.md`} target="_blank" rel="noreferrer">First trace guide <span aria-hidden="true">↗</span></a></div>
         <div data-reveal><InstallTerminal /></div>
       </section>
+      <section className="beta-section" id="beta" aria-labelledby="beta-title"><div data-reveal><h2 id="beta-title">Try it on one of your runs.</h2><p>Follow the first trace guide, then send us what worked or where you got stuck. This local setup stores traces in SQLite on your machine.</p></div><div className="beta-actions" data-reveal><a className="button-primary" href={`${repo}/blob/main/docs/beta-test.md`} target="_blank" rel="noreferrer">Start beta test <span aria-hidden="true">↗</span></a><a className="button-secondary" href={`${repo}/issues/new/choose`} target="_blank" rel="noreferrer">Report feedback <span aria-hidden="true">↗</span></a></div></section>
     </main>
     <footer className="site-footer"><div><a className="brand" href="#top"><img src="/assets/logo.png" width="28" height="28" alt="" /><span>capybara<span className="brand-dot">.</span></span></a><p>A local-first trace debugger for AI agents.</p></div><div className="footer-links"><a href={repo} target="_blank" rel="noreferrer">Source ↗</a><a href={`${repo}/issues/new/choose`} target="_blank" rel="noreferrer">Feedback ↗</a><a href={`${repo}/blob/main/LICENSE`} target="_blank" rel="noreferrer">MIT License ↗</a><a href="/assets/react-bits-license.txt">React Bits license ↗</a></div></footer>
   </>;

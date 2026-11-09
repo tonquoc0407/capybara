@@ -9,4 +9,5 @@ const files = ['logo.png', 'pupu-workspace.png', 'web-overview.png', 'web-trace-
 
 await mkdir(destination, { recursive: true });
 await Promise.all(files.map(file => copyFile(join(source, file), join(destination, file))));
+await copyFile(join(source, 'external', 'agents_issue_4070', 'showcase.mp4'), join(destination, 'agents-issue-4070.mp4'));
 await copyFile(join(site, 'REACT_BITS_LICENSE.md'), join(destination, 'react-bits-license.txt'));
