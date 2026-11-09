@@ -186,7 +186,7 @@ function TraceReplay() {
 }
 
 function InstallTerminal() {
-  const [method, setMethod] = useState('brew');
+  const [method, setMethod] = useState('source');
   const command = installCommands[method];
 
   return <div className="install-terminal">
@@ -264,12 +264,6 @@ function App() {
     };
   }, []);
 
-  const features = [
-    { title: 'Get a trace in.', body: 'OTLP, HTTP events, Python SDK, or Claude Code logs.' },
-    { title: 'Follow the failure.', body: 'Inspect full spans, linked logs, findings, and costs.' },
-    { title: 'Keep the fix.', body: 'Diff runs and gate regressions in CI.' }
-  ];
-
   return <>
     <a className="skip-link" href="#main">Skip to content</a>
     <header className="site-header">
@@ -296,11 +290,6 @@ function App() {
         <div className="section-intro" data-reveal><h2 id="demo-title">Inspect a failed run here.</h2></div>
         <div data-reveal><TraceReplay /></div>
         <div className="recording" data-reveal><div className="recording-heading"><h3>See the trace arrive.</h3></div><div className="recording-media"><video autoPlay muted loop playsInline preload="metadata" poster="/assets/pupu-workspace.png" aria-label="Capybara TUI receiving and inspecting a local HTTP trace"><source src="/assets/pupu-tour.mp4" type="video/mp4" />Your browser does not support video playback.</video></div><div className="recording-caption"><span>TUI recording · local HTTP trace</span><a href="/assets/pupu-tour.mp4" target="_blank" rel="noreferrer">Open video ↗</a></div></div>
-      </section>
-
-      <section className="section workflow-section" id="how-it-works" aria-labelledby="workflow-title">
-        <div className="section-intro" data-reveal><h2 id="workflow-title">From trace to regression check.</h2></div>
-        <div className="feature-grid" data-reveal>{features.map((feature, index) => <article key={feature.title} className="feature-card"><span className="feature-number">0{index + 1}</span><h3>{feature.title}</h3><p>{feature.body}</p></article>)}</div>
       </section>
 
       <PublicCase />

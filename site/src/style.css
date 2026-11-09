@@ -133,13 +133,6 @@ h1 em { color: var(--orange); font-style: normal; }
 .recording-caption a { color: #b9a396; font-size: 13px; text-decoration: none; }
 .recording-caption a:hover { color: #ffb271; }
 
-.workflow-section { padding-top: 60px; }
-.feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(28px, 4vw, 64px); }
-.feature-card { padding: 24px 0 8px; border-top: 1px solid #5a4437; }
-.feature-number { color: #cf9870; font: 600 11px var(--mono); }
-.feature-card h3 { margin: 36px 0 10px; font-size: clamp(23px, 1.9vw, 29px); letter-spacing: -.05em; font-weight: 600; }
-.feature-card p { max-width: 32ch; color: #bfaea2; line-height: 1.55; font-size: 14px; margin-bottom: 0; }
-
 .case-section { border-top: 1px solid #382b24; }
 .case-section .section-intro { display: flex; align-items: end; justify-content: space-between; gap: 36px; }
 .case-section .section-intro h2 { max-width: 730px; }
@@ -259,7 +252,6 @@ h1 em { color: var(--orange); font-style: normal; }
   .hero { grid-template-columns: 1fr; padding-top: 68px; min-height: 0; gap: 55px; }
   .hero-copy { max-width: 800px; }
   .hero-visual { width: min(760px, 96%); justify-self: center; }
-  .feature-card h3 { margin-top: 32px; }
   .case-layout { grid-template-columns: 1fr; }
   .case-evidence { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
   .case-evidence > div:not(.case-links) { display: block; }
@@ -285,7 +277,7 @@ h1 em { color: var(--orange); font-style: normal; }
   .inspector-content { min-height: 350px; padding: 22px; }
   .replay-caption span:last-child { display: none; }
   .recording { margin-top: 52px; }
-  .feature-grid, .connect-content { grid-template-columns: 1fr; }
+  .connect-content { grid-template-columns: 1fr; }
   .case-section .section-intro { display: block; }
   .case-section .section-intro p { margin-top: 16px; }
   .case-evidence { grid-template-columns: 1fr; gap: 0; }
@@ -298,7 +290,6 @@ h1 em { color: var(--orange); font-style: normal; }
   .source-list { grid-template-columns: 1fr; }
   .install-section { grid-template-columns: minmax(0, 1fr); }
   .install-section > [data-reveal] { min-width: 0; }
-  .feature-card h3 { margin-top: 26px; }
   .connect-content { padding: 24px 0; min-height: 0; gap: 20px; }
   .showcase-stage { height: 440px; padding: 14px; }
   .site-footer { grid-template-columns: 1fr; }

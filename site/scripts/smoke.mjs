@@ -34,7 +34,6 @@ try {
   assert.ok(await desktop.locator('.marquee-copy').evaluateAll(copies => copies.length === 2 && copies[0].textContent === copies[1].textContent && copies[0].getBoundingClientRect().width >= window.innerWidth), 'marquee copies do not form a seamless loop');
   assert.equal(await desktop.locator('.gradient-text').count(), 1);
   assert.equal(await desktop.locator('.star-border, .glare-hover').count(), 0);
-  assert.equal(await desktop.locator('.feature-card').count(), 3);
 
   await desktop.getByRole('button', { name: 'Play replay' }).click();
   await desktop.waitForTimeout(350);
@@ -63,7 +62,7 @@ try {
     await desktop.locator('.showcase-stage img').evaluate(image => image.decode());
     assert.ok(await desktop.locator('.showcase-stage img').evaluate((image, expected) => image.complete && image.naturalWidth > 0 && image.src.endsWith(expected), filename), `missing ${filename}`);
   }
-  await desktop.getByRole('button', { name: 'Current source' }).click();
+  assert.ok(await desktop.getByRole('button', { name: 'Current source' }).getAttribute('aria-pressed') === 'true');
   assert.ok(await desktop.getByText('go install github.com/tonquoc0407/capybara/cmd/capybara@main').isVisible());
   await desktop.getByRole('button', { name: 'Homebrew' }).click();
   assert.ok(await desktop.getByText('brew install tonquoc0407/tap/capybara').isVisible());
