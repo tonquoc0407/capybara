@@ -8,6 +8,7 @@ on:
       - "demo/logo.png"
       - "demo/pupu-workspace.png"
       - "demo/web-overview.png"
+      - "demo/web-trace-mobile.png"
       - "demo/pupu-tour.mp4"
       - ".github/workflows/site.yml"
   pull_request:
@@ -16,6 +17,7 @@ on:
       - "demo/logo.png"
       - "demo/pupu-workspace.png"
       - "demo/web-overview.png"
+      - "demo/web-trace-mobile.png"
       - "demo/pupu-tour.mp4"
       - ".github/workflows/site.yml"
 

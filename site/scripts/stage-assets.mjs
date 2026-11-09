@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path';
 const site = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const source = resolve(site, '..', 'demo');
 const destination = join(site, 'public', 'assets');
-const files = ['logo.png', 'pupu-workspace.png', 'web-overview.png', 'pupu-tour.mp4'];
+const files = ['logo.png', 'pupu-workspace.png', 'web-overview.png', 'web-trace-mobile.png', 'pupu-tour.mp4'];
 
 await mkdir(destination, { recursive: true });
 await Promise.all(files.map(file => copyFile(join(source, file), join(destination, file))));

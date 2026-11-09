@@ -33,9 +33,8 @@ try {
   assert.ok(await desktop.evaluate(() => [...document.querySelectorAll('a[href^="#"]')].every(link => document.getElementById(link.hash.slice(1)))), 'broken in-page link');
   assert.ok(await desktop.locator('.marquee-copy').evaluateAll(copies => copies.length === 2 && copies[0].textContent === copies[1].textContent && copies[0].getBoundingClientRect().width >= window.innerWidth), 'marquee copies do not form a seamless loop');
   assert.equal(await desktop.locator('.gradient-text').count(), 1);
-  assert.equal(await desktop.locator('.star-border').count(), 1);
-  assert.equal(await desktop.locator('.glare-hover').count(), 1);
-  assert.equal(await desktop.locator('.spotlight-card').count(), 3);
+  assert.equal(await desktop.locator('.star-border, .glare-hover').count(), 0);
+  assert.equal(await desktop.locator('.feature-card').count(), 3);
 
   await desktop.getByRole('button', { name: 'Play replay' }).click();
   await desktop.waitForTimeout(350);
@@ -48,10 +47,15 @@ try {
   assert.ok(await desktop.getByText(/current value of your 120 ACME shares/).isVisible());
   await desktop.getByRole('button', { name: /improvised/ }).click();
   assert.ok(await desktop.locator('.finding-strip').getByText(/answer after tool failure/).isVisible());
-  assert.ok(await desktop.locator('.real-demo video source').getAttribute('src') === '/assets/pupu-tour.mp4');
-  assert.ok(await desktop.locator('.real-demo video').evaluate(video => video.autoplay && video.loop && video.muted && !video.controls), 'video must autoplay without native progress controls');
-  await desktop.locator('.real-demo video').scrollIntoViewIfNeeded();
-  await desktop.waitForFunction(() => document.querySelector('.real-demo video')?.currentTime > 0.2, undefined, { timeout: 5000 });
+  assert.ok(await desktop.locator('.recording video source').getAttribute('src') === '/assets/pupu-tour.mp4');
+  assert.ok(await desktop.locator('.recording video').evaluate(video => video.autoplay && video.loop && video.muted && !video.controls), 'video must autoplay without native progress controls');
+  await desktop.locator('.recording video').scrollIntoViewIfNeeded();
+  await desktop.waitForFunction(() => document.querySelector('.recording video')?.currentTime > 0.2, undefined, { timeout: 5000 });
+  for (const [tab, filename] of [['Web overview', 'web-overview.png'], ['Web trace', 'web-trace-mobile.png'], ['Terminal', 'pupu-workspace.png']]) {
+    await desktop.getByRole('group', { name: 'Choose interface preview' }).getByRole('button', { name: tab }).click();
+    await desktop.locator('.showcase-stage img').evaluate(image => image.decode());
+    assert.ok(await desktop.locator('.showcase-stage img').evaluate((image, expected) => image.complete && image.naturalWidth > 0 && image.src.endsWith(expected), filename), `missing ${filename}`);
+  }
   await desktop.getByRole('button', { name: 'Current source' }).click();
   assert.ok(await desktop.getByText('go install github.com/tonquoc0407/capybara/cmd/capybara@main').isVisible());
   await desktop.getByRole('button', { name: 'Homebrew' }).click();
@@ -81,6 +85,7 @@ try {
   assert.ok(await mobile.getByRole('heading', { name: /Find the step that broke/ }).isVisible());
   assert.ok(await mobile.getByRole('button', { name: 'Play replay' }).isVisible());
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'mobile page overflows horizontally');
+  assert.ok(await mobile.locator('.showcase-stage').evaluate(stage => stage.scrollWidth > stage.clientWidth && stage.scrollHeight > stage.clientHeight), 'mobile interface preview must support panning');
   assert.deepEqual(errors, [], `browser errors: ${errors.join(', ')}`);
   for (const element of await mobile.locator('[data-reveal]').all()) await element.scrollIntoViewIfNeeded();
   await mobile.waitForTimeout(750);

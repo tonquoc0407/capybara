@@ -12,7 +12,7 @@ npm ci
 npm run dev
 ```
 
-`npm run build` produces `site/dist`. The build copies four existing repo assets from `demo/` into the output. No API keys or build secrets are required. Fonts are bundled locally; the page makes no third-party runtime requests.
+`npm run build` produces `site/dist`. The build copies five existing repo assets from `demo/` into the output. No API keys or build secrets are required. Fonts are bundled locally; the page makes no third-party runtime requests.
 
 Run `npm run build && npm run test:smoke` to check the replay and mobile layout with Playwright. The browser binary is installed separately with `npx playwright install chromium`.
 
@@ -34,4 +34,4 @@ The project name determines the `*.pages.dev` address. Check name availability i
 
 Before making the site public, review the Homebrew command against the latest release, verify the links and the replay on desktop and mobile, and confirm the deployed page loads its assets over HTTPS.
 
-The SpotlightCard, GradientText, GlareHover, and StarBorder effects are sourced from [React Bits](https://reactbits.dev/) through the [reactbits.dev-skill](https://github.com/Philotheephilix/reactbits.dev-skill) registry helper. Their separate MIT + Commons Clause terms are preserved in [REACT_BITS_LICENSE.md](REACT_BITS_LICENSE.md); the project's root MIT license does not replace them.
+The GradientText effect is sourced from [React Bits](https://reactbits.dev/) through the [reactbits.dev-skill](https://github.com/Philotheephilix/reactbits.dev-skill) registry helper. Its separate MIT + Commons Clause terms are preserved in [REACT_BITS_LICENSE.md](REACT_BITS_LICENSE.md); the project's root MIT license does not replace them.
