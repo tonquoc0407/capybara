@@ -92,6 +92,8 @@ try {
   assert.ok(await mobile.getByRole('heading', { name: /Find the step that broke/ }).isVisible());
   assert.ok(await mobile.getByRole('button', { name: 'Play replay' }).isVisible());
   assert.ok(await mobile.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), 'mobile page overflows horizontally');
+  await mobile.getByRole('group', { name: 'Connection methods' }).getByRole('button', { name: 'HTTP events' }).click();
+  assert.ok(await mobile.getByText('python examples/local_events.py').isVisible());
   assert.ok(await mobile.locator('.showcase-stage').evaluate(stage => stage.scrollWidth > stage.clientWidth && stage.scrollHeight > stage.clientHeight), 'mobile interface preview must support panning');
   assert.deepEqual(errors, [], `browser errors: ${errors.join(', ')}`);
   for (const element of await mobile.locator('[data-reveal]').all()) await element.scrollIntoViewIfNeeded();

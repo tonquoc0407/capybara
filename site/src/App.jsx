@@ -13,12 +13,12 @@ const connections = [
   { id: 'json', label: 'HTTP events', summary: 'From a source checkout, send a complete run to the local HTTP receiver.', code: 'python examples/local_events.py', result: 'The example prints a run ID; press o in Connect to inspect it.', href: '#from-your-own-agent' }
 ];
 const supportedInputs = [
-  { name: 'OTLP', setup: 'HTTP/protobuf and gRPC receivers on localhost.', note: 'GenAI, OpenInference, OpenLLMetry and ai.* attributes; other sources may need a mapping file.', href: '#otlp' },
-  { name: 'HTTP events', setup: 'POST start, update, end or complete events.', note: 'Local clients only; the endpoint has no API key.', href: 'docs/local-events.md' },
-  { name: 'Python SDK', setup: 'Published capybara-sdk package.', note: 'Add init() and trace a function to emit spans.', href: '#from-your-own-agent' },
-  { name: 'Node SDK', setup: 'Install from the repository source.', note: 'The package is not published on npm yet.', href: 'sdk-js/README.md' },
-  { name: 'Claude Code', setup: 'Tail local session logs or import an older session.', note: 'Needs local Claude Code logs; no app instrumentation.', href: '#a-session-file' },
-  { name: 'Files', setup: 'Import span JSONL, OTLP JSONL, Claude JSONL or agent-replay JSON.', note: 'OTLP LogRecords are not imported as traces.', href: '#a-file-you-have' }
+  { name: 'OTLP', setup: 'Send HTTP/protobuf or gRPC to localhost.', note: 'Known GenAI attributes are mapped; other sources may need config.', href: '#otlp' },
+  { name: 'HTTP events', setup: 'POST span events to the local receiver.', note: 'Loopback clients only; no API key.', href: 'docs/local-events.md' },
+  { name: 'Python SDK', setup: 'Install capybara-sdk from PyPI.', note: 'Call init() and trace a function.', href: '#from-your-own-agent' },
+  { name: 'Node SDK', setup: 'Install from the repository source.', note: 'Not published on npm yet.', href: 'sdk-js/README.md' },
+  { name: 'Claude Code', setup: 'Read local session logs.', note: 'No app instrumentation needed.', href: '#a-session-file' },
+  { name: 'Files', setup: 'Import JSONL or agent-replay JSON.', note: 'OTLP LogRecords are not imported as traces.', href: '#a-file-you-have' }
 ];
 const totalSeconds = 9;
 const marqueeItems = ['OTLP INPUT', 'LOCAL HTTP API', 'FULL TRACE TREE', 'LINKED LOGS', 'COST PROVENANCE', 'REGRESSION CHECKS'];
@@ -210,9 +210,9 @@ function ConnectPanel() {
 }
 
 function SupportedInputs() {
-  return <div className="supported-inputs" id="sources"><h3>Supported inputs</h3><div className="source-list">{supportedInputs.map(input => <div className="source-row" key={input.name}>
-    <strong>{input.name}</strong><span>{input.setup}</span><span>{input.note}</span><a href={input.href.startsWith('#') ? `${repo}${input.href}` : `${repo}/blob/main/${input.href}`} target="_blank" rel="noreferrer" aria-label={`${input.name} setup`}>Setup ↗</a>
-  </div>)}</div></div>;
+  return <div className="supported-inputs" id="sources"><h3>Supported inputs</h3><div className="source-list">{supportedInputs.map(input => <a className="source-row" key={input.name} href={input.href.startsWith('#') ? `${repo}${input.href}` : `${repo}/blob/main/${input.href}`} target="_blank" rel="noreferrer">
+    <span className="source-heading"><strong>{input.name}</strong><span aria-hidden="true">↗</span></span><span className="source-setup">{input.setup}</span><span className="source-note">{input.note}</span>
+  </a>)}</div></div>;
 }
 
 function PublicCase() {
