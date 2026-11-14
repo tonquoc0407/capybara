@@ -175,6 +175,7 @@ type appModel struct {
 	connectDemoAt    time.Time
 	connectSeen      map[string]bool
 	connectNewRun    string
+	connectChecking  bool
 	paletteQuery     string
 	paletteIndex     int
 	detailFull       bool
@@ -348,7 +349,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Batch(cmds...)
 	case runsMsg:
-		if m.connectOpen && m.connectSeen != nil && m.connectNewRun == "" {
+		if m.connectOpen && m.connectSeen != nil && (m.connectNewRun == "" || strings.HasPrefix(m.connectNewRun, "connection-check-")) {
 			for _, run := range msg.runs {
 				if !m.connectSeen[run.ID] {
 					m.connectNewRun = run.ID
@@ -370,6 +371,18 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case eventCountMsg:
 		m.connectRuns = msg.count
 		return m, nil
+	case connectCheckMsg:
+		m.connectChecking = false
+		if msg.err != nil {
+			m.notice = "Connection check failed: " + msg.err.Error()
+			return m, nil
+		}
+		m.connectNewRun = msg.runID
+		if m.connectSeen != nil {
+			m.connectSeen[msg.runID] = true
+		}
+		m.notice = "Connection check received; press o to inspect"
+		return m, m.loadRuns()
 	case spansMsg:
 		if msg.runID != m.selectedRun {
 			return m, nil

@@ -1,6 +1,8 @@
 # Beta test: first trace and investigation
 
-Install the current source with `go install github.com/tonquoc0407/capybara/cmd/capybara@main`; the latest published tag may have an older TUI. Use a fresh local database for the test: run `export CAPYBARA_DB=./beta.db`, then `capybara`. Press `i`, choose a source, then press `v` to read the full setup or Enter to copy it. The Connect screen confirms when a new run arrives; press `o` to open that run. For an immediate receiver check, choose **HTTP JSON events** and run its copied `curl` command in another terminal.
+Install the current source with `go install github.com/tonquoc0407/capybara/cmd/capybara@main`; the latest published tag may have an older TUI. For a fresh local database, run `export CAPYBARA_DB=./beta.db`, then `capybara`.
+
+Press `i` to open Connect. Press `t` to send a sample trace through the local HTTP receiver, then `o` to inspect it. To connect your app, choose a source and press `v` to read its full setup or Enter to copy it. Connect shows the next run your app sends.
 
 Choose the input that matches your app:
 

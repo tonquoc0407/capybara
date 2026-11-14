@@ -45,7 +45,7 @@ brew install tonquoc0407/tap/capybara
 
 Or `go install github.com/tonquoc0407/capybara/cmd/capybara@latest`, or grab a binary from the [releases page](https://github.com/tonquoc0407/capybara/releases). One file, no CGo, no runtime dependencies.
 
-For a local tour, run `capybara sample && capybara`. Press `i` to see connection methods. The [beta test guide](docs/beta-test.md) covers the first trace, three application paths, and feedback.
+For a local tour, run `capybara sample && capybara`. Press `i` to see connection methods, then `t` to test the HTTP receiver without another terminal. The [beta test guide](docs/beta-test.md) covers the first trace, three application paths, and feedback.
 
 This README describes `main`. Homebrew, `@latest` and release binaries use the latest published tag, which may lag the features below. To try the current source, use `go install github.com/tonquoc0407/capybara/cmd/capybara@main`.
 
@@ -155,7 +155,7 @@ For a long-running local service without a terminal UI, run `capybara listen`. I
 
 Each request needs a unique `event_id`, `type`, `run_id`, `span_id` and RFC3339 `time`. `span.start` needs `kind` and `name`; `span.end` needs `status` (`ok` or `error`). `span.complete` can send a finished span in one request, with optional `start_time`. Retries with the same event ID and body are safe. An update or end before start returns HTTP 409. The receiver stores `model`, `provider`, `tool_name`, `tokens_in`, `tokens_out`, `cost_usd`, `attrs` and `contents` when provided. `-no-content` drops content bodies and untrusted attributes. The endpoint accepts requests from the same machine only; it has no API key.
 
-The TUI also lists OTLP, both SDKs, the Claude watcher and file import under `i`. Press `v` to read the full setup on a narrow terminal; a newly received run appears in Connect and `o` opens it.
+The TUI also lists OTLP, both SDKs, the Claude watcher and file import under `i`. Press `t` to send a connection check through the local receiver, or `v` to read the full setup on a narrow terminal. A newly received run appears in Connect and `o` opens it.
 
 Install the Python SDK:
 

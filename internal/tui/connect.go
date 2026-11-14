@@ -1,7 +1,11 @@
 package tui
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -11,6 +15,11 @@ import (
 
 	"github.com/tonquoc0407/capybara/internal/store"
 )
+
+type connectCheckMsg struct {
+	runID string
+	err   error
+}
 
 var (
 	connectOptions      = []string{"HTTP JSON events", "OTLP", "Python SDK", "Node SDK (source build)", "Claude watcher", "File import"}
@@ -41,6 +50,9 @@ func (m appModel) handleConnectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.copyConnectSnippet()
 		case "o":
 			return m.openConnectedRun()
+		case "t":
+			m.connectSetupOpen = false
+			return m.checkConnection()
 		}
 		return m, nil
 	}
@@ -62,8 +74,51 @@ func (m appModel) handleConnectKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.connectScroll = 0
 	case "o":
 		return m.openConnectedRun()
+	case "t":
+		return m.checkConnection()
 	}
 	return m, nil
+}
+
+func (m appModel) checkConnection() (tea.Model, tea.Cmd) {
+	if m.about.OTLP == "" {
+		m.notice = "HTTP listener unavailable"
+		return m, nil
+	}
+	if m.connectChecking {
+		return m, nil
+	}
+	m.connectChecking = true
+	m.notice = "Sending connection check..."
+	base := m.about.OTLP
+	return m, func() tea.Msg {
+		at := time.Now().UTC()
+		id := fmt.Sprintf("connection-check-%d", at.UnixNano())
+		body, err := json.Marshal(map[string]any{
+			"event_id": id, "type": "span.complete", "run_id": id,
+			"span_id": id, "kind": "agent", "name": "Capybara connection check",
+			"time": at.Format(time.RFC3339Nano), "status": "ok",
+		})
+		if err != nil {
+			return connectCheckMsg{err: err}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v1/events", bytes.NewReader(body))
+		if err != nil {
+			return connectCheckMsg{err: err}
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return connectCheckMsg{err: err}
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			return connectCheckMsg{err: fmt.Errorf("receiver returned HTTP %d", resp.StatusCode)}
+		}
+		return connectCheckMsg{runID: id}
+	}
 }
 
 func (m *appModel) copyConnectSnippet() {
@@ -198,7 +253,7 @@ func (m appModel) connectView() string {
 	lines = append(lines, "")
 	lines = append(lines, m.th.Dim.Render(connectDescriptions[m.connectIndex]), "")
 	if snippet := m.connectSnippet(); snippet != "" {
-		lines = append(lines, m.th.Dim.Render("Enter/y: copy setup  ·  o: open received trace  ·  j/k: select"))
+		lines = append(lines, m.th.Dim.Render("Enter/y: copy setup  ·  t: test receiver  ·  o: open trace  ·  j/k: select"))
 		for _, line := range strings.Split(snippet, "\n") {
 			lines = append(lines, m.th.Text.Render(line))
 		}
@@ -210,7 +265,7 @@ func (m appModel) connectView() string {
 func (m appModel) connectSetupView() string {
 	header := m.headerView()
 	footer := m.th.Shell.Width(m.width).Render(m.th.HelpKey.Render("j/k") + " scroll   " +
-		m.th.HelpKey.Render("enter") + " copy   " + m.th.HelpKey.Render("o") + " open trace   " + m.th.HelpKey.Render("esc") + " sources")
+		m.th.HelpKey.Render("enter") + " copy   " + m.th.HelpKey.Render("t") + " test   " + m.th.HelpKey.Render("o") + " open trace   " + m.th.HelpKey.Render("esc") + " sources")
 	areaH := max(3, m.height-lipgloss.Height(header)-lipgloss.Height(footer))
 	width := max(1, m.width-paneChrome)
 	lines := []string{m.th.Accent.Render(connectOptions[m.connectIndex]), m.th.Dim.Render(connectDescriptions[m.connectIndex]), ""}
@@ -234,7 +289,7 @@ func (m appModel) connectSetupView() string {
 func (m appModel) pupuConnectView() string {
 	header := m.headerView()
 	footer := m.th.Shell.Width(m.width).Render(m.th.HelpKey.Render("j/k") + " choose   " +
-		m.th.HelpKey.Render("v") + " full setup   " + m.th.HelpKey.Render("enter") + " copy   " + m.th.HelpKey.Render("o") + " open")
+		m.th.HelpKey.Render("v") + " full setup   " + m.th.HelpKey.Render("enter") + " copy   " + m.th.HelpKey.Render("t") + " test   " + m.th.HelpKey.Render("o") + " open")
 	areaH := max(3, m.height-lipgloss.Height(header)-lipgloss.Height(footer))
 	leftW := min(34, max(24, m.width/3))
 	var options []string
@@ -279,7 +334,7 @@ func (m appModel) pupuConnectView() string {
 		content := append([]string{}, options...)
 		content = append(content, "", m.th.Accent.Render(status), m.th.Dim.Render(policy),
 			m.th.Text.Render(connectDescriptions[m.connectIndex]), "",
-			m.th.Dim.Render("v shows the full setup; Enter copies it"))
+			m.th.Dim.Render("v full setup · Enter copy · t test"))
 		if m.connectNewRun != "" {
 			content = append(content, m.th.StatusOK.Render("Received "+shortID(m.connectNewRun)+" · o to open"))
 		}

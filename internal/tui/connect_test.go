@@ -2,6 +2,8 @@ package tui
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -9,6 +11,53 @@ import (
 	"github.com/tonquoc0407/capybara/internal/store"
 	"github.com/tonquoc0407/capybara/internal/theme"
 )
+
+func TestConnectChecksReceiverAndOpensTestTrace(t *testing.T) {
+	events := make(chan map[string]any, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/events" || r.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		var event map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+			t.Errorf("decode event: %v", err)
+		}
+		events <- event
+		w.WriteHeader(http.StatusCreated)
+	}))
+	defer server.Close()
+
+	m := newApp(nil, theme.Pupu(), nil, true)
+	m.width, m.height = 100, 32
+	m.about.OTLP = server.URL
+	m.connectOpen = true
+	m.connectSeen = map[string]bool{}
+	updated, cmd := m.handleConnectKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	m = updated.(appModel)
+	if cmd == nil || !m.connectChecking {
+		t.Fatal("connection check did not start")
+	}
+	msg, ok := cmd().(connectCheckMsg)
+	if !ok || msg.err != nil || msg.runID == "" {
+		t.Fatalf("connection check result: %#v", msg)
+	}
+	event := <-events
+	if event["run_id"] != msg.runID || event["kind"] != "agent" || event["name"] != "Capybara connection check" {
+		t.Fatalf("unexpected event: %#v", event)
+	}
+	updated, _ = m.Update(msg)
+	m = updated.(appModel)
+	if m.connectChecking || m.connectNewRun != msg.runID {
+		t.Fatalf("connection check was not recorded: %#v", m.connectNewRun)
+	}
+	updated, _ = m.Update(runsMsg{runs: []store.Run{{ID: msg.runID}}})
+	m = updated.(appModel)
+	updated, _ = m.handleConnectKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("o")})
+	m = updated.(appModel)
+	if m.connectOpen || m.selectedRun != msg.runID {
+		t.Fatalf("test trace did not open: %q", m.selectedRun)
+	}
+}
 
 func TestConnectUsesBoundAddressAndShowsLiveRun(t *testing.T) {
 	m := newApp(nil, theme.Bara(), nil, false)

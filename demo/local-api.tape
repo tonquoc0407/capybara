@@ -23,6 +23,8 @@ Show
 Sleep 1s
 Type "i"
 Sleep 1s
+Type "t"
+Sleep 1s
 Type "v"
 Sleep 1s
 Escape
