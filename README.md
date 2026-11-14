@@ -24,6 +24,8 @@
 
 Capybara runs locally and stores traces in SQLite. Capture them with OTLP, HTTP JSON events, an SDK, a Claude Code session, or a file. Inspect failures in the TUI or read-only Web view; compare runs, export regression fixtures, and review cost provenance. The optional hub adds project tokens and a shared Web workspace.
 
+[Explore the landing page and trace replay](https://getcapybara.tonquoc1412.workers.dev/).
+
 ## Contents
 
 - [Install](#install)

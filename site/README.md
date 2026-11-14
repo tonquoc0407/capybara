@@ -16,7 +16,20 @@ npm run dev
 
 Run `npm run build && npm run test:smoke` to check the replay and mobile layout with Playwright. The browser binary is installed separately with `npx playwright install chromium`.
 
-## Cloudflare Pages setup
+## Cloudflare deployment
+
+The landing page is live at <https://getcapybara.tonquoc1412.workers.dev/>. It uses Workers Builds with the repository root as the build path:
+
+| Setting | Value |
+| --- | --- |
+| Project name | `getcapybara` |
+| Root directory | `/` |
+| Build command | `cd site && npm ci && npm run build` |
+| Deploy command | `npx wrangler deploy --assets ./site/dist --name getcapybara --compatibility-date 2026-11-14` |
+
+The build needs the repository's `demo/` directory because it copies existing images and video. No API keys or build secrets are required.
+
+### Cloudflare Pages alternative
 
 Connect the `tonquoc0407/capybara` GitHub repository to Cloudflare Pages and use:
 
@@ -30,8 +43,8 @@ Connect the `tonquoc0407/capybara` GitHub repository to Cloudflare Pages and use
 | Build output directory | `dist` |
 | Node version | `.node-version` in `site/` sets 22 |
 
-The project name determines the `*.pages.dev` address. Check name availability in Cloudflare before putting the URL into documentation. Do not set a canonical URL or sitemap until the deployed address is confirmed. The repository's `demo/` directory must remain available to the build because the site reuses its images and video.
+The Pages project name determines the `*.pages.dev` address. If you switch hosting, update the canonical and Open Graph URLs in `index.html`.
 
-Before making the site public, review the Homebrew command against the latest release, verify the links and the replay on desktop and mobile, and confirm the deployed page loads its assets over HTTPS.
+Before announcing the site, review the Homebrew command against the latest release and verify the links and replay on desktop and mobile. The deployed assets load over HTTPS.
 
 The GradientText effect is sourced from [React Bits](https://reactbits.dev/) through the [reactbits.dev-skill](https://github.com/Philotheephilix/reactbits.dev-skill) registry helper. Its separate MIT + Commons Clause terms are preserved in [REACT_BITS_LICENSE.md](REACT_BITS_LICENSE.md); the project's root MIT license does not replace them.
