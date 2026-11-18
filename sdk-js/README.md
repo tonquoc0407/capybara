@@ -3,7 +3,13 @@
 Emit OpenTelemetry `gen_ai.*` traces to a local [capybara](https://github.com/tonquoc0407/capybara)
 trace debugger, from Node.
 
-The Node package is not published on npm yet. Build it from a capybara checkout:
+After `sdk-js-v0.1.1` is published, install the package:
+
+```bash
+npm install capybara-sdk
+```
+
+Until that release is published, build the current checkout locally instead:
 
 ```bash
 cd /path/to/capybara/sdk-js

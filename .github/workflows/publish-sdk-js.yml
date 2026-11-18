@@ -39,6 +39,14 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm pack --dry-run
+      - name: install packed package in a clean app
+        run: |
+          package_path=$(npm pack --silent --pack-destination "$RUNNER_TEMP")
+          mkdir "$RUNNER_TEMP/sdk-js-smoke"
+          cd "$RUNNER_TEMP/sdk-js-smoke"
+          npm init --yes >/dev/null
+          npm install --no-audit --no-fund "$RUNNER_TEMP/$package_path"
+          node --input-type=module -e "import { init, trace, schema, version } from 'capybara-sdk'; if (version !== '0.1.1' || typeof init !== 'function' || typeof trace !== 'function' || typeof schema !== 'function') process.exit(1)"
 
   publish:
     needs: [build]

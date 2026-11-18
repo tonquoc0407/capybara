@@ -1,6 +1,6 @@
 {
   "name": "capybara-sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Emit OpenTelemetry traces to a local capybara trace debugger.",
   "type": "module",
   "license": "MIT",
@@ -17,6 +17,13 @@
     "agents",
     "observability"
   ],
+  "engines": {
+    "node": ">=20"
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -30,10 +37,12 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "examples"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.test.json",
     "test": "node --test test/*.test.ts"
   },

@@ -9,5 +9,5 @@ export type { ActiveSpanEntry } from './metrics.js';
 export { Session, ReplayError, hashToolCall, run, providerFor } from './replay.js';
 export type { Manifest, ToolEntry, LLMEntry } from './replay.js';
 
-export const version = '0.1.0';
+export const version = '0.1.1';
 
