@@ -328,7 +328,7 @@ watcher when ~/.claude/projects exists.
   runs     list runs, filtered by finding, model, status, source or cost
   coverage report typed-span coverage and unmapped ingest namespaces
   doctor   check local database and report missing trace data
-  incidents group recent failures; "incidents packet <run>" emits evidence JSON
+  incidents group recent failures; packet, annotate and list incident evidence
   dataset  capture cases, correct expected outputs, clone and export datasets
   score    record normalized human or custom feedback on a run
   experiment run a dataset with a scenario command, or compare paired results

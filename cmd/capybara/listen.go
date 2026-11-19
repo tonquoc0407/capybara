@@ -38,7 +38,7 @@ func listenCmd(ctx context.Context, dbPath, addr string, capture bool, args []st
 	if base == "" {
 		return fmt.Errorf("HTTP listener unavailable: %w", listenErr)
 	}
-	if _, err := fmt.Fprintf(out, "events %s/api/v1/events\nOTLP   %s\n", base, base); err != nil {
+	if _, err := fmt.Fprintf(out, "events %s/api/v1/events\nOTLP   %s\nhealth %s/healthz\nready  %s/readyz\n", base, base, base, base); err != nil {
 		return err
 	}
 	if listenErr != nil {

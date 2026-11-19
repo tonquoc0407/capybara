@@ -12,17 +12,18 @@ import (
 // Packet keeps observations separate from detector hypotheses and states which
 // data is missing for a cost or replay conclusion.
 type Packet struct {
-	RunID                string                 `json:"run_id"`
-	Fingerprint          string                 `json:"fingerprint"`
-	Context              RunContext             `json:"context"`
-	Observed             Observed               `json:"observed"`
-	Hypotheses           []store.Finding        `json:"hypotheses"`
-	Costs                []store.CostProvenance `json:"costs"`
-	Scores               []store.Score          `json:"scores"`
-	Fixture              *export.Fixture        `json:"fixture,omitempty"`
-	Comparison           *Comparison            `json:"comparison,omitempty"`
-	Missing              []string               `json:"missing"`
-	ReplayInputsRecorded bool                   `json:"replay_inputs_recorded"`
+	RunID                string                     `json:"run_id"`
+	Fingerprint          string                     `json:"fingerprint"`
+	Context              RunContext                 `json:"context"`
+	Observed             Observed                   `json:"observed"`
+	Hypotheses           []store.Finding            `json:"hypotheses"`
+	Costs                []store.CostProvenance     `json:"costs"`
+	Scores               []store.Score              `json:"scores"`
+	Annotations          []store.IncidentAnnotation `json:"annotations,omitempty"`
+	Fixture              *export.Fixture            `json:"fixture,omitempty"`
+	Comparison           *Comparison                `json:"comparison,omitempty"`
+	Missing              []string                   `json:"missing"`
+	ReplayInputsRecorded bool                       `json:"replay_inputs_recorded"`
 }
 
 // RunContext records the run metadata needed to interpret an incident.
@@ -88,6 +89,10 @@ func BuildPacket(ctx context.Context, st *store.Store, runID string) (Packet, er
 	if err != nil {
 		return Packet{}, err
 	}
+	annotations, err := st.IncidentAnnotations(ctx, runID)
+	if err != nil {
+		return Packet{}, err
+	}
 	cachedBySpan := map[string]bool{}
 	for _, c := range cached {
 		cachedBySpan[c.SpanID] = true
@@ -100,7 +105,7 @@ func BuildPacket(ctx context.Context, st *store.Store, runID string) (Packet, er
 			SessionID: run.SessionID, Status: run.Status, CostUSD: run.CostUSD,
 		},
 		Observed:   Observed{Spans: spans, Logs: logs, Contents: contents},
-		Hypotheses: findings, Costs: costs, Scores: scores,
+		Hypotheses: findings, Costs: costs, Scores: scores, Annotations: annotations,
 	}
 	if fixture, err := export.BuildFixture(ctx, st, runID); err == nil {
 		p.Fixture = &fixture

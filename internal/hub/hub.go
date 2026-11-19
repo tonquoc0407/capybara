@@ -282,6 +282,8 @@ func (s Server) Handler() http.Handler {
 		scores, err := s.Store.ListScores(r.Context(), id)
 		writeJSON(w, scores, err)
 	})
+	mux.HandleFunc("GET /api/v1/runs/{id}/annotations", s.listAnnotations)
+	mux.HandleFunc("POST /api/v1/runs/{id}/annotations", s.addAnnotation)
 	mux.HandleFunc("GET /api/v1/runs/{id}/incident-packet", func(w http.ResponseWriter, r *http.Request) {
 		id, ok := s.runID(w, r)
 		if !ok {

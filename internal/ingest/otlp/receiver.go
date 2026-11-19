@@ -3,6 +3,7 @@ package otlp
 import (
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -255,11 +256,35 @@ func (s *metricServer) Export(ctx context.Context, req pmetricotlp.ExportRequest
 
 func (r *Receiver) handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", r.handleHealth)
+	mux.HandleFunc("GET /readyz", r.handleReady)
 	mux.HandleFunc("POST /v1/traces", r.handleTraces)
 	mux.HandleFunc("POST /v1/metrics", r.handleMetrics)
 	mux.HandleFunc("POST /v1/logs", r.handleLogs)
 	mux.HandleFunc("POST /api/v1/events", r.handleEvent)
 	return mux
+}
+
+func (r *Receiver) handleHealth(w http.ResponseWriter, _ *http.Request) {
+	writeStatus(w, http.StatusOK, map[string]any{"status": "ok"})
+}
+
+func (r *Receiver) handleReady(w http.ResponseWriter, _ *http.Request) {
+	if !r.Listening() {
+		writeStatus(w, http.StatusServiceUnavailable, map[string]any{"status": "not_ready", "reason": "no transport is listening"})
+		return
+	}
+	writeStatus(w, http.StatusOK, map[string]any{
+		"status": "ready",
+		"http":   r.httpLis != nil,
+		"grpc":   r.grpcLis != nil,
+	})
+}
+
+func writeStatus(w http.ResponseWriter, code int, value map[string]any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(value)
 }
 
 func (r *Receiver) handleLogs(w http.ResponseWriter, req *http.Request) {

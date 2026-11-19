@@ -73,7 +73,7 @@ func TestUpgradeFromVersionSevenKeepsTraceEvidence(t *testing.T) {
 		t.Fatalf("finding origin after upgrade = %+v, %v", findings, err)
 	}
 	var version int
-	if err := st.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 17 {
+	if err := st.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 18 {
 		t.Fatalf("version after upgrade = %d, %v", version, err)
 	}
 	if err := migrate(st.db); err != nil {

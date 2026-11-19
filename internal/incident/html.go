@@ -28,6 +28,7 @@ h1,h2{color:#d78700}section{border-top:1px solid #454545;padding:1rem 0}pre{whit
 {{if .Packet.Comparison}}<section><h2>Before and after</h2><p>Parent {{.Packet.Comparison.ParentRunID}} · {{.Packet.Comparison.ParentStatus}} → {{.Packet.Comparison.CurrentStatus}} · first divergence {{.Packet.Comparison.FirstDivergence}}</p></section>{{end}}
 <section><h2>Missing evidence</h2><p>Replay inputs recorded: {{.Packet.ReplayInputsRecorded}}</p>{{range .Packet.Missing}}<p>{{.}}</p>{{end}}</section>
 <section><h2>Scores</h2>{{range .Packet.Scores}}<p>{{.Name}} · {{.Value}} · {{.Source}}</p>{{end}}</section>
+<section><h2>Incident annotations</h2>{{range .Packet.Annotations}}<p>{{.CreatedAt}} · {{.Status}} · {{.Author}}</p><pre>{{.Note}}</pre>{{end}}</section>
 {{if .Fixture}}<section><h2>Regression fixture</h2><pre>{{.Fixture}}</pre></section>{{end}}
 </body></html>`))
 

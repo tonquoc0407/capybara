@@ -330,3 +330,31 @@ func TestReceiverReturnsExplicitBackpressureWithoutReadingBody(t *testing.T) {
 		t.Fatalf("gRPC backpressure: %v", err)
 	}
 }
+
+func TestHealthAndReadinessEndpoints(t *testing.T) {
+	r := New(openTemp(t), true)
+	for _, tc := range []struct {
+		path string
+		code int
+	}{
+		{"/healthz", http.StatusOK},
+		{"/readyz", http.StatusServiceUnavailable},
+	} {
+		w := httptest.NewRecorder()
+		r.handler().ServeHTTP(w, httptest.NewRequest(http.MethodGet, tc.path, nil))
+		if w.Code != tc.code || w.Header().Get("Content-Type") != "application/json" {
+			t.Fatalf("%s: status=%d content-type=%q body=%s", tc.path, w.Code, w.Header().Get("Content-Type"), w.Body.String())
+		}
+	}
+	grpcLis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("grpc listen: %v", err)
+	}
+	defer grpcLis.Close()
+	r.grpcLis = grpcLis
+	w := httptest.NewRecorder()
+	r.handler().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"grpc":true`) {
+		t.Fatalf("ready after bind: status=%d body=%s", w.Code, w.Body.String())
+	}
+}

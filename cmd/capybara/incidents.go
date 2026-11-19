@@ -13,6 +13,9 @@ import (
 )
 
 func incidentsCmd(ctx context.Context, dbPath string, args []string, out io.Writer) error {
+	if len(args) > 0 && (args[0] == "annotate" || args[0] == "annotations") {
+		return incidentAnnotationCmd(ctx, dbPath, args, out)
+	}
 	fs := flag.NewFlagSet("incidents", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	project := fs.String("project", "", "project to inspect")
@@ -47,7 +50,7 @@ func incidentsCmd(ctx context.Context, dbPath string, args []string, out io.Writ
 		return enc.Encode(packet)
 	}
 	if fs.NArg() != 0 {
-		return errors.New("usage: capybara incidents [-project name] [-limit 1-100] [packet <run>]")
+		return errors.New("usage: capybara incidents [-project name] [-limit 1-100] [packet <run>] | annotate | annotations")
 	}
 	groups, err := incident.List(ctx, st, *project, *limit)
 	if err != nil {
@@ -60,4 +63,46 @@ func incidentsCmd(ctx context.Context, dbPath string, args []string, out io.Writ
 		}
 	}
 	return nil
+}
+
+func incidentAnnotationCmd(ctx context.Context, dbPath string, args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("incident annotations", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	status := fs.String("status", "open", "annotation status: open, investigating, resolved or ignored")
+	note := fs.String("note", "", "investigation or disposition note")
+	author := fs.String("author", "local", "note author")
+	if err := fs.Parse(args[1:]); err != nil {
+		return err
+	}
+	st, err := store.Open(dbPath)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	if args[0] == "annotations" {
+		if fs.NArg() != 1 {
+			return errors.New("usage: capybara incidents annotations <run>")
+		}
+		id, err := st.ResolveRunID(ctx, fs.Arg(0))
+		if err != nil {
+			return err
+		}
+		items, err := st.IncidentAnnotations(ctx, id)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(out).Encode(items)
+	}
+	if fs.NArg() != 1 {
+		return errors.New("usage: capybara incidents annotate [-status open] [-note text] [-author name] <run>")
+	}
+	id, err := st.ResolveRunID(ctx, fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	item, err := st.AddIncidentAnnotation(ctx, id, *status, *note, *author)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(out).Encode(item)
 }
