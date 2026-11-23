@@ -61,7 +61,10 @@ func TestLiveHubAnalyzesExistingAndIncomingTracesAndStopsStreams(t *testing.T) {
 		cancel()
 		if !stopped {
 			select {
-			case <-done:
+			case err := <-done:
+				if err != nil {
+					t.Errorf("hub shutdown: %v", err)
+				}
 			case <-time.After(6 * time.Second):
 				t.Error("hub did not stop")
 			}

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -428,7 +429,9 @@ func TestRunSSEBridge(t *testing.T) {
 	}
 
 	cancel()
-	<-bridgeDone
+	if err := <-bridgeDone; err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("SSE bridge: %v", err)
+	}
 
 	spans, err := st.Spans(context.Background(), runID)
 	if err != nil {
@@ -568,7 +571,9 @@ func TestProxyStreamsCircuitBreaker(t *testing.T) {
 
 	_ = clientInW.Close()
 	_ = serverOutW.Close()
-	<-errc
+	if err := <-errc; err != nil && !errors.Is(err, context.Canceled) {
+		t.Fatalf("proxy: %v", err)
+	}
 
 	// Verify store has error span for second tool call
 	spans, err := st.Spans(context.Background(), runID)

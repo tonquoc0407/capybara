@@ -152,10 +152,12 @@ func (r *Receiver) serve(ctx context.Context) error {
 			errc <- nil
 		}()
 	}
-	drain := func() {
+	drain := func() error {
+		var drained error
 		for range running {
-			<-errc
+			drained = errors.Join(drained, <-errc)
 		}
+		return drained
 	}
 	select {
 	case <-ctx.Done():
@@ -165,14 +167,15 @@ func (r *Receiver) serve(ctx context.Context) error {
 		if err := httpSrv.Shutdown(shutdownCtx); err != nil {
 			httpSrv.Close()
 		}
-		drain()
-		return nil
+		return drain()
 	case err := <-errc:
 		running--
 		grpcSrv.Stop()
 		httpSrv.Close()
-		drain()
-		return fmt.Errorf("otlp serve: %w", err)
+		if err == nil {
+			err = errors.New("transport stopped unexpectedly")
+		}
+		return errors.Join(fmt.Errorf("otlp serve: %w", err), drain())
 	}
 }
 
